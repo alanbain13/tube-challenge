@@ -46,8 +46,13 @@ const tubeLineColors: { [key: string]: string } = {
 const Map = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const [mapboxToken, setMapboxToken] = useState<string>('');
-  const [isTokenSet, setIsTokenSet] = useState<boolean>(false);
+  const [mapboxToken, setMapboxToken] = useState<string>(() => {
+    return localStorage.getItem('mapbox_token') || '';
+  });
+  const [isTokenSet, setIsTokenSet] = useState<boolean>(() => {
+    const savedToken = localStorage.getItem('mapbox_token');
+    return Boolean(savedToken && savedToken.startsWith('pk.'));
+  });
   const [stations, setStations] = useState<Station[]>([]);
   const [lineSequences, setLineSequences] = useState<{ [key: string]: any }>({});
   const [visits, setVisits] = useState<StationVisit[]>([]);
@@ -446,10 +451,11 @@ const Map = () => {
           <Button 
             onClick={() => {
               if (mapboxToken.startsWith('pk.')) {
+                localStorage.setItem('mapbox_token', mapboxToken);
                 setIsTokenSet(true);
                 toast({
-                  title: "Token added",
-                  description: "Map will load with your token"
+                  title: "Token saved",
+                  description: "Map will load with your token (saved for future sessions)"
                 });
               } else {
                 toast({
