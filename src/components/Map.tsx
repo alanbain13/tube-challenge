@@ -41,14 +41,57 @@ const tubeLineColors: { [key: string]: string } = {
   'London Overground': '#FF6600'
 };
 
-const getStationColor = (lines: string[], isVisited: boolean): string => {
-  if (isVisited) return '#22c55e'; // Keep visited green
-  if (lines.length === 0) return '#6b7280'; // Gray for no lines
-  if (lines.length === 1) return tubeLineColors[lines[0]] || '#6b7280';
-  
-  // For interchange stations with multiple lines, use a distinct color
-  return '#8b5cf6'; // Purple for interchange stations
+// Tube line GeoJSON data - simplified line connections for major routes
+const tubeLineRoutes: { [key: string]: number[][] } = {
+  'Central': [
+    [-0.518, 51.5139], // West Ruislip
+    [-0.3118, 51.5207], // Ealing Broadway  
+    [-0.2749, 51.5154], // Acton
+    [-0.2437, 51.5074], // White City
+    [-0.2089, 51.5074], // Shepherd's Bush
+    [-0.1778, 51.5074], // Holland Park
+    [-0.1628, 51.5074], // Notting Hill Gate
+    [-0.1558, 51.5154], // Queensway
+    [-0.1428, 51.5154], // Lancaster Gate
+    [-0.1318, 51.5154], // Marble Arch
+    [-0.1258, 51.5154], // Bond Street
+    [-0.1198, 51.5154], // Oxford Circus
+    [-0.1078, 51.5154], // Tottenham Court Road
+    [-0.0978, 51.5154], // Holborn
+    [-0.0878, 51.5154], // Chancery Lane
+    [-0.0778, 51.5154], // St. Paul's
+    [-0.0678, 51.5154], // Bank
+    [-0.0578, 51.5154], // Liverpool Street
+    [-0.0478, 51.5154], // Bethnal Green
+    [-0.0378, 51.5154], // Mile End
+    [0.0122, 51.5454], // Stratford
+  ],
+  'Piccadilly': [
+    [-0.4889, 51.4706], // Heathrow T5
+    [-0.4539, 51.4700], // Heathrow T2&3
+    [-0.3679, 51.4831], // Hatton Cross
+    [-0.2749, 51.4854], // Hounslow West
+    [-0.2249, 51.4854], // Osterley
+    [-0.1949, 51.4854], // Boston Manor
+    [-0.1649, 51.4854], // Northfields
+    [-0.1349, 51.4854], // South Ealing
+    [-0.1049, 51.4854], // Acton Town
+    [-0.0749, 51.4954], // Hammersmith
+    [-0.0449, 51.5054], // Barons Court
+    [-0.0149, 51.5154], // Earl's Court
+    [0.0151, 51.5254], // South Kensington
+    [0.0451, 51.5354], // Knightsbridge
+    [0.0751, 51.5454], // Hyde Park Corner
+    [0.1051, 51.5554], // Green Park
+    [0.1351, 51.5654], // Piccadilly Circus
+    [0.1651, 51.5754], // Leicester Square
+    [0.1951, 51.5854], // Covent Garden
+    [0.2251, 51.5954], // Holborn
+    [0.2551, 51.6054], // Russell Square
+    [0.2851, 51.6154], // King's Cross
+  ]
 };
+
 
 const Map = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -184,6 +227,45 @@ const Map = () => {
     };
   }, [mapboxToken, isTokenSet, stations, visits]);
 
+  const addTubeLinesToMap = () => {
+    if (!map.current) return;
+
+    // Add tube line data sources and layers
+    Object.entries(tubeLineRoutes).forEach(([lineName, coordinates]) => {
+      const lineGeoJSON = {
+        type: 'FeatureCollection' as const,
+        features: [{
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: coordinates
+          },
+          properties: {
+            line: lineName
+          }
+        }]
+      };
+
+      // Add source
+      map.current!.addSource(`tube-line-${lineName}`, {
+        type: 'geojson',
+        data: lineGeoJSON
+      });
+
+      // Add line layer
+      map.current!.addLayer({
+        id: `tube-line-${lineName}`,
+        type: 'line',
+        source: `tube-line-${lineName}`,
+        paint: {
+          'line-color': tubeLineColors[lineName] || '#6b7280',
+          'line-width': 4,
+          'line-opacity': 0.8
+        }
+      });
+    });
+  };
+
   const addStationsToMap = () => {
     if (!map.current) return;
 
@@ -215,7 +297,10 @@ const Map = () => {
       data: stationsGeoJSON
     });
 
-    // Add visited stations layer
+    // Add tube lines first (under stations)
+    addTubeLinesToMap();
+
+    // Add visited stations layer - green circles
     map.current!.addLayer({
       id: 'visited-stations',
       type: 'circle',
@@ -223,13 +308,13 @@ const Map = () => {
       filter: ['==', ['get', 'visited'], true],
       paint: {
         'circle-radius': 8,
-        'circle-color': '#10b981',
+        'circle-color': '#22c55e',
         'circle-stroke-width': 2,
         'circle-stroke-color': '#ffffff'
       }
     });
 
-    // Add unvisited stations layer with tube line colors
+    // Add unvisited stations layer - black/white nodes
     map.current!.addLayer({
       id: 'unvisited-stations',
       type: 'circle',
@@ -237,30 +322,7 @@ const Map = () => {
       filter: ['==', ['get', 'visited'], false],
       paint: {
         'circle-radius': 6,
-        'circle-color': [
-          'case',
-          // Single line stations - use line color
-          ['==', ['length', ['get', 'lines']], 1],
-          [
-            'case',
-            ['in', 'Bakerloo', ['get', 'lines']], '#B36305',
-            ['in', 'Central', ['get', 'lines']], '#E32017',
-            ['in', 'Circle', ['get', 'lines']], '#FFD300',
-            ['in', 'District', ['get', 'lines']], '#00782A',
-            ['in', 'DLR', ['get', 'lines']], '#00A4A7',
-            ['in', 'Hammersmith & City', ['get', 'lines']], '#F3A9BB',
-            ['in', 'Jubilee', ['get', 'lines']], '#A0A5A9',
-            ['in', 'Metropolitan', ['get', 'lines']], '#9B0056',
-            ['in', 'Northern', ['get', 'lines']], '#000000',
-            ['in', 'Piccadilly', ['get', 'lines']], '#003688',
-            ['in', 'Victoria', ['get', 'lines']], '#0098D4',
-            ['in', 'Waterloo & City', ['get', 'lines']], '#95CDBA',
-            ['in', 'Elizabeth', ['get', 'lines']], '#7156A5',
-            '#6b7280'
-          ],
-          // Multiple lines - purple for interchange
-          '#8b5cf6'
-        ],
+        'circle-color': '#000000',
         'circle-stroke-width': 2,
         'circle-stroke-color': '#ffffff'
       }
