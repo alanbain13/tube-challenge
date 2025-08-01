@@ -216,6 +216,12 @@ const Map = () => {
           const station = stations.find(s => s.tfl_id === naptanId);
           if (station) {
             coordinates.push([station.longitude, station.latitude]);
+          } else {
+            // Debug: log first few mismatches to understand the ID format difference
+            if (coordinates.length === 0) {
+              console.log(`No match found for naptanId: ${naptanId}`);
+              console.log(`Sample station tfl_ids:`, stations.slice(0, 3).map(s => s.tfl_id));
+            }
           }
         });
 
