@@ -67,6 +67,7 @@ const Map = () => {
     const loadData = async () => {
       try {
         // Load stations - try database first, then TfL API
+        console.log('Starting to load station data...');
         try {
           const { data: dbStations, error: dbError } = await (supabase as any)
             .from('stations')
@@ -78,27 +79,32 @@ const Map = () => {
           
           // If we have stations in DB and no error, use them
           if (dbStations && dbStations.length > 0 && !dbError) {
-            console.log(`Using ${dbStations.length} stations from database`);
+            console.log(`✅ Using ${dbStations.length} stations from database`);
             setStations(dbStations);
           } else {
             // Otherwise, fetch from TfL API via our edge function
-            console.log('Fetching stations from TfL API...');
+            console.log('📡 Fetching stations from TfL API...');
             const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
             
-            if (tflError) throw tflError;
+            if (tflError) {
+              console.error('❌ TfL API error:', tflError);
+              throw tflError;
+            }
             
             if (tflData?.stations) {
-              console.log(`Using ${tflData.stations.length} stations from TfL API`);
+              console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
+              console.log('Sample station:', tflData.stations[0]);
               setStations(tflData.stations);
             } else {
+              console.error('❌ No station data received from TfL API');
               throw new Error('No station data received from TfL API');
             }
           }
         } catch (stationError) {
-          console.error('Error loading stations:', stationError);
+          console.error('❌ Error loading stations:', stationError);
           toast({
             title: "Error",
-            description: "Failed to load station data",
+            description: "Failed to load station data. Please try refreshing the page.",
             variant: "destructive",
           });
         }
