@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import ProfileSetup from "@/components/ProfileSetup";
 
 const Index = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,6 +26,11 @@ const Index = () => {
     return null;
   }
 
+  // Show profile setup if user hasn't completed their profile
+  if (!profile || !profile.display_name) {
+    return <ProfileSetup userId={user.id} onComplete={() => window.location.reload()} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
       <div className="container mx-auto px-4 py-8">
@@ -34,7 +40,7 @@ const Index = () => {
               Tube Challenge
             </h1>
             <p className="text-muted-foreground">
-              Welcome back, {user.user_metadata?.display_name || user.email}!
+              Welcome back, {profile.display_name || user.email}!
             </p>
           </div>
           <Button variant="outline" onClick={signOut}>
