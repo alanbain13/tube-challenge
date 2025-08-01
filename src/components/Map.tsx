@@ -66,13 +66,42 @@ const Map = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load stations
-        const { data: stationsData, error: stationsError } = await (supabase as any)
-          .from('stations')
-          .select('*');
-
-        if (stationsError) throw stationsError;
-        setStations(stationsData || []);
+        // Load stations - try database first, then TfL API
+        try {
+          const { data: dbStations, error: dbError } = await (supabase as any)
+            .from('stations')
+            .select('*');
+          
+          if (dbError) {
+            console.warn('Database error, falling back to TfL API:', dbError);
+          }
+          
+          // If we have stations in DB and no error, use them
+          if (dbStations && dbStations.length > 0 && !dbError) {
+            console.log(`Using ${dbStations.length} stations from database`);
+            setStations(dbStations);
+          } else {
+            // Otherwise, fetch from TfL API via our edge function
+            console.log('Fetching stations from TfL API...');
+            const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
+            
+            if (tflError) throw tflError;
+            
+            if (tflData?.stations) {
+              console.log(`Using ${tflData.stations.length} stations from TfL API`);
+              setStations(tflData.stations);
+            } else {
+              throw new Error('No station data received from TfL API');
+            }
+          }
+        } catch (stationError) {
+          console.error('Error loading stations:', stationError);
+          toast({
+            title: "Error",
+            description: "Failed to load station data",
+            variant: "destructive",
+          });
+        }
 
         // Load user visits if authenticated
         if (user) {
