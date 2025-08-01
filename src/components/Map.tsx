@@ -189,51 +189,60 @@ const Map = () => {
 
     // Add tube line data sources and layers from TfL line sequences
     Object.entries(lineSequences).forEach(([lineId, lineData]) => {
-      if (!lineData?.stations) return;
+      if (!lineData?.orderedLineRoutes) return;
 
-      // Create coordinates array from station sequence
-      const coordinates: number[][] = [];
-      lineData.stations.forEach((stationData: any) => {
-        if (stationData.lat && stationData.lon) {
-          coordinates.push([stationData.lon, stationData.lat]);
-        }
-      });
+      // Process each route within the line (some lines have multiple routes/branches)
+      lineData.orderedLineRoutes.forEach((route: any, routeIndex: number) => {
+        if (!route?.naptanIds || route.naptanIds.length < 2) return;
 
-      if (coordinates.length < 2) return; // Need at least 2 points for a line
-
-      const lineGeoJSON = {
-        type: 'FeatureCollection' as const,
-        features: [{
-          type: 'Feature' as const,
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: coordinates
-          },
-          properties: {
-            line: lineId
+        // Create coordinates array from station sequence using actual station data
+        const coordinates: number[][] = [];
+        
+        route.naptanIds.forEach((naptanId: string) => {
+          // Find the station data from the stations list
+          const station = stations.find(s => s.tfl_id === naptanId);
+          if (station) {
+            coordinates.push([station.longitude, station.latitude]);
           }
-        }]
-      };
+        });
 
-      // Convert line ID to proper name for color lookup
-      const lineName = lineId.charAt(0).toUpperCase() + lineId.slice(1).replace('-', ' & ');
-      
-      // Add source
-      map.current!.addSource(`tube-line-${lineId}`, {
-        type: 'geojson',
-        data: lineGeoJSON
-      });
+        if (coordinates.length < 2) return; // Need at least 2 points for a line
 
-      // Add line layer
-      map.current!.addLayer({
-        id: `tube-line-${lineId}`,
-        type: 'line',
-        source: `tube-line-${lineId}`,
-        paint: {
-          'line-color': tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280',
-          'line-width': 4,
-          'line-opacity': 0.8
-        }
+        const lineGeoJSON = {
+          type: 'FeatureCollection' as const,
+          features: [{
+            type: 'Feature' as const,
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: coordinates
+            },
+            properties: {
+              line: lineId,
+              route: routeIndex
+            }
+          }]
+        };
+
+        // Convert line ID to proper name for color lookup
+        const lineName = lineId.charAt(0).toUpperCase() + lineId.slice(1).replace('-', ' & ');
+        
+        // Add source
+        map.current!.addSource(`tube-line-${lineId}-${routeIndex}`, {
+          type: 'geojson',
+          data: lineGeoJSON
+        });
+
+        // Add line layer
+        map.current!.addLayer({
+          id: `tube-line-${lineId}-${routeIndex}`,
+          type: 'line',
+          source: `tube-line-${lineId}-${routeIndex}`,
+          paint: {
+            'line-color': tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280',
+            'line-width': 4,
+            'line-opacity': 0.8
+          }
+        });
       });
     });
   };
