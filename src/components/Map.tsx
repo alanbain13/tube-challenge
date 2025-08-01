@@ -192,11 +192,21 @@ const Map = () => {
 
     console.log('Adding tube lines to map:', Object.keys(lineSequences));
     Object.entries(lineSequences).forEach(([lineId, lineData]) => {
-      if (!lineData?.orderedLineRoutes) return;
+      console.log(`Processing line ${lineId}:`, lineData);
+      
+      if (!lineData?.orderedLineRoutes) {
+        console.log(`No orderedLineRoutes for ${lineId}`);
+        return;
+      }
 
       // Process each route within the line (some lines have multiple routes/branches)
       lineData.orderedLineRoutes.forEach((route: any, routeIndex: number) => {
-        if (!route?.naptanIds || route.naptanIds.length < 2) return;
+        if (!route?.naptanIds || route.naptanIds.length < 2) {
+          console.log(`Route ${routeIndex} for ${lineId} has insufficient stations`);
+          return;
+        }
+
+        console.log(`Processing route ${routeIndex} for ${lineId} with ${route.naptanIds.length} stations`);
 
         // Create coordinates array from station sequence using actual station data
         const coordinates: number[][] = [];
@@ -209,7 +219,12 @@ const Map = () => {
           }
         });
 
-        if (coordinates.length < 2) return; // Need at least 2 points for a line
+        console.log(`Route ${routeIndex} for ${lineId}: found ${coordinates.length} coordinates from ${route.naptanIds.length} stations`);
+
+        if (coordinates.length < 2) {
+          console.log(`Not enough coordinates for ${lineId} route ${routeIndex}`);
+          return; // Need at least 2 points for a line
+        }
 
         const lineGeoJSON = {
           type: 'FeatureCollection' as const,
@@ -228,6 +243,9 @@ const Map = () => {
 
         // Convert line ID to proper name for color lookup
         const lineName = lineId.charAt(0).toUpperCase() + lineId.slice(1).replace('-', ' & ');
+        const lineColor = tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280';
+        
+        console.log(`Adding ${lineId} route ${routeIndex} with color ${lineColor}`);
         
         // Add source
         map.current!.addSource(`tube-line-${lineId}-${routeIndex}`, {
@@ -241,7 +259,7 @@ const Map = () => {
           type: 'line',
           source: `tube-line-${lineId}-${routeIndex}`,
           paint: {
-            'line-color': tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280',
+            'line-color': lineColor,
             'line-width': 4,
             'line-opacity': 0.8
           }
