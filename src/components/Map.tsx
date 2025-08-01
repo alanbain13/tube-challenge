@@ -23,6 +23,33 @@ interface StationVisit {
   visited_at: string;
 }
 
+// TfL official tube line colors
+const tubeLineColors: { [key: string]: string } = {
+  'Bakerloo': '#B36305',
+  'Central': '#E32017', 
+  'Circle': '#FFD300',
+  'District': '#00782A',
+  'DLR': '#00A4A7',
+  'Hammersmith & City': '#F3A9BB',
+  'Jubilee': '#A0A5A9',
+  'Metropolitan': '#9B0056',
+  'Northern': '#000000',
+  'Piccadilly': '#003688',
+  'Victoria': '#0098D4',
+  'Waterloo & City': '#95CDBA',
+  'Elizabeth': '#7156A5',
+  'London Overground': '#FF6600'
+};
+
+const getStationColor = (lines: string[], isVisited: boolean): string => {
+  if (isVisited) return '#22c55e'; // Keep visited green
+  if (lines.length === 0) return '#6b7280'; // Gray for no lines
+  if (lines.length === 1) return tubeLineColors[lines[0]] || '#6b7280';
+  
+  // For interchange stations with multiple lines, use a distinct color
+  return '#8b5cf6'; // Purple for interchange stations
+};
+
 const Map = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -148,7 +175,7 @@ const Map = () => {
       }
     });
 
-    // Add unvisited stations layer
+    // Add unvisited stations layer with tube line colors
     map.current!.addLayer({
       id: 'unvisited-stations',
       type: 'circle',
@@ -156,8 +183,31 @@ const Map = () => {
       filter: ['==', ['get', 'visited'], false],
       paint: {
         'circle-radius': 6,
-        'circle-color': '#6b7280',
-        'circle-stroke-width': 1,
+        'circle-color': [
+          'case',
+          // Single line stations - use line color
+          ['==', ['length', ['get', 'lines']], 1],
+          [
+            'case',
+            ['in', 'Bakerloo', ['get', 'lines']], '#B36305',
+            ['in', 'Central', ['get', 'lines']], '#E32017',
+            ['in', 'Circle', ['get', 'lines']], '#FFD300',
+            ['in', 'District', ['get', 'lines']], '#00782A',
+            ['in', 'DLR', ['get', 'lines']], '#00A4A7',
+            ['in', 'Hammersmith & City', ['get', 'lines']], '#F3A9BB',
+            ['in', 'Jubilee', ['get', 'lines']], '#A0A5A9',
+            ['in', 'Metropolitan', ['get', 'lines']], '#9B0056',
+            ['in', 'Northern', ['get', 'lines']], '#000000',
+            ['in', 'Piccadilly', ['get', 'lines']], '#003688',
+            ['in', 'Victoria', ['get', 'lines']], '#0098D4',
+            ['in', 'Waterloo & City', ['get', 'lines']], '#95CDBA',
+            ['in', 'Elizabeth', ['get', 'lines']], '#7156A5',
+            '#6b7280'
+          ],
+          // Multiple lines - purple for interchange
+          '#8b5cf6'
+        ],
+        'circle-stroke-width': 2,
         'circle-stroke-color': '#ffffff'
       }
     });
@@ -344,7 +394,15 @@ const Map = () => {
           <div className="flex gap-2 mt-2 mb-3">
             <Badge variant="outline">Zone {selectedStation.zone}</Badge>
             {selectedStation.lines.map(line => (
-              <Badge key={line} variant="secondary" className="text-xs">
+              <Badge 
+                key={line} 
+                variant="secondary" 
+                className="text-xs text-white"
+                style={{ 
+                  backgroundColor: tubeLineColors[line] || '#6b7280',
+                  color: line === 'Circle' || line === 'Hammersmith & City' ? '#000' : '#fff'
+                }}
+              >
                 {line}
               </Badge>
             ))}
