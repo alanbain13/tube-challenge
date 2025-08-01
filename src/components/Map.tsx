@@ -77,8 +77,27 @@ const Map = () => {
             console.warn('Database error, falling back to TfL API:', dbError);
           }
           
-          // If we have stations in DB and no error, use them
-          if (dbStations && dbStations.length > 0 && !dbError) {
+          // If we have a small number of stations (only Zone 1), try TfL API for all stations
+          if (dbStations && dbStations.length > 0 && dbStations.length < 100 && !dbError) {
+            console.log(`⚠️  Only ${dbStations.length} stations in database, fetching all stations from TfL API...`);
+            try {
+              const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
+              
+              if (tflError) {
+                console.error('❌ TfL API error, falling back to database:', tflError);
+                setStations(dbStations);
+              } else if (tflData?.stations) {
+                console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
+                setStations(tflData.stations);
+              } else {
+                console.warn('⚠️  No TfL data, using database stations');
+                setStations(dbStations);
+              }
+            } catch (tflError) {
+              console.error('❌ TfL API failed, using database stations:', tflError);
+              setStations(dbStations);
+            }
+          } else if (dbStations && dbStations.length >= 100 && !dbError) {
             console.log(`✅ Using ${dbStations.length} stations from database`);
             setStations(dbStations);
           } else {
