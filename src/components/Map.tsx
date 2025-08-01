@@ -27,6 +27,7 @@ const Map = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>('');
+  const [isTokenSet, setIsTokenSet] = useState<boolean>(false);
   const [stations, setStations] = useState<Station[]>([]);
   const [visits, setVisits] = useState<StationVisit[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -71,9 +72,9 @@ const Map = () => {
     loadData();
   }, [user, toast]);
 
-  // Initialize map when token is available
+  // Initialize map when token is set and validated
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken || stations.length === 0) return;
+    if (!mapContainer.current || !mapboxToken || !isTokenSet || stations.length === 0) return;
 
     mapboxgl.accessToken = mapboxToken;
     
@@ -100,7 +101,7 @@ const Map = () => {
     return () => {
       map.current?.remove();
     };
-  }, [mapboxToken, stations, visits]);
+  }, [mapboxToken, isTokenSet, stations, visits]);
 
   const addStationsToMap = () => {
     if (!map.current) return;
@@ -280,7 +281,7 @@ const Map = () => {
     );
   }
 
-  if (!mapboxToken) {
+  if (!mapboxToken || !isTokenSet) {
     return (
       <div className="p-6 border rounded-lg bg-card">
         <h3 className="text-lg font-semibold mb-4">Mapbox Token Required</h3>
@@ -298,6 +299,7 @@ const Map = () => {
           <Button 
             onClick={() => {
               if (mapboxToken.startsWith('pk.')) {
+                setIsTokenSet(true);
                 toast({
                   title: "Token added",
                   description: "Map will load with your token"
