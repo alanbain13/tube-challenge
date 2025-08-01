@@ -43,10 +43,19 @@ serve(async (req) => {
     const tflData = await stationsResponse.json();
     console.log(`Fetched ${tflData.stopPoints?.length || 0} stations from TfL`);
 
-    // Group stations by name to get main station nodes (avoiding duplicates from multiple entrances)
+    // Filter for actual Underground stations only and group by name
     const stationGroups = new Map();
     
     tflData.stopPoints?.forEach((station: any) => {
+      // Only include stations that have tube lines and are actual Underground stations
+      const hasUndergroundLines = station.lines?.some((line: any) => 
+        ['bakerloo', 'central', 'circle', 'district', 'hammersmith-city',
+         'jubilee', 'metropolitan', 'northern', 'piccadilly', 'victoria', 
+         'waterloo-city', 'elizabeth'].includes(line.id)
+      );
+      
+      if (!hasUndergroundLines) return;
+      
       const stationName = station.commonName;
       if (!stationGroups.has(stationName)) {
         stationGroups.set(stationName, {
@@ -71,7 +80,7 @@ serve(async (req) => {
       lines: Array.from(station.lines)
     }));
 
-    console.log(`Grouped ${tflData.stopPoints?.length || 0} individual points into ${stations.length} main stations`);
+    console.log(`Filtered and grouped ${tflData.stopPoints?.length || 0} points into ${stations.length} Underground stations`);
 
     // Fetch line sequences for major tube lines
     const tubeLines = [

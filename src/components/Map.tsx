@@ -185,9 +185,12 @@ const Map = () => {
   }, [mapboxToken, isTokenSet, stations, visits]);
 
   const addTubeLinesToMap = () => {
-    if (!map.current || !lineSequences) return;
+    if (!map.current || !lineSequences || Object.keys(lineSequences).length === 0) {
+      console.log('Cannot add tube lines - missing map or line sequences');
+      return;
+    }
 
-    // Add tube line data sources and layers from TfL line sequences
+    console.log('Adding tube lines to map:', Object.keys(lineSequences));
     Object.entries(lineSequences).forEach(([lineId, lineData]) => {
       if (!lineData?.orderedLineRoutes) return;
 
