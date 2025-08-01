@@ -41,56 +41,6 @@ const tubeLineColors: { [key: string]: string } = {
   'London Overground': '#FF6600'
 };
 
-// Tube line GeoJSON data - simplified line connections for major routes
-const tubeLineRoutes: { [key: string]: number[][] } = {
-  'Central': [
-    [-0.518, 51.5139], // West Ruislip
-    [-0.3118, 51.5207], // Ealing Broadway  
-    [-0.2749, 51.5154], // Acton
-    [-0.2437, 51.5074], // White City
-    [-0.2089, 51.5074], // Shepherd's Bush
-    [-0.1778, 51.5074], // Holland Park
-    [-0.1628, 51.5074], // Notting Hill Gate
-    [-0.1558, 51.5154], // Queensway
-    [-0.1428, 51.5154], // Lancaster Gate
-    [-0.1318, 51.5154], // Marble Arch
-    [-0.1258, 51.5154], // Bond Street
-    [-0.1198, 51.5154], // Oxford Circus
-    [-0.1078, 51.5154], // Tottenham Court Road
-    [-0.0978, 51.5154], // Holborn
-    [-0.0878, 51.5154], // Chancery Lane
-    [-0.0778, 51.5154], // St. Paul's
-    [-0.0678, 51.5154], // Bank
-    [-0.0578, 51.5154], // Liverpool Street
-    [-0.0478, 51.5154], // Bethnal Green
-    [-0.0378, 51.5154], // Mile End
-    [0.0122, 51.5454], // Stratford
-  ],
-  'Piccadilly': [
-    [-0.4889, 51.4706], // Heathrow T5
-    [-0.4539, 51.4700], // Heathrow T2&3
-    [-0.3679, 51.4831], // Hatton Cross
-    [-0.2749, 51.4854], // Hounslow West
-    [-0.2249, 51.4854], // Osterley
-    [-0.1949, 51.4854], // Boston Manor
-    [-0.1649, 51.4854], // Northfields
-    [-0.1349, 51.4854], // South Ealing
-    [-0.1049, 51.4854], // Acton Town
-    [-0.0749, 51.4954], // Hammersmith
-    [-0.0449, 51.5054], // Barons Court
-    [-0.0149, 51.5154], // Earl's Court
-    [0.0151, 51.5254], // South Kensington
-    [0.0451, 51.5354], // Knightsbridge
-    [0.0751, 51.5454], // Hyde Park Corner
-    [0.1051, 51.5554], // Green Park
-    [0.1351, 51.5654], // Piccadilly Circus
-    [0.1651, 51.5754], // Leicester Square
-    [0.1951, 51.5854], // Covent Garden
-    [0.2251, 51.5954], // Holborn
-    [0.2551, 51.6054], // Russell Square
-    [0.2851, 51.6154], // King's Cross
-  ]
-};
 
 
 const Map = () => {
@@ -99,6 +49,7 @@ const Map = () => {
   const [mapboxToken, setMapboxToken] = useState<string>('');
   const [isTokenSet, setIsTokenSet] = useState<boolean>(false);
   const [stations, setStations] = useState<Station[]>([]);
+  const [lineSequences, setLineSequences] = useState<{ [key: string]: any }>({});
   const [visits, setVisits] = useState<StationVisit[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +83,9 @@ const Map = () => {
               } else if (tflData?.stations) {
                 console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
                 setStations(tflData.stations);
+                if (tflData?.lineSequences) {
+                  setLineSequences(tflData.lineSequences);
+                }
               } else {
                 console.warn('⚠️  No TfL data, using database stations');
                 setStations(dbStations);
@@ -157,6 +111,9 @@ const Map = () => {
               console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
               console.log('Sample station:', tflData.stations[0]);
               setStations(tflData.stations);
+              if (tflData?.lineSequences) {
+                setLineSequences(tflData.lineSequences);
+              }
             } else {
               console.error('❌ No station data received from TfL API');
               throw new Error('No station data received from TfL API');
@@ -228,10 +185,22 @@ const Map = () => {
   }, [mapboxToken, isTokenSet, stations, visits]);
 
   const addTubeLinesToMap = () => {
-    if (!map.current) return;
+    if (!map.current || !lineSequences) return;
 
-    // Add tube line data sources and layers
-    Object.entries(tubeLineRoutes).forEach(([lineName, coordinates]) => {
+    // Add tube line data sources and layers from TfL line sequences
+    Object.entries(lineSequences).forEach(([lineId, lineData]) => {
+      if (!lineData?.stations) return;
+
+      // Create coordinates array from station sequence
+      const coordinates: number[][] = [];
+      lineData.stations.forEach((stationData: any) => {
+        if (stationData.lat && stationData.lon) {
+          coordinates.push([stationData.lon, stationData.lat]);
+        }
+      });
+
+      if (coordinates.length < 2) return; // Need at least 2 points for a line
+
       const lineGeoJSON = {
         type: 'FeatureCollection' as const,
         features: [{
@@ -241,24 +210,27 @@ const Map = () => {
             coordinates: coordinates
           },
           properties: {
-            line: lineName
+            line: lineId
           }
         }]
       };
 
+      // Convert line ID to proper name for color lookup
+      const lineName = lineId.charAt(0).toUpperCase() + lineId.slice(1).replace('-', ' & ');
+      
       // Add source
-      map.current!.addSource(`tube-line-${lineName}`, {
+      map.current!.addSource(`tube-line-${lineId}`, {
         type: 'geojson',
         data: lineGeoJSON
       });
 
       // Add line layer
       map.current!.addLayer({
-        id: `tube-line-${lineName}`,
+        id: `tube-line-${lineId}`,
         type: 'line',
-        source: `tube-line-${lineName}`,
+        source: `tube-line-${lineId}`,
         paint: {
-          'line-color': tubeLineColors[lineName] || '#6b7280',
+          'line-color': tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280',
           'line-width': 4,
           'line-opacity': 0.8
         }
