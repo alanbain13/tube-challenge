@@ -185,28 +185,15 @@ const Map = () => {
   }, [mapboxToken, isTokenSet, stations, visits]);
 
   const addTubeLinesToMap = () => {
-    if (!map.current || !lineSequences || Object.keys(lineSequences).length === 0) {
-      console.log('Cannot add tube lines - missing map or line sequences');
-      return;
-    }
+    if (!map.current || !lineSequences) return;
 
-    console.log('Adding tube lines to map:', Object.keys(lineSequences));
+    // Add tube line data sources and layers from TfL line sequences
     Object.entries(lineSequences).forEach(([lineId, lineData]) => {
-      console.log(`Processing line ${lineId}:`, lineData);
-      
-      if (!lineData?.orderedLineRoutes) {
-        console.log(`No orderedLineRoutes for ${lineId}`);
-        return;
-      }
+      if (!lineData?.orderedLineRoutes) return;
 
       // Process each route within the line (some lines have multiple routes/branches)
       lineData.orderedLineRoutes.forEach((route: any, routeIndex: number) => {
-        if (!route?.naptanIds || route.naptanIds.length < 2) {
-          console.log(`Route ${routeIndex} for ${lineId} has insufficient stations`);
-          return;
-        }
-
-        console.log(`Processing route ${routeIndex} for ${lineId} with ${route.naptanIds.length} stations`);
+        if (!route?.naptanIds || route.naptanIds.length < 2) return;
 
         // Create coordinates array from station sequence using actual station data
         const coordinates: number[][] = [];
@@ -216,21 +203,10 @@ const Map = () => {
           const station = stations.find(s => s.tfl_id === naptanId);
           if (station) {
             coordinates.push([station.longitude, station.latitude]);
-          } else {
-            // Debug: log first few mismatches to understand the ID format difference
-            if (coordinates.length === 0) {
-              console.log(`No match found for naptanId: ${naptanId}`);
-              console.log(`Sample station tfl_ids:`, stations.slice(0, 3).map(s => s.tfl_id));
-            }
           }
         });
 
-        console.log(`Route ${routeIndex} for ${lineId}: found ${coordinates.length} coordinates from ${route.naptanIds.length} stations`);
-
-        if (coordinates.length < 2) {
-          console.log(`Not enough coordinates for ${lineId} route ${routeIndex}`);
-          return; // Need at least 2 points for a line
-        }
+        if (coordinates.length < 2) return; // Need at least 2 points for a line
 
         const lineGeoJSON = {
           type: 'FeatureCollection' as const,
@@ -249,9 +225,6 @@ const Map = () => {
 
         // Convert line ID to proper name for color lookup
         const lineName = lineId.charAt(0).toUpperCase() + lineId.slice(1).replace('-', ' & ');
-        const lineColor = tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280';
-        
-        console.log(`Adding ${lineId} route ${routeIndex} with color ${lineColor}`);
         
         // Add source
         map.current!.addSource(`tube-line-${lineId}-${routeIndex}`, {
@@ -265,7 +238,7 @@ const Map = () => {
           type: 'line',
           source: `tube-line-${lineId}-${routeIndex}`,
           paint: {
-            'line-color': lineColor,
+            'line-color': tubeLineColors[lineName] || tubeLineColors[lineId] || '#6b7280',
             'line-width': 4,
             'line-opacity': 0.8
           }

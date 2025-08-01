@@ -43,44 +43,18 @@ serve(async (req) => {
     const tflData = await stationsResponse.json();
     console.log(`Fetched ${tflData.stopPoints?.length || 0} stations from TfL`);
 
-    // Filter for actual Underground stations only and group by name
-    const stationGroups = new Map();
-    
-    tflData.stopPoints?.forEach((station: any) => {
-      // Only include stations that have tube lines and are actual Underground stations
-      const hasUndergroundLines = station.lines?.some((line: any) => 
-        ['bakerloo', 'central', 'circle', 'district', 'hammersmith-city',
-         'jubilee', 'metropolitan', 'northern', 'piccadilly', 'victoria', 
-         'waterloo-city', 'elizabeth'].includes(line.id)
-      );
-      
-      if (!hasUndergroundLines) return;
-      
-      const stationName = station.commonName;
-      if (!stationGroups.has(stationName)) {
-        stationGroups.set(stationName, {
-          id: station.id,
-          tfl_id: station.id,
-          name: stationName,
-          latitude: station.lat,
-          longitude: station.lon,
-          zone: station.zone || '1',
-          lines: new Set(station.lines?.map((line: any) => line.name) || [])
-        });
-      } else {
-        // If station already exists, merge the lines
-        const existing = stationGroups.get(stationName);
-        station.lines?.forEach((line: any) => existing.lines.add(line.name));
-      }
-    });
+    // Transform TfL data to our format
+    const stations = tflData.stopPoints?.map((station: any) => ({
+      id: station.id,
+      tfl_id: station.id,
+      name: station.commonName,
+      latitude: station.lat,
+      longitude: station.lon,
+      zone: station.zone || '1', // Default to zone 1 if not specified
+      lines: station.lines?.map((line: any) => line.name) || []
+    })) || [];
 
-    // Convert back to array format with lines as array
-    const stations = Array.from(stationGroups.values()).map(station => ({
-      ...station,
-      lines: Array.from(station.lines)
-    }));
-
-    console.log(`Filtered and grouped ${tflData.stopPoints?.length || 0} points into ${stations.length} Underground stations`);
+    console.log(`Transformed ${stations.length} stations`);
 
     // Fetch line sequences for major tube lines
     const tubeLines = [
