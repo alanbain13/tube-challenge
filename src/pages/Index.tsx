@@ -73,8 +73,11 @@ const Index = () => {
               <p className="text-muted-foreground mb-4">
                 Explore the Tube network and track your progress
               </p>
-              <Button className="w-full" disabled>
-                Coming Soon
+              <Button 
+                className="w-full" 
+                onClick={() => window.location.href = '/map'}
+              >
+                Open Map
               </Button>
             </div>
           </div>
