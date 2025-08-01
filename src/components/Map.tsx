@@ -295,20 +295,23 @@ const Map = () => {
             value={mapboxToken}
             onChange={(e) => setMapboxToken(e.target.value)}
           />
-          <Button onClick={() => {
-            if (mapboxToken.startsWith('pk.')) {
-              toast({
-                title: "Token added",
-                description: "Map will load with your token"
-              });
-            } else {
-              toast({
-                title: "Invalid token",
-                description: "Please enter a valid Mapbox public token",
-                variant: "destructive"
-              });
-            }
-          }}>
+          <Button 
+            onClick={() => {
+              if (mapboxToken.startsWith('pk.')) {
+                toast({
+                  title: "Token added",
+                  description: "Map will load with your token"
+                });
+              } else {
+                toast({
+                  title: "Invalid token",
+                  description: "Please enter a valid Mapbox public token",
+                  variant: "destructive"
+                });
+              }
+            }}
+            disabled={!mapboxToken.trim()}
+          >
             Set Token
           </Button>
         </div>
