@@ -43,18 +43,35 @@ serve(async (req) => {
     const tflData = await stationsResponse.json();
     console.log(`Fetched ${tflData.stopPoints?.length || 0} stations from TfL`);
 
-    // Transform TfL data to our format
-    const stations = tflData.stopPoints?.map((station: any) => ({
-      id: station.id,
-      tfl_id: station.id,
-      name: station.commonName,
-      latitude: station.lat,
-      longitude: station.lon,
-      zone: station.zone || '1', // Default to zone 1 if not specified
-      lines: station.lines?.map((line: any) => line.name) || []
-    })) || [];
+    // Group stations by name to get main station nodes (avoiding duplicates from multiple entrances)
+    const stationGroups = new Map();
+    
+    tflData.stopPoints?.forEach((station: any) => {
+      const stationName = station.commonName;
+      if (!stationGroups.has(stationName)) {
+        stationGroups.set(stationName, {
+          id: station.id,
+          tfl_id: station.id,
+          name: stationName,
+          latitude: station.lat,
+          longitude: station.lon,
+          zone: station.zone || '1',
+          lines: new Set(station.lines?.map((line: any) => line.name) || [])
+        });
+      } else {
+        // If station already exists, merge the lines
+        const existing = stationGroups.get(stationName);
+        station.lines?.forEach((line: any) => existing.lines.add(line.name));
+      }
+    });
 
-    console.log(`Transformed ${stations.length} stations`);
+    // Convert back to array format with lines as array
+    const stations = Array.from(stationGroups.values()).map(station => ({
+      ...station,
+      lines: Array.from(station.lines)
+    }));
+
+    console.log(`Grouped ${tflData.stopPoints?.length || 0} individual points into ${stations.length} main stations`);
 
     // Fetch line sequences for major tube lines
     const tubeLines = [
