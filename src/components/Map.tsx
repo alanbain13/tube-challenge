@@ -82,7 +82,9 @@ const Map = () => {
                 setStations(dbStations);
               } else if (tflData?.stations) {
                 console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
-                setStations(tflData.stations);
+                const deduplicatedStations = deduplicateStations(tflData.stations);
+                console.log(`🔧 Deduplicated from ${tflData.stations.length} to ${deduplicatedStations.length} stations`);
+                setStations(deduplicatedStations);
                 if (tflData?.lineSequences) {
                   setLineSequences(tflData.lineSequences);
                 }
@@ -107,13 +109,15 @@ const Map = () => {
               throw tflError;
             }
             
-            if (tflData?.stations) {
-              console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
-              console.log('Sample station:', tflData.stations[0]);
-              setStations(tflData.stations);
-              if (tflData?.lineSequences) {
-                setLineSequences(tflData.lineSequences);
-              }
+          if (tflData?.stations) {
+            console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
+            console.log('Sample station:', tflData.stations[0]);
+            const deduplicatedStations = deduplicateStations(tflData.stations);
+            console.log(`🔧 Deduplicated from ${tflData.stations.length} to ${deduplicatedStations.length} stations`);
+            setStations(deduplicatedStations);
+            if (tflData?.lineSequences) {
+              setLineSequences(tflData.lineSequences);
+            }
             } else {
               console.error('❌ No station data received from TfL API');
               throw new Error('No station data received from TfL API');
@@ -183,6 +187,86 @@ const Map = () => {
       map.current?.remove();
     };
   }, [mapboxToken, isTokenSet, stations, visits]);
+
+  // Deduplicate stations by proximity and name similarity
+  const deduplicateStations = (stations: Station[]): Station[] => {
+    const duplicateGroups: Station[][] = [];
+    const processed = new Set<string>();
+
+    stations.forEach((station, index) => {
+      if (processed.has(station.id)) return;
+
+      const duplicates = [station];
+      processed.add(station.id);
+
+      // Find similar stations (same name or within 50m)
+      stations.forEach((otherStation, otherIndex) => {
+        if (index === otherIndex || processed.has(otherStation.id)) return;
+
+        const isSimilarName = 
+          station.name.toLowerCase().replace(/\s+/g, '') === 
+          otherStation.name.toLowerCase().replace(/\s+/g, '') ||
+          station.name.toLowerCase().includes(otherStation.name.toLowerCase()) ||
+          otherStation.name.toLowerCase().includes(station.name.toLowerCase());
+
+        // Calculate distance between stations (Haversine formula approximation)
+        const lat1 = Number(station.latitude);
+        const lon1 = Number(station.longitude);
+        const lat2 = Number(otherStation.latitude);
+        const lon2 = Number(otherStation.longitude);
+        
+        const R = 6371000; // Earth's radius in meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        if (isSimilarName || distance < 50) {
+          duplicates.push(otherStation);
+          processed.add(otherStation.id);
+        }
+      });
+
+      duplicateGroups.push(duplicates);
+    });
+
+    // For each group, pick the best representative
+    return duplicateGroups.map(group => {
+      if (group.length === 1) return group[0];
+
+      // Sort by tfl_id preference (shorter, more standard format preferred)
+      const sorted = group.sort((a, b) => {
+        // Prefer Underground format (9400ZZLU...)
+        const aIsUnderground = a.tfl_id.startsWith('9400ZZLU');
+        const bIsUnderground = b.tfl_id.startsWith('9400ZZLU');
+        if (aIsUnderground && !bIsUnderground) return -1;
+        if (!aIsUnderground && bIsUnderground) return 1;
+        
+        // Then prefer shorter IDs
+        return a.tfl_id.length - b.tfl_id.length;
+      });
+
+      const primary = sorted[0];
+      
+      // Merge all line associations
+      const allLines = [...new Set(group.flatMap(s => s.lines))];
+      
+      // Use most central coordinates (average)
+      const avgLat = group.reduce((sum, s) => sum + Number(s.latitude), 0) / group.length;
+      const avgLon = group.reduce((sum, s) => sum + Number(s.longitude), 0) / group.length;
+
+      console.log(`Deduplicating ${group.length} stations for "${primary.name}": ${group.map(s => s.tfl_id).join(', ')}`);
+
+      return {
+        ...primary,
+        lines: allLines,
+        latitude: avgLat,
+        longitude: avgLon
+      };
+    });
+  };
 
   const addTubeLinesToMap = () => {
     if (!map.current || !lineSequences) return;
