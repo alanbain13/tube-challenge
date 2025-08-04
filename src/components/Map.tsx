@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import StationDataUpload from './StationDataUpload';
 
 interface Station {
   id: string;
@@ -58,13 +59,91 @@ const Map = () => {
   const [visits, setVisits] = useState<StationVisit[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploadedData, setUploadedData] = useState<any>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Check for saved station data on component mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('tube_stations_data');
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        setUploadedData(parsedData);
+      } catch (error) {
+        console.error('Failed to parse saved station data:', error);
+        localStorage.removeItem('tube_stations_data');
+      }
+    }
+  }, []);
+
+  // Process uploaded JSON data to match our Station interface
+  const processUploadedData = (data: any): Station[] => {
+    if (!data || !Array.isArray(data)) {
+      console.error('Invalid data format: expected array');
+      return [];
+    }
+
+    return data.map((item, index) => ({
+      id: item.id || `uploaded-${index}`,
+      tfl_id: item.tfl_id || item.id || `uploaded-${index}`,
+      name: item.name || item.station_name || 'Unknown Station',
+      latitude: parseFloat(item.latitude || item.lat || item.geocoords?.lat || 0),
+      longitude: parseFloat(item.longitude || item.lng || item.lon || item.geocoords?.lng || 0),
+      zone: item.zone || item.zone_number || '1',
+      lines: Array.isArray(item.lines) ? item.lines : 
+             Array.isArray(item.line_names) ? item.line_names :
+             typeof item.lines === 'string' ? [item.lines] : []
+    })).filter(station => station.latitude !== 0 && station.longitude !== 0);
+  };
+
+  const handleDataUpload = (data: any) => {
+    setUploadedData(data);
+    setLoading(true);
+    // Trigger data reload
+    const processedStations = processUploadedData(data);
+    if (processedStations.length > 0) {
+      setStations(processedStations);
+      setLoading(false);
+      toast({
+        title: "Success",
+        description: `Loaded ${processedStations.length} stations from your file`
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Could not process the uploaded data. Please check the file format.",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
 
   // Load stations and visits
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Prioritize uploaded data if available
+        if (uploadedData) {
+          console.log('✅ Using uploaded station data');
+          const processedStations = processUploadedData(uploadedData);
+          if (processedStations.length > 0) {
+            setStations(processedStations);
+            // Load user visits if authenticated
+            if (user) {
+              const { data: visitsData, error: visitsError } = await (supabase as any)
+                .from('station_visits')
+                .select('*')
+                .eq('user_id', user.id);
+
+              if (visitsError) throw visitsError;
+              setVisits(visitsData || []);
+            }
+            setLoading(false);
+            return;
+          }
+        }
+
         // Load stations - try database first, then TfL API
         console.log('Starting to load station data...');
         try {
@@ -156,7 +235,7 @@ const Map = () => {
     };
 
     loadData();
-  }, [user, toast]);
+  }, [user, toast, uploadedData]);
 
   // Initialize map when token is set and validated
   useEffect(() => {
@@ -429,6 +508,22 @@ const Map = () => {
     return (
       <div className="flex items-center justify-center h-96">
         <p>Loading map...</p>
+      </div>
+    );
+  }
+
+  // Show upload interface if no stations are loaded
+  if (stations.length === 0 && (!uploadedData && mapboxToken && isTokenSet)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <h3 className="text-lg font-semibold">Upload Tube Stations Data</h3>
+        <p className="text-muted-foreground text-center">
+          Upload your JSON file containing tube station information to display them on the map.
+        </p>
+        <StationDataUpload 
+          onDataUploaded={handleDataUpload}
+          hasData={!!uploadedData}
+        />
       </div>
     );
   }
