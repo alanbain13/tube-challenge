@@ -586,6 +586,14 @@ const Map = () => {
     <div className="relative">
       <div ref={mapContainer} className="w-full h-96 rounded-lg" />
       
+      {/* Upload button overlay */}
+      <div className="absolute top-4 right-16 z-10">
+        <StationDataUpload 
+          onDataUploaded={handleDataUpload}
+          hasData={!!uploadedData}
+        />
+      </div>
+      
       {selectedStation && (
         <div className="absolute top-4 left-4 bg-card p-4 rounded-lg shadow-lg border max-w-sm">
           <h3 className="font-semibold text-lg">{selectedStation.name}</h3>
@@ -634,6 +642,11 @@ const Map = () => {
             <div className="w-3 h-3 rounded-full bg-gray-500"></div>
             <span>Not Visited ({stations.length - visits.length})</span>
           </div>
+          {uploadedData && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Using uploaded data
+            </div>
+          )}
         </div>
       </div>
     </div>
