@@ -26,15 +26,17 @@ interface StationData {
   line_names?: string[];
 }
 
-function processStationData(data: StationData[], source: string = 'uploaded'): any[] {
+function processStationData(data: any[], source: string = 'uploaded'): any[] {
   return data.map((item, index) => ({
     tfl_id: item.tfl_id || item.id || `${source}-${index}`,
-    name: item.name || item.station_name || 'Unknown Station',
+    name: item.commonName || item.commonName_real || item.name || item.station_name || 'Unknown Station',
     latitude: parseFloat(String(item.latitude || item.lat || item.geocoords?.lat || 0)),
     longitude: parseFloat(String(item.longitude || item.lng || item.lon || item.geocoords?.lng || 0)),
-    zone: String(item.zone || item.zone_number || '1'),
-    lines: Array.isArray(item.lines) ? item.lines : 
+    zone: String(item.zone_real || item.zone || item.zone_number || '1'),
+    lines: Array.isArray(item.lines_array) ? item.lines_array : 
+           Array.isArray(item.lines) ? item.lines : 
            Array.isArray(item.line_names) ? item.line_names :
+           typeof item.lines_real === 'string' ? item.lines_real.split(';').map((line: string) => line.trim()) :
            typeof item.lines === 'string' ? [item.lines] : []
   })).filter(station => station.latitude !== 0 && station.longitude !== 0);
 }
