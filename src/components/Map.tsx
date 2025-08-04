@@ -331,6 +331,18 @@ const Map = () => {
   const addStationsToMap = () => {
     if (!map.current) return;
 
+    console.log('🚉 Adding stations to map...', stations.length);
+    
+    // Debug: Check first few stations to see their structure
+    if (stations.length > 0) {
+      console.log('📊 Sample station data:', {
+        first: stations[0],
+        hasLines: stations[0]?.lines?.length > 0,
+        linesType: typeof stations[0]?.lines,
+        linesValue: stations[0]?.lines
+      });
+    }
+
     // Create GeoJSON data for stations
     const stationsGeoJSON = {
       type: 'FeatureCollection' as const,
@@ -340,18 +352,20 @@ const Map = () => {
           type: 'Feature' as const,
           geometry: {
             type: 'Point' as const,
-            coordinates: [station.longitude, station.latitude]
+            coordinates: [Number(station.longitude), Number(station.latitude)]
           },
           properties: {
             id: station.id,
             name: station.name,
             zone: station.zone,
-            lines: station.lines,
+            lines: station.lines || [],
             visited: isVisited
           }
         };
       })
     };
+
+    console.log('📍 Created GeoJSON with', stationsGeoJSON.features.length, 'stations');
 
     // Add source
     map.current!.addSource('stations', {
@@ -390,6 +404,8 @@ const Map = () => {
       }
     });
 
+    console.log('✅ Added station layers to map');
+
     // Add click handlers
     ['visited-stations', 'unvisited-stations'].forEach(layerId => {
       map.current!.on('click', layerId, (e) => {
@@ -413,6 +429,7 @@ const Map = () => {
       });
     });
   };
+
 
   const toggleStationVisit = async (station: Station) => {
     if (!user) {
