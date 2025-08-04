@@ -91,31 +91,27 @@ const StationDataUpload: React.FC<StationDataUploadProps> = ({ onDataUploaded, h
     reader.readAsText(file);
   };
 
-  if (hasData) {
-    return (
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6">
-          <div className="flex items-center space-x-2 text-green-600">
-            <Database className="h-5 w-5" />
-            <span className="text-sm font-medium">Custom stations loaded</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Upload className="h-5 w-5" />
-          <span>Upload Stations Data</span>
+          <span>{hasData ? 'Replace Data' : 'Upload Stations Data'}</span>
         </CardTitle>
         <CardDescription>
-          Upload your JSON file to permanently store tube stations data in the database
+          {hasData 
+            ? 'Upload a new JSON file to replace the current stations data'
+            : 'Upload your JSON file to permanently store tube stations data in the database'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {hasData && (
+          <div className="flex items-center space-x-2 text-green-600 mb-4">
+            <Database className="h-5 w-5" />
+            <span className="text-sm font-medium">Custom stations currently loaded</span>
+          </div>
+        )}
         <div className="grid w-full items-center gap-1.5">
           <Label htmlFor="stations-file">JSON File</Label>
           <Input
