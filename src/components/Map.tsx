@@ -42,8 +42,6 @@ const tubeLineColors: { [key: string]: string } = {
   'London Overground': '#FF6600'
 };
 
-
-
 const Map = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -59,183 +57,130 @@ const Map = () => {
   const [visits, setVisits] = useState<StationVisit[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uploadedData, setUploadedData] = useState<any>(null);
+  const [hasCustomData, setHasCustomData] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Check for saved station data on component mount
-  useEffect(() => {
-    const savedData = localStorage.getItem('tube_stations_data');
-    if (savedData) {
-      try {
-        const parsedData = JSON.parse(savedData);
-        setUploadedData(parsedData);
-      } catch (error) {
-        console.error('Failed to parse saved station data:', error);
-        localStorage.removeItem('tube_stations_data');
+  // Check if we have custom station data in the database
+  const checkForCustomData = async () => {
+    try {
+      const { data: dbStations, error } = await (supabase as any)
+        .from('stations')
+        .select('*')
+        .limit(1);
+      
+      if (!error && dbStations && dbStations.length > 0) {
+        // Check if this looks like custom data (not TfL format)
+        const hasCustomFormat = dbStations.some((station: any) => 
+          station.tfl_id?.startsWith('custom-') || 
+          station.tfl_id?.startsWith('uploaded-')
+        );
+        setHasCustomData(hasCustomFormat);
       }
+    } catch (error) {
+      console.error('Error checking custom data:', error);
     }
-  }, []);
-
-  // Process uploaded JSON data to match our Station interface
-  const processUploadedData = (data: any): Station[] => {
-    if (!data || !Array.isArray(data)) {
-      console.error('Invalid data format: expected array');
-      return [];
-    }
-
-    return data.map((item, index) => ({
-      id: item.id || `uploaded-${index}`,
-      tfl_id: item.tfl_id || item.id || `uploaded-${index}`,
-      name: item.name || item.station_name || 'Unknown Station',
-      latitude: parseFloat(item.latitude || item.lat || item.geocoords?.lat || 0),
-      longitude: parseFloat(item.longitude || item.lng || item.lon || item.geocoords?.lng || 0),
-      zone: item.zone || item.zone_number || '1',
-      lines: Array.isArray(item.lines) ? item.lines : 
-             Array.isArray(item.line_names) ? item.line_names :
-             typeof item.lines === 'string' ? [item.lines] : []
-    })).filter(station => station.latitude !== 0 && station.longitude !== 0);
   };
 
-  const handleDataUpload = (data: any) => {
-    setUploadedData(data);
+  const handleDataUploaded = async () => {
     setLoading(true);
-    // Trigger data reload
-    const processedStations = processUploadedData(data);
-    if (processedStations.length > 0) {
-      setStations(processedStations);
-      setLoading(false);
-      toast({
-        title: "Success",
-        description: `Loaded ${processedStations.length} stations from your file`
-      });
-    } else {
-      toast({
-        title: "Error",
-        description: "Could not process the uploaded data. Please check the file format.",
-        variant: "destructive"
-      });
-      setLoading(false);
-    }
+    setHasCustomData(true);
+    // Trigger a reload of the stations data
+    loadData();
   };
 
   // Load stations and visits
-  useEffect(() => {
-    const loadData = async () => {
+  const loadData = async () => {
+    try {
+      // Load stations from database first
+      console.log('Starting to load station data...');
       try {
-        // Prioritize uploaded data if available
-        if (uploadedData) {
-          console.log('✅ Using uploaded station data');
-          const processedStations = processUploadedData(uploadedData);
-          if (processedStations.length > 0) {
-            setStations(processedStations);
-            // Load user visits if authenticated
-            if (user) {
-              const { data: visitsData, error: visitsError } = await (supabase as any)
-                .from('station_visits')
-                .select('*')
-                .eq('user_id', user.id);
-
-              if (visitsError) throw visitsError;
-              setVisits(visitsData || []);
-            }
-            setLoading(false);
-            return;
-          }
+        const { data: dbStations, error: dbError } = await (supabase as any)
+          .from('stations')
+          .select('*');
+        
+        if (dbError) {
+          console.warn('Database error, falling back to TfL API:', dbError);
         }
-
-        // Load stations - try database first, then TfL API
-        console.log('Starting to load station data...');
-        try {
-          const { data: dbStations, error: dbError } = await (supabase as any)
-            .from('stations')
-            .select('*');
+        
+        if (dbStations && dbStations.length > 0 && !dbError) {
+          console.log(`✅ Using ${dbStations.length} stations from database`);
+          setStations(dbStations);
           
-          if (dbError) {
-            console.warn('Database error, falling back to TfL API:', dbError);
-          }
+          // Check if this is custom data
+          const hasCustomFormat = dbStations.some((station: any) => 
+            station.tfl_id?.startsWith('custom-') || 
+            station.tfl_id?.startsWith('uploaded-')
+          );
+          setHasCustomData(hasCustomFormat);
           
-          // If we have a small number of stations (only Zone 1), try TfL API for all stations
-          if (dbStations && dbStations.length > 0 && dbStations.length < 100 && !dbError) {
-            console.log(`⚠️  Only ${dbStations.length} stations in database, fetching all stations from TfL API...`);
+          // If it's TfL data from database, also try to get line sequences
+          if (!hasCustomFormat && dbStations.length > 100) {
             try {
               const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
-              
-              if (tflError) {
-                console.error('❌ TfL API error, falling back to database:', tflError);
-                setStations(dbStations);
-              } else if (tflData?.stations) {
-                console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
-                setStations(tflData.stations);
-                if (tflData?.lineSequences) {
-                  setLineSequences(tflData.lineSequences);
-                }
-              } else {
-                console.warn('⚠️  No TfL data, using database stations');
-                setStations(dbStations);
-              }
-            } catch (tflError) {
-              console.error('❌ TfL API failed, using database stations:', tflError);
-              setStations(dbStations);
-            }
-          } else if (dbStations && dbStations.length >= 100 && !dbError) {
-            console.log(`✅ Using ${dbStations.length} stations from database`);
-            setStations(dbStations);
-          } else {
-            // Otherwise, fetch from TfL API via our edge function
-            console.log('📡 Fetching stations from TfL API...');
-            const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
-            
-            if (tflError) {
-              console.error('❌ TfL API error:', tflError);
-              throw tflError;
-            }
-            
-            if (tflData?.stations) {
-              console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
-              console.log('Sample station:', tflData.stations[0]);
-              setStations(tflData.stations);
               if (tflData?.lineSequences) {
                 setLineSequences(tflData.lineSequences);
               }
-            } else {
-              console.error('❌ No station data received from TfL API');
-              throw new Error('No station data received from TfL API');
+            } catch (error) {
+              console.log('Could not fetch line sequences');
             }
           }
-        } catch (stationError) {
-          console.error('❌ Error loading stations:', stationError);
-          toast({
-            title: "Error",
-            description: "Failed to load station data. Please try refreshing the page.",
-            variant: "destructive",
-          });
+        } else {
+          // Otherwise, fetch from TfL API via our edge function
+          console.log('📡 Fetching stations from TfL API...');
+          const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
+          
+          if (tflError) {
+            console.error('❌ TfL API error:', tflError);
+            throw tflError;
+          }
+          
+          if (tflData?.stations) {
+            console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
+            setStations(tflData.stations);
+            if (tflData?.lineSequences) {
+              setLineSequences(tflData.lineSequences);
+            }
+          } else {
+            console.error('❌ No station data received from TfL API');
+            throw new Error('No station data received from TfL API');
+          }
         }
-
-        // Load user visits if authenticated
-        if (user) {
-          const { data: visitsData, error: visitsError } = await (supabase as any)
-            .from('station_visits')
-            .select('*')
-            .eq('user_id', user.id);
-
-          if (visitsError) throw visitsError;
-          setVisits(visitsData || []);
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
+      } catch (stationError) {
+        console.error('❌ Error loading stations:', stationError);
         toast({
-          title: "Error loading map data",
-          description: "Please try again later.",
-          variant: "destructive"
+          title: "Error",
+          description: "Failed to load station data. Please try refreshing the page.",
+          variant: "destructive",
         });
-      } finally {
-        setLoading(false);
       }
-    };
 
+      // Load user visits if authenticated
+      if (user) {
+        const { data: visitsData, error: visitsError } = await (supabase as any)
+          .from('station_visits')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (visitsError) throw visitsError;
+        setVisits(visitsData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Error loading map data",
+        description: "Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkForCustomData();
     loadData();
-  }, [user, toast, uploadedData]);
+  }, [user, toast]);
 
   // Initialize map when token is set and validated
   useEffect(() => {
@@ -542,22 +487,6 @@ const Map = () => {
     );
   }
 
-  // Show upload interface if no stations are loaded
-  if (stations.length === 0 && (!uploadedData && mapboxToken && isTokenSet)) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <h3 className="text-lg font-semibold">Upload Tube Stations Data</h3>
-        <p className="text-muted-foreground text-center">
-          Upload your JSON file containing tube station information to display them on the map.
-        </p>
-        <StationDataUpload 
-          onDataUploaded={handleDataUpload}
-          hasData={!!uploadedData}
-        />
-      </div>
-    );
-  }
-
   if (!mapboxToken || !isTokenSet) {
     return (
       <div className="p-6 border rounded-lg bg-card">
@@ -619,8 +548,8 @@ const Map = () => {
       {/* Upload button overlay */}
       <div className="absolute top-4 right-16 z-10">
         <StationDataUpload 
-          onDataUploaded={handleDataUpload}
-          hasData={!!uploadedData}
+          onDataUploaded={handleDataUploaded}
+          hasData={hasCustomData}
         />
       </div>
       
@@ -672,9 +601,9 @@ const Map = () => {
             <div className="w-3 h-3 rounded-full bg-gray-500"></div>
             <span>Not Visited ({stations.length - visits.length})</span>
           </div>
-          {uploadedData && (
+          {hasCustomData && (
             <div className="text-xs text-muted-foreground mt-1">
-              Using uploaded data
+              Using custom data
             </div>
           )}
         </div>

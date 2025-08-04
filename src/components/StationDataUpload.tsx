@@ -3,18 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, CheckCircle } from 'lucide-react';
+import { Upload, CheckCircle, Database } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface StationDataUploadProps {
-  onDataUploaded: (data: any) => void;
+  onDataUploaded: () => void;
   hasData: boolean;
 }
 
 const StationDataUpload: React.FC<StationDataUploadProps> = ({ onDataUploaded, hasData }) => {
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -30,21 +31,44 @@ const StationDataUpload: React.FC<StationDataUploadProps> = ({ onDataUploaded, h
     setIsUploading(true);
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const content = e.target?.result as string;
         const jsonData = JSON.parse(content);
         
-        // Store in localStorage for persistence
-        localStorage.setItem('tube_stations_data', content);
-        
-        onDataUploaded(jsonData);
-        
+        if (!Array.isArray(jsonData)) {
+          toast({
+            title: "Invalid JSON format",
+            description: "Expected an array of station data",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Upload to backend
+        const { data, error } = await supabase.functions.invoke('upload-stations', {
+          body: { stationsData: jsonData }
+        });
+
+        if (error) {
+          console.error('Upload error:', error);
+          toast({
+            title: "Upload failed",
+            description: error.message || "Failed to upload station data",
+            variant: "destructive"
+          });
+          return;
+        }
+
         toast({
           title: "Data uploaded successfully",
-          description: "Your tube stations data has been loaded"
+          description: `${data.stationsCount} stations stored in database`
         });
+
+        onDataUploaded();
+        
       } catch (error) {
+        console.error('File processing error:', error);
         toast({
           title: "Invalid JSON file",
           description: "Please check your file format",
@@ -72,8 +96,8 @@ const StationDataUpload: React.FC<StationDataUploadProps> = ({ onDataUploaded, h
       <Card className="w-full max-w-md">
         <CardContent className="pt-6">
           <div className="flex items-center space-x-2 text-green-600">
-            <CheckCircle className="h-5 w-5" />
-            <span className="text-sm font-medium">Stations data loaded</span>
+            <Database className="h-5 w-5" />
+            <span className="text-sm font-medium">Custom stations loaded</span>
           </div>
         </CardContent>
       </Card>
@@ -88,7 +112,7 @@ const StationDataUpload: React.FC<StationDataUploadProps> = ({ onDataUploaded, h
           <span>Upload Stations Data</span>
         </CardTitle>
         <CardDescription>
-          Upload your JSON file containing tube stations data
+          Upload your JSON file to permanently store tube stations data in the database
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -103,7 +127,7 @@ const StationDataUpload: React.FC<StationDataUploadProps> = ({ onDataUploaded, h
           />
         </div>
         {isUploading && (
-          <p className="text-sm text-muted-foreground">Uploading...</p>
+          <p className="text-sm text-muted-foreground">Uploading to database...</p>
         )}
       </CardContent>
     </Card>
