@@ -584,8 +584,8 @@ const Map = () => {
     <div className="relative">
       <div ref={mapContainer} className="w-full h-96 rounded-lg" />
       
-      {/* Upload button overlay */}
-      <div className="absolute top-4 right-16 z-10">
+      {/* Upload button overlay - made more visible */}
+      <div className="absolute top-4 right-4 z-20 bg-white rounded-lg shadow-lg p-2">
         <StationDataUpload 
           onDataUploaded={handleDataUploaded}
           hasData={hasCustomData}
