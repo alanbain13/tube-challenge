@@ -186,8 +186,24 @@ const Map = () => {
 
   // Initialize map when token is set and validated
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken || !isTokenSet || stations.length === 0) return;
+    console.log('🗺️ Map useEffect triggered:', {
+      hasContainer: !!mapContainer.current,
+      hasToken: !!mapboxToken,
+      isTokenSet,
+      stationsCount: stations.length
+    });
 
+    if (!mapContainer.current || !mapboxToken || !isTokenSet || stations.length === 0) {
+      console.log('❌ Map initialization blocked:', {
+        container: !!mapContainer.current,
+        token: !!mapboxToken,
+        tokenSet: isTokenSet,
+        stations: stations.length
+      });
+      return;
+    }
+
+    console.log('✅ Initializing Mapbox map...');
     mapboxgl.accessToken = mapboxToken;
     
     map.current = new mapboxgl.Map({
@@ -196,6 +212,8 @@ const Map = () => {
       center: [-0.1278, 51.5074], // London center
       zoom: 10,
     });
+
+    console.log('🗺️ Map created, adding controls...');
 
     // Add navigation controls
     map.current.addControl(
@@ -207,10 +225,12 @@ const Map = () => {
 
     // Add stations to map
     map.current.on('load', () => {
+      console.log('🗺️ Map loaded, adding stations...');
       addStationsToMap();
     });
 
     return () => {
+      console.log('🗺️ Cleaning up map...');
       map.current?.remove();
     };
   }, [mapboxToken, isTokenSet, stations, visits]);
