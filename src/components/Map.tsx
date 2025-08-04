@@ -242,11 +242,13 @@ const Map = () => {
     }
 
     console.log('🚇 Drawing tube lines from station coordinates...');
+    console.log('📊 Total stations available:', stations.length);
 
     // Group stations by line
     const stationsByLine: { [lineName: string]: Station[] } = {};
     
     stations.forEach(station => {
+      console.log(`Station ${station.name} has lines:`, station.lines);
       station.lines.forEach(line => {
         if (!stationsByLine[line]) {
           stationsByLine[line] = [];
@@ -255,7 +257,10 @@ const Map = () => {
       });
     });
 
-    console.log('📊 Found lines:', Object.keys(stationsByLine));
+    console.log('📊 Found lines with stations:', Object.keys(stationsByLine));
+    Object.entries(stationsByLine).forEach(([line, stations]) => {
+      console.log(`${line}: ${stations.length} stations`);
+    });
 
     // Draw lines for each tube line
     Object.entries(stationsByLine).forEach(([lineName, lineStations]) => {
@@ -583,14 +588,6 @@ const Map = () => {
   return (
     <div className="relative">
       <div ref={mapContainer} className="w-full h-96 rounded-lg" />
-      
-      {/* Upload button overlay - made more visible */}
-      <div className="absolute top-4 right-4 z-20 bg-white rounded-lg shadow-lg p-2">
-        <StationDataUpload 
-          onDataUploaded={handleDataUploaded}
-          hasData={hasCustomData}
-        />
-      </div>
       
       {selectedStation && (
         <div className="absolute top-4 left-4 bg-card p-4 rounded-lg shadow-lg border max-w-sm">
