@@ -114,22 +114,18 @@ const Map = () => {
           );
           setHasCustomData(hasCustomFormat);
           
-          // If it's TfL data from database, also try to get line sequences
-          if (!hasCustomFormat && dbStations.length > 100) {
-            try {
-              console.log('🚇 Fetching line sequences for TfL data...');
-              const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
-              if (tflData?.lineSequences) {
-                console.log('✅ Got line sequences:', Object.keys(tflData.lineSequences));
-                setLineSequences(tflData.lineSequences);
-              } else {
-                console.log('❌ No line sequences received');
-              }
-            } catch (error) {
-              console.log('❌ Could not fetch line sequences:', error);
+          // Always try to get line sequences for tube lines, even with custom data
+          try {
+            console.log('🚇 Fetching line sequences...');
+            const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
+            if (tflData?.lineSequences) {
+              console.log('✅ Got line sequences:', Object.keys(tflData.lineSequences));
+              setLineSequences(tflData.lineSequences);
+            } else {
+              console.log('❌ No line sequences received');
             }
-          } else if (hasCustomFormat) {
-            console.log('⚠️ Custom data detected - no tube lines will be shown');
+          } catch (error) {
+            console.log('❌ Could not fetch line sequences:', error);
           }
         } else {
           // Otherwise, fetch from TfL API via our edge function
