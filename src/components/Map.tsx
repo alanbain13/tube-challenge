@@ -249,12 +249,14 @@ const Map = () => {
     
     stations.forEach(station => {
       console.log(`Station ${station.name} has lines:`, station.lines);
-      station.lines.forEach(line => {
-        if (!stationsByLine[line]) {
-          stationsByLine[line] = [];
-        }
-        stationsByLine[line].push(station);
-      });
+      if (station.lines && Array.isArray(station.lines)) {
+        station.lines.forEach(line => {
+          if (!stationsByLine[line]) {
+            stationsByLine[line] = [];
+          }
+          stationsByLine[line].push(station);
+        });
+      }
     });
 
     console.log('📊 Found lines with stations:', Object.keys(stationsByLine));
@@ -269,6 +271,8 @@ const Map = () => {
         return;
       }
 
+      console.log(`🚇 Processing ${lineName} line with ${lineStations.length} stations`);
+
       // Sort stations geographically (roughly west to east, then north to south)
       const sortedStations = [...lineStations].sort((a, b) => {
         const lonDiff = a.longitude - b.longitude;
@@ -282,7 +286,7 @@ const Map = () => {
         Number(station.latitude)
       ]);
 
-      console.log(`✅ Creating line for ${lineName} with ${coordinates.length} stations`);
+      console.log(`✅ Creating line for ${lineName} with coordinates:`, coordinates.slice(0, 3), '...');
 
       const lineGeoJSON = {
         type: 'FeatureCollection' as const,
@@ -306,25 +310,34 @@ const Map = () => {
       const layerId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}`;
 
       try {
+        // Check if source already exists and remove it
+        if (map.current!.getSource(sourceId)) {
+          console.log(`🔄 Removing existing source: ${sourceId}`);
+          map.current!.removeLayer(layerId);
+          map.current!.removeSource(sourceId);
+        }
+
+        console.log(`➕ Adding source: ${sourceId}`);
         // Add source
         map.current!.addSource(sourceId, {
           type: 'geojson',
           data: lineGeoJSON
         });
 
-        // Add line layer
+        console.log(`➕ Adding layer: ${layerId}`);
+        // Add line layer - put it BEFORE station layers so stations appear on top
         map.current!.addLayer({
           id: layerId,
           type: 'line',
           source: sourceId,
           paint: {
             'line-color': lineColor,
-            'line-width': 4,
-            'line-opacity': 0.8
+            'line-width': 6,
+            'line-opacity': 0.7
           }
-        }, 'visited-stations'); // Add before station layers
+        });
 
-        console.log(`✅ Added layer: ${layerId}`);
+        console.log(`✅ Successfully added layer: ${layerId}`);
       } catch (error) {
         console.error(`❌ Error adding line layer ${layerId}:`, error);
       }
