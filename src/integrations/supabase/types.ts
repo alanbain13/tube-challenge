@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          earned_at: string
+          id: string
+          key: string
+          meta: Json | null
+          name: string
+          progress: number | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          earned_at?: string
+          id?: string
+          key: string
+          meta?: Json | null
+          name: string
+          progress?: number | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          earned_at?: string
+          id?: string
+          key?: string
+          meta?: Json | null
+          name?: string
+          progress?: number | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      activities: {
+        Row: {
+          created_at: string
+          distance_km: number | null
+          ended_at: string | null
+          id: string
+          line_ids: string[] | null
+          notes: string | null
+          started_at: string
+          station_tfl_ids: string[]
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number | null
+          ended_at?: string | null
+          id?: string
+          line_ids?: string[] | null
+          notes?: string | null
+          started_at?: string
+          station_tfl_ids: string[]
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number | null
+          ended_at?: string | null
+          id?: string
+          line_ids?: string[] | null
+          notes?: string | null
+          started_at?: string
+          station_tfl_ids?: string[]
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -105,25 +177,37 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          photo_url: string | null
           station_id: string | null
           station_tfl_id: string | null
+          status: string
           user_id: string
+          verification_method: string | null
+          verified_at: string | null
           visited_at: string
         }
         Insert: {
           created_at?: string
           id?: string
+          photo_url?: string | null
           station_id?: string | null
           station_tfl_id?: string | null
+          status?: string
           user_id: string
+          verification_method?: string | null
+          verified_at?: string | null
           visited_at?: string
         }
         Update: {
           created_at?: string
           id?: string
+          photo_url?: string | null
           station_id?: string | null
           station_tfl_id?: string | null
+          status?: string
           user_id?: string
+          verification_method?: string | null
+          verified_at?: string | null
           visited_at?: string
         }
         Relationships: [
