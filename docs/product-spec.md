@@ -147,3 +147,81 @@ Feature: <name>
   - Given <preconditions>, When <action>, Then <expected>
 - Open Questions:
   - <list>
+
+## Master Feature List and User Stories
+
+1. User Onboarding
+- 1.1 As a new user, I want to create an account using email or Google/Apple login so that I can securely track my progress.
+- 1.2 As a user, I want to set up my profile with an avatar, name, and home station so that my experience feels personalised.
+- 1.3 As a first-time user, I want to view a short tutorial so that I understand how to use the app.
+
+2. Interactive Tube Map
+- 2.1 As a user, I want to view a tappable map of the London Underground so I can explore stations and lines.
+- 2.2 As a user, I want the map to show which stations I’ve visited so I can track progress visually.
+- 2.3 As a user, I want to see service alerts on the map so I can plan around delays.
+
+3. Station Check-In System
+- 3.1 As a user, I want to check in at a station using GPS so I can track which stations I've visited.
+- 3.2 As a user, I want the app to prevent duplicate check-ins so my stats are accurate.
+- 3.3 As a user, I want to manually check in when GPS fails so I can continue the challenge.
+
+4. Game Modes / Challenges
+- 4.1 As a user, I want to participate in a Zone 1 Sprint challenge so I can complete all Zone 1 stations as fast as possible.
+- 4.2 As a user, I want to complete an Alphabet Run challenge so I can visit stations starting with every letter.
+- 4.3 As a user, I want to complete Line Mastery challenges so I can say I’ve ridden full lines.
+- 4.4 As a user, I want to repeat time trials to beat my own score and improve.
+- 4.5 As a user, I want to create custom challenges to suit my own goals.
+
+5. Smart Route Planner
+- 5.1 As a user, I want the app to suggest the optimal route to complete a challenge so I can finish it efficiently.
+- 5.2 As a user, I want to choose between fastest, most efficient, or scenic options to suit my preferences.
+
+6. Achievements & Badges
+- 6.1 As a user, I want to earn badges when I complete milestones so that I feel rewarded.
+- 6.2 As a user, I want to see hidden achievements to keep gameplay interesting and surprising.
+- 6.3 As a user, I want to browse a badge gallery to see what I’ve earned and what’s next.
+
+7. User Profile & Stats
+- 7.1 As a user, I want to view stats like total stations visited, lines completed, and distance traveled so I can track my progress.
+- 7.2 As a user, I want to share my stats to social media so I can show off my achievements.
+
+8. Live Leaderboards
+- 8.1 As a user, I want to see global leaderboards by challenge to compare my score with others.
+- 8.2 As a user, I want to view leaderboards filtered by friends, city, or time period to get more relevant comparisons.
+- 8.3 As a user, I want to tap on a name in the leaderboard to view that player’s profile (if public).
+
+9. Social Integration
+- 9.1 As a user, I want to follow friends so I can compare our progress.
+- 9.2 As a user, I want to see friends’ recent activity, badges, and challenge completions.
+- 9.3 As a user, I want to share screenshots or challenge outcomes to social media.
+- 9.4 As a user, I want to race against a friend’s previous run in ghost mode.
+
+10. Notifications & Alerts
+- 10.1 As a user, I want to receive alerts when I’m near a new station so I don’t miss a check-in.
+- 10.2 As a user, I want to receive reminders for ongoing or new challenges.
+- 10.3 As a user, I want to be notified if a disruption affects my planned route.
+
+11. Offline Mode
+- 11.1 As a user, I want to check in even when offline so I don’t lose progress.
+- 11.2 As a user, I want my check-ins to sync automatically when I regain connection.
+
+12. Content & Trivia
+- 12.1 As a user, I want to unlock trivia or history facts at stations to make the experience more educational and fun.
+- 12.2 As a user, I want to collect interesting facts about places I’ve visited as a souvenir of my trips.
+
+13. Settings & Preferences
+- 13.1 As a user, I want to control notification settings so I only get alerts I care about.
+- 13.2 As a user, I want to manage my privacy settings including profile visibility and location sharing.
+- 13.3 As a user, I want to export my journey data for personal use.
+
+14. Admin & Game Master Tools
+- 14.1 As an admin, I want to create timed global or local challenges for users to participate in.
+- 14.2 As an admin, I want to moderate the leaderboard for fairness.
+- 14.3 As an event organiser, I want to set hidden codes or check-ins for scavenger hunts.
+
+15. Monetisation
+- 15.1 As a user, I want to purchase extra badge packs or features to customise my experience.
+- 15.2 As a premium user, I want advanced stats and unlimited challenge creation.
+- 15.3 As a user, I want to use the app for free with optional ads.
+- 15.4 As a business partner, I want to sponsor routes or events to reach the app’s audience.
+
