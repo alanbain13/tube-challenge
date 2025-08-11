@@ -5,7 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import roundelEmpty from '@/assets/roundel-empty.svg';
+import roundelFilled from '@/assets/roundel-filled.svg';
 
 interface Station {
   id: string;
@@ -58,6 +59,62 @@ const Map = () => {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Popup and bounds refs
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const networkBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);
+
+  // Load roundel icons into the map style
+  const loadRoundelImages = async () => {
+    if (!map.current) return;
+    const loadImage = (url: string, name: string) =>
+      new Promise<void>((resolve, reject) => {
+        if (!map.current) return resolve();
+        if (map.current.hasImage(name)) return resolve();
+        map.current.loadImage(url, (error, image) => {
+          if (error || !image) return reject(error);
+          if (!map.current) return resolve();
+          map.current.addImage(name, image as any, { pixelRatio: 2 });
+          resolve();
+        });
+      });
+
+    await Promise.all([
+      loadImage(roundelEmpty, 'roundel-empty'),
+      loadImage(roundelFilled, 'roundel-filled'),
+    ]);
+  };
+
+  // Simple custom control to fit to full network extent
+  class FitBoundsControl implements mapboxgl.IControl {
+    private _map?: mapboxgl.Map;
+    private _container?: HTMLDivElement;
+
+    onAdd(map: mapboxgl.Map) {
+      this._map = map;
+      const container = document.createElement('div');
+      container.className = 'mapboxgl-ctrl-group mapboxgl-ctrl';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mapboxgl-ctrl-icon';
+      button.title = 'Fit to full extent';
+      button.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 9V3h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 9V3h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 15v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 15v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+      button.onclick = () => {
+        const b = networkBoundsRef.current;
+        if (this._map && b) this._map.fitBounds(b, { padding: 40, duration: 600 });
+      };
+      container.appendChild(button);
+      this._container = container;
+      return container;
+    }
+
+    onRemove() {
+      if (this._container && this._container.parentNode) {
+        this._container.parentNode.removeChild(this._container);
+      }
+      this._map = undefined;
+    }
+  }
 
   // Load stations from GeoJSON file
   const loadStationsFromGeoJSON = async () => {
@@ -176,6 +233,9 @@ const Map = () => {
       style: 'mapbox://styles/mapbox/light-v11',
       center: [-0.1278, 51.5074], // London center
       zoom: 10,
+      cooperativeGestures: true,
+      dragRotate: false,
+      pitchWithRotate: false,
     });
 
     console.log('🗺️ Map created, adding controls...');
@@ -189,17 +249,37 @@ const Map = () => {
     );
 
     // Add data to map when loaded
-    map.current.on('load', () => {
-      console.log('🗺️ Map loaded, adding data...');
+    map.current.on('load', async () => {
+      console.log('🗺️ Map loaded, styling and adding data...');
+
+      // Minimal base map styling: hide POIs and most road labels to focus on Tube layers
+      const styleLayers = map.current!.getStyle().layers;
+      styleLayers?.forEach((l) => {
+        if (l.type === 'symbol' && (l.id.includes('poi') || l.id.includes('road'))) {
+          try { map.current!.setLayoutProperty(l.id, 'visibility', 'none'); } catch {}
+        }
+      });
+
       addTubeLinesToMap();
+      await loadRoundelImages();
       addStationsToMap();
+
+      // Compute network bounds and add a fit control
+      const b = new mapboxgl.LngLatBounds();
+      stations.forEach((s) => b.extend([Number(s.longitude), Number(s.latitude)]));
+      networkBoundsRef.current = b;
+      map.current!.addControl(new FitBoundsControl(), 'top-left');
+
+      if (!b.isEmpty()) {
+        map.current!.fitBounds(b, { padding: 40, duration: 0 });
+      }
     });
 
     return () => {
       console.log('🗺️ Cleaning up map...');
       map.current?.remove();
     };
-  }, [mapboxToken, isTokenSet, stations, visits, lineFeatures]);
+  }, [mapboxToken, isTokenSet, stations]);
 
   const addTubeLinesToMap = () => {
     if (!map.current || lineFeatures.length === 0) {
@@ -329,14 +409,37 @@ const Map = () => {
     console.log('✅ Added station layers to map');
 
     // Add click handlers
-    ['visited-stations', 'unvisited-stations'].forEach(layerId => {
+    ['stations-symbols'].forEach(layerId => {
       map.current!.on('click', layerId, (e) => {
         if (e.features && e.features[0]) {
-          const feature = e.features[0];
-          const stationId = feature.properties?.id;
+          const feature = e.features[0] as mapboxgl.MapboxGeoJSONFeature;
+          const stationId = (feature.properties as any)?.id as string;
           const station = stations.find(s => s.id === stationId);
           if (station) {
             setSelectedStation(station);
+
+            const coords = (feature.geometry as any)?.coordinates || [Number(station.longitude), Number(station.latitude)];
+            const badges = (station.lines || []).map((line) => {
+              const bg = tubeLineColors[line] || '#6b7280';
+              const fg = (line === 'Circle' || line === 'Hammersmith & City') ? '#000' : '#fff';
+              return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${line}</span>`;
+            }).join(' ');
+
+            const html = `
+              <div style="font-family: ui-sans-serif, system-ui, -apple-system; font-size: 12px;">
+                <div style="font-weight:600; font-size: 14px; margin-bottom: 4px;">${station.name}</div>
+                <div style="opacity:.7; margin-bottom: 6px;">Zone ${station.zone}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">${badges}</div>
+              </div>`;
+
+            if (popupRef.current) popupRef.current.remove();
+            popupRef.current = new mapboxgl.Popup({ offset: 12, closeOnClick: true })
+              .setLngLat(coords as [number, number])
+              .setHTML(html)
+              .addTo(map.current!);
+
+            // Toggle visit on click
+            void toggleStationVisit(station);
           }
         }
       });
@@ -506,51 +609,11 @@ const Map = () => {
     );
   }
 
-  const isStationVisited = selectedStation ? visits.some(visit => 
-    visit.station_tfl_id === selectedStation.id || visit.station_id === selectedStation.id
-  ) : false;
 
   return (
     <div className="relative">
       <div ref={mapContainer} className="w-full h-96 rounded-lg" />
       
-      {selectedStation && (
-        <div className="absolute top-4 left-4 bg-card p-4 rounded-lg shadow-lg border max-w-sm">
-          <h3 className="font-semibold text-lg">{selectedStation.name}</h3>
-          <div className="flex gap-2 mt-2 mb-3">
-            <Badge variant="outline">Zone {selectedStation.zone}</Badge>
-            {selectedStation.lines.map(line => (
-              <Badge 
-                key={line} 
-                variant="secondary" 
-                className="text-xs text-white"
-                style={{ 
-                  backgroundColor: tubeLineColors[line] || '#6b7280',
-                  color: line === 'Circle' || line === 'Hammersmith & City' ? '#000' : '#fff'
-                }}
-              >
-                {line}
-              </Badge>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => toggleStationVisit(selectedStation)}
-              variant={isStationVisited ? "destructive" : "default"}
-              size="sm"
-            >
-              {isStationVisited ? "Remove Visit" : "Mark as Visited"}
-            </Button>
-            <Button
-              onClick={() => setSelectedStation(null)}
-              variant="outline"
-              size="sm"
-            >
-              Close
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="absolute bottom-4 right-4 bg-card p-3 rounded-lg shadow-lg border">
         <div className="text-sm">
