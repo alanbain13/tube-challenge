@@ -532,7 +532,7 @@ const toggleStationVisit = async (station: Station) => {
         description: `Removed visit to ${station.name}`
       });
     } else {
-      // Add visit using mapping to DB station UUID
+      // Add visit using mapping to DB station UUID if available; otherwise fallback to TfL ID only
       let stationUuid: string | undefined;
       const { data: sRow } = await supabase
         .from('stations')
@@ -550,22 +550,15 @@ const toggleStationVisit = async (station: Station) => {
         stationUuid = (mapRow as any)?.uuid_id as string | undefined;
       }
 
-      if (!stationUuid) {
-        toast({
-          title: 'Station not linked',
-          description: 'This station is missing a database mapping. Please import stations or add a mapping for ' + station.name,
-          variant: 'destructive',
-        });
-        return;
-      }
+      const insertPayload: any = {
+        user_id: user.id,
+        station_tfl_id: station.id,
+      };
+      if (stationUuid) insertPayload.station_id = stationUuid;
 
       const { data, error } = await supabase
         .from('station_visits')
-        .insert({
-          user_id: user.id,
-          station_id: stationUuid,
-          station_tfl_id: station.id,
-        })
+        .insert(insertPayload)
         .select('id, station_id, station_tfl_id, visited_at')
         .maybeSingle();
 

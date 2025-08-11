@@ -105,7 +105,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          station_id: string
+          station_id: string | null
           station_tfl_id: string | null
           user_id: string
           visited_at: string
@@ -113,7 +113,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          station_id: string
+          station_id?: string | null
           station_tfl_id?: string | null
           user_id: string
           visited_at?: string
@@ -121,7 +121,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          station_id?: string
+          station_id?: string | null
           station_tfl_id?: string | null
           user_id?: string
           visited_at?: string
