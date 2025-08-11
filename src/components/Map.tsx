@@ -6,11 +6,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import StationDataUpload from './StationDataUpload';
 
 interface Station {
   id: string;
-  tfl_id: string;
   name: string;
   latitude: number;
   longitude: number;
@@ -20,7 +18,8 @@ interface Station {
 
 interface StationVisit {
   id: string;
-  station_id: string;
+  station_id?: string; // Legacy column
+  station_tfl_id?: string; // New column for TfL IDs
   visited_at: string;
 }
 
@@ -53,138 +52,104 @@ const Map = () => {
     return Boolean(savedToken && savedToken.startsWith('pk.'));
   });
   const [stations, setStations] = useState<Station[]>([]);
-  const [lineSequences, setLineSequences] = useState<{ [key: string]: any }>({});
+  const [lineFeatures, setLineFeatures] = useState<any[]>([]);
   const [visits, setVisits] = useState<StationVisit[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasCustomData, setHasCustomData] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Check if we have custom station data in the database
-  const checkForCustomData = async () => {
+  // Load stations from GeoJSON file
+  const loadStationsFromGeoJSON = async () => {
     try {
-      const { data: dbStations, error } = await (supabase as any)
-        .from('stations')
-        .select('*')
-        .limit(1);
+      console.log('🔄 Loading station data from GeoJSON...');
       
-      if (!error && dbStations && dbStations.length > 0) {
-        // Check if this looks like custom data (not TfL format)
-        const hasCustomFormat = dbStations.some((station: any) => 
-          station.tfl_id?.startsWith('custom-') || 
-          station.tfl_id?.startsWith('uploaded-')
-        );
-        setHasCustomData(hasCustomFormat);
+      const response = await fetch('/data/stations.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stations data: ${response.status}`);
       }
+      
+      const geojsonData = await response.json();
+      console.log('✅ Loaded GeoJSON data with', geojsonData.features.length, 'features');
+      
+      // Separate stations (Point features) and lines (LineString features)
+      const stationFeatures = geojsonData.features.filter(
+        (feature: any) => feature.geometry.type === 'Point'
+      );
+      const lineFeatures = geojsonData.features.filter(
+        (feature: any) => feature.geometry.type === 'LineString'
+      );
+      
+      console.log('📍 Found', stationFeatures.length, 'station features');
+      console.log('🚇 Found', lineFeatures.length, 'line features');
+      
+      // Transform station features to our Station interface
+      const transformedStations: Station[] = stationFeatures.map((feature: any) => ({
+        id: feature.properties.id,
+        name: feature.properties.name,
+        latitude: feature.geometry.coordinates[1],
+        longitude: feature.geometry.coordinates[0],
+        zone: feature.properties.zone || '1',
+        lines: feature.properties.lines?.map((line: any) => line.name) || []
+      }));
+      
+      setStations(transformedStations);
+      setLineFeatures(lineFeatures);
+      
+      console.log('✅ Successfully processed', transformedStations.length, 'stations');
     } catch (error) {
-      console.error('Error checking custom data:', error);
+      console.error('❌ Error loading GeoJSON data:', error);
+      toast({
+        title: "Error loading station data",
+        description: "Failed to load station data from GeoJSON file.",
+        variant: "destructive"
+      });
+      setStations([]);
+      setLineFeatures([]);
     }
   };
 
-  const handleDataUploaded = async () => {
-    setLoading(true);
-    setHasCustomData(true);
-    // Trigger a reload of the stations data
-    loadData();
+  // Load user visits
+  const loadUserVisits = async () => {
+    if (!user) return;
+    
+    try {
+      console.log('🔄 Fetching station visits...');
+      const { data, error } = await supabase
+        .from('station_visits')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (error) {
+        console.error('❌ Error fetching visits:', error);
+        return;
+      }
+      
+      console.log('✅ Fetched visits:', data?.length || 0);
+      setVisits(data || []);
+    } catch (error) {
+      console.error('❌ Error fetching station visits:', error);
+    }
   };
 
-  // Load stations and visits
+  // Load all data
   const loadData = async () => {
+    setLoading(true);
     try {
-      // Load stations from database first
-      console.log('Starting to load station data...');
-      try {
-        const { data: dbStations, error: dbError } = await (supabase as any)
-          .from('stations')
-          .select('*');
-        
-        if (dbError) {
-          console.warn('Database error, falling back to TfL API:', dbError);
-        }
-        
-        if (dbStations && dbStations.length > 0 && !dbError) {
-          console.log(`✅ Using ${dbStations.length} stations from database`);
-          setStations(dbStations);
-          
-          // Check if this is custom data
-          const hasCustomFormat = dbStations.some((station: any) => 
-            station.tfl_id?.startsWith('custom-') || 
-            station.tfl_id?.startsWith('uploaded-')
-          );
-          setHasCustomData(hasCustomFormat);
-          
-          // Always try to get line sequences for tube lines, even with custom data
-          try {
-            console.log('🚇 Fetching line sequences...');
-            const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
-            if (tflData?.lineSequences) {
-              console.log('✅ Got line sequences:', Object.keys(tflData.lineSequences));
-              setLineSequences(tflData.lineSequences);
-            } else {
-              console.log('❌ No line sequences received');
-            }
-          } catch (error) {
-            console.log('❌ Could not fetch line sequences:', error);
-          }
-        } else {
-          // Otherwise, fetch from TfL API via our edge function
-          console.log('📡 Fetching stations from TfL API...');
-          const { data: tflData, error: tflError } = await supabase.functions.invoke('fetch-tfl-stations');
-          
-          if (tflError) {
-            console.error('❌ TfL API error:', tflError);
-            throw tflError;
-          }
-          
-          if (tflData?.stations) {
-            console.log(`✅ Successfully loaded ${tflData.stations.length} stations from TfL API`);
-            setStations(tflData.stations);
-            if (tflData?.lineSequences) {
-              setLineSequences(tflData.lineSequences);
-            }
-          } else {
-            console.error('❌ No station data received from TfL API');
-            throw new Error('No station data received from TfL API');
-          }
-        }
-      } catch (stationError) {
-        console.error('❌ Error loading stations:', stationError);
-        toast({
-          title: "Error",
-          description: "Failed to load station data. Please try refreshing the page.",
-          variant: "destructive",
-        });
-      }
-
-      // Load user visits if authenticated
-      if (user) {
-        const { data: visitsData, error: visitsError } = await (supabase as any)
-          .from('station_visits')
-          .select('*')
-          .eq('user_id', user.id);
-
-        if (visitsError) throw visitsError;
-        setVisits(visitsData || []);
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast({
-        title: "Error loading map data",
-        description: "Please try again later.",
-        variant: "destructive"
-      });
+      await Promise.all([
+        loadStationsFromGeoJSON(),
+        loadUserVisits()
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    checkForCustomData();
     loadData();
-  }, [user, toast]);
+  }, [user]);
 
-  // Initialize map when token is set and validated
+  // Initialize map when token is set and data is loaded
   useEffect(() => {
     console.log('🗺️ Map useEffect triggered:', {
       hasContainer: !!mapContainer.current,
@@ -223,9 +188,10 @@ const Map = () => {
       'top-right'
     );
 
-    // Add stations to map
+    // Add data to map when loaded
     map.current.on('load', () => {
-      console.log('🗺️ Map loaded, adding stations...');
+      console.log('🗺️ Map loaded, adding data...');
+      addTubeLinesToMap();
       addStationsToMap();
     });
 
@@ -233,81 +199,24 @@ const Map = () => {
       console.log('🗺️ Cleaning up map...');
       map.current?.remove();
     };
-  }, [mapboxToken, isTokenSet, stations, visits]);
+  }, [mapboxToken, isTokenSet, stations, visits, lineFeatures]);
 
   const addTubeLinesToMap = () => {
-    if (!map.current || stations.length === 0) {
-      console.log('❌ Cannot add tube lines - missing map or stations');
+    if (!map.current || lineFeatures.length === 0) {
+      console.log('❌ Cannot add tube lines - missing map or line data');
       return;
     }
 
-    console.log('🚇 Drawing tube lines from station coordinates...');
-    console.log('📊 Total stations available:', stations.length);
-
-    // Group stations by line
-    const stationsByLine: { [lineName: string]: Station[] } = {};
+    console.log('🚇 Adding tube lines from GeoJSON to map...');
     
-    stations.forEach(station => {
-      console.log(`Station ${station.name} has lines:`, station.lines);
-      if (station.lines && Array.isArray(station.lines)) {
-        station.lines.forEach(line => {
-          if (!stationsByLine[line]) {
-            stationsByLine[line] = [];
-          }
-          stationsByLine[line].push(station);
-        });
-      }
-    });
-
-    console.log('📊 Found lines with stations:', Object.keys(stationsByLine));
-    Object.entries(stationsByLine).forEach(([line, stations]) => {
-      console.log(`${line}: ${stations.length} stations`);
-    });
-
-    // Draw lines for each tube line
-    Object.entries(stationsByLine).forEach(([lineName, lineStations]) => {
-      if (lineStations.length < 2) {
-        console.log(`⚠️ Not enough stations for ${lineName}: ${lineStations.length}`);
-        return;
-      }
-
-      console.log(`🚇 Processing ${lineName} line with ${lineStations.length} stations`);
-
-      // Sort stations geographically (roughly west to east, then north to south)
-      const sortedStations = [...lineStations].sort((a, b) => {
-        const lonDiff = a.longitude - b.longitude;
-        if (Math.abs(lonDiff) > 0.01) return lonDiff; // Prioritize longitude (west-east)
-        return b.latitude - a.latitude; // Then latitude (north-south)
-      });
-
-      // Create coordinates array
-      const coordinates = sortedStations.map(station => [
-        Number(station.longitude),
-        Number(station.latitude)
-      ]);
-
-      console.log(`✅ Creating line for ${lineName} with coordinates:`, coordinates.slice(0, 3), '...');
-
-      const lineGeoJSON = {
-        type: 'FeatureCollection' as const,
-        features: [{
-          type: 'Feature' as const,
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: coordinates
-          },
-          properties: {
-            line: lineName
-          }
-        }]
-      };
-
-      // Get line color
-      const lineColor = tubeLineColors[lineName] || '#6b7280';
-      console.log(`🎨 Line ${lineName} -> color: ${lineColor}`);
-
-      const sourceId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}`;
-      const layerId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}`;
+    lineFeatures.forEach((lineFeature, index) => {
+      const lineName = lineFeature.properties.line_name || `Line-${index}`;
+      const lineColor = lineFeature.properties.color || lineFeature.properties.stroke || '#666666';
+      
+      console.log(`🎨 Processing line: ${lineName} with color: ${lineColor}`);
+      
+      const sourceId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+      const layerId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
 
       try {
         // Check if source already exists and remove it
@@ -318,6 +227,13 @@ const Map = () => {
         }
 
         console.log(`➕ Adding source: ${sourceId}`);
+        
+        // Create GeoJSON for this line
+        const lineGeoJSON = {
+          type: 'FeatureCollection' as const,
+          features: [lineFeature]
+        };
+        
         // Add source
         map.current!.addSource(sourceId, {
           type: 'geojson',
@@ -325,15 +241,16 @@ const Map = () => {
         });
 
         console.log(`➕ Adding layer: ${layerId}`);
-        // Add line layer - put it BEFORE station layers so stations appear on top
+        
+        // Add line layer
         map.current!.addLayer({
           id: layerId,
           type: 'line',
           source: sourceId,
           paint: {
             'line-color': lineColor,
-            'line-width': 6,
-            'line-opacity': 0.7
+            'line-width': lineFeature.properties['stroke-width'] || 4,
+            'line-opacity': 0.8
           }
         });
 
@@ -342,30 +259,20 @@ const Map = () => {
         console.error(`❌ Error adding line layer ${layerId}:`, error);
       }
     });
-
-    console.log('🚇 Finished drawing tube lines');
   };
 
   const addStationsToMap = () => {
     if (!map.current) return;
 
     console.log('🚉 Adding stations to map...', stations.length);
-    
-    // Debug: Check first few stations to see their structure
-    if (stations.length > 0) {
-      console.log('📊 Sample station data:', {
-        first: stations[0],
-        hasLines: stations[0]?.lines?.length > 0,
-        linesType: typeof stations[0]?.lines,
-        linesValue: stations[0]?.lines
-      });
-    }
 
     // Create GeoJSON data for stations
     const stationsGeoJSON = {
       type: 'FeatureCollection' as const,
       features: stations.map((station) => {
-        const isVisited = visits.some(visit => visit.station_id === station.id);
+        const isVisited = visits.some(visit => 
+          visit.station_tfl_id === station.id || visit.station_id === station.id
+        );
         return {
           type: 'Feature' as const,
           geometry: {
@@ -390,9 +297,6 @@ const Map = () => {
       type: 'geojson',
       data: stationsGeoJSON
     });
-
-    // Add tube lines first (under stations)
-    addTubeLinesToMap();
 
     // Add visited stations layer - green circles
     map.current!.addLayer({
@@ -448,7 +352,6 @@ const Map = () => {
     });
   };
 
-
   const toggleStationVisit = async (station: Station) => {
     if (!user) {
       toast({
@@ -459,12 +362,15 @@ const Map = () => {
       return;
     }
 
-    const existingVisit = visits.find(visit => visit.station_id === station.id);
+    // Check for existing visit using both new and legacy columns
+    const existingVisit = visits.find(visit => 
+      visit.station_tfl_id === station.id || visit.station_id === station.id
+    );
 
     try {
       if (existingVisit) {
         // Remove visit
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('station_visits')
           .delete()
           .eq('id', existingVisit.id);
@@ -477,12 +383,13 @@ const Map = () => {
           description: `Removed visit to ${station.name}`
         });
       } else {
-        // Add visit
-        const { data, error } = await (supabase as any)
+        // Add visit using the new column
+        const { data, error } = await supabase
           .from('station_visits')
           .insert({
             user_id: user.id,
-            station_id: station.id
+            station_id: station.id, // Keep legacy column for compatibility
+            station_tfl_id: station.id // Use new column for TfL IDs
           })
           .select()
           .single();
@@ -497,7 +404,7 @@ const Map = () => {
         }
       }
 
-      // Update map
+      // Update map visualization
       if (map.current) {
         const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
         if (source) {
@@ -506,7 +413,10 @@ const Map = () => {
             features: stations.map((s) => {
               const isVisited = s.id === station.id 
                 ? !existingVisit 
-                : visits.some(visit => visit.station_id === s.id && visit.station_id !== station.id);
+                : visits.some(visit => 
+                    (visit.station_tfl_id === s.id || visit.station_id === s.id) && 
+                    (visit.station_tfl_id !== station.id && visit.station_id !== station.id)
+                  );
               return {
                 type: 'Feature' as const,
                 geometry: {
@@ -596,7 +506,9 @@ const Map = () => {
     );
   }
 
-  const isStationVisited = selectedStation ? visits.some(visit => visit.station_id === selectedStation.id) : false;
+  const isStationVisited = selectedStation ? visits.some(visit => 
+    visit.station_tfl_id === selectedStation.id || visit.station_id === selectedStation.id
+  ) : false;
 
   return (
     <div className="relative">
@@ -650,11 +562,9 @@ const Map = () => {
             <div className="w-3 h-3 rounded-full bg-gray-500"></div>
             <span>Not Visited ({stations.length - visits.length})</span>
           </div>
-          {hasCustomData && (
-            <div className="text-xs text-muted-foreground mt-1">
-              Using custom data
-            </div>
-          )}
+          <div className="text-xs text-muted-foreground mt-1">
+            GeoJSON data: {stations.length} stations, {lineFeatures.length} lines
+          </div>
         </div>
       </div>
     </div>

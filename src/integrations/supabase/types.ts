@@ -14,7 +14,164 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          home_station: string | null
+          id: string
+          last_active: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          home_station?: string | null
+          id?: string
+          last_active?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          home_station?: string | null
+          id?: string
+          last_active?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      station_id_mapping: {
+        Row: {
+          created_at: string
+          id: string
+          tfl_id: string
+          uuid_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tfl_id: string
+          uuid_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tfl_id?: string
+          uuid_id?: string
+        }
+        Relationships: []
+      }
+      station_special_interests: {
+        Row: {
+          created_at: string
+          id: string
+          interest_description: string | null
+          interest_name: string
+          station_tfl_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interest_description?: string | null
+          interest_name: string
+          station_tfl_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interest_description?: string | null
+          interest_name?: string
+          station_tfl_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      station_visits: {
+        Row: {
+          created_at: string
+          id: string
+          station_id: string
+          station_tfl_id: string | null
+          user_id: string
+          visited_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          station_id: string
+          station_tfl_id?: string | null
+          user_id: string
+          visited_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          station_id?: string
+          station_tfl_id?: string | null
+          user_id?: string
+          visited_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "station_visits_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stations: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          lines: string[]
+          longitude: number
+          name: string
+          tfl_id: string
+          updated_at: string
+          zone: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          lines: string[]
+          longitude: number
+          name: string
+          tfl_id: string
+          updated_at?: string
+          zone: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          lines?: string[]
+          longitude?: number
+          name?: string
+          tfl_id?: string
+          updated_at?: string
+          zone?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
