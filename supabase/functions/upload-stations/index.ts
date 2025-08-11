@@ -72,7 +72,19 @@ Deno.serve(async (req) => {
     
     console.log(`✅ Processed ${processedStations.length} valid stations`);
 
-    // Clear existing stations and insert new ones
+    // Clear existing mappings and stations, then insert new ones
+    // 1) Clear mapping table
+    const { error: deleteMapError } = await supabase
+      .from('station_id_mapping')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all mappings
+
+    if (deleteMapError) {
+      console.error('❌ Error clearing station_id_mapping:', deleteMapError);
+      throw deleteMapError;
+    }
+
+    // 2) Clear stations table
     const { error: deleteError } = await supabase
       .from('stations')
       .delete()
@@ -83,35 +95,56 @@ Deno.serve(async (req) => {
       throw deleteError;
     }
 
-    console.log('🗑️ Cleared existing stations');
+    console.log('🗑️ Cleared existing stations and mappings');
 
-    // Insert new stations in batches to avoid timeout
+    // Insert new stations in batches to avoid timeout and create mappings
     const batchSize = 100;
     let insertedCount = 0;
+    let mappingCount = 0;
 
     for (let i = 0; i < processedStations.length; i += batchSize) {
       const batch = processedStations.slice(i, i + batchSize);
       
-      const { error: insertError } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('stations')
-        .insert(batch);
+        .insert(batch)
+        .select('id, tfl_id');
       
       if (insertError) {
         console.error(`❌ Error inserting batch ${i / batchSize + 1}:`, insertError);
         throw insertError;
       }
+
+      // Build and insert mapping entries for this batch
+      const mappingBatch = (inserted ?? []).map((s: { id: string; tfl_id: string }) => ({
+        tfl_id: s.tfl_id,
+        uuid_id: s.id,
+      }));
+
+      if (mappingBatch.length > 0) {
+        const { error: mappingError } = await supabase
+          .from('station_id_mapping')
+          .insert(mappingBatch);
+
+        if (mappingError) {
+          console.error(`❌ Error inserting mapping batch ${i / batchSize + 1}:`, mappingError);
+          throw mappingError;
+        }
+
+        mappingCount += mappingBatch.length;
+      }
       
       insertedCount += batch.length;
-      console.log(`📦 Inserted batch ${i / batchSize + 1}/${Math.ceil(processedStations.length / batchSize)} (${insertedCount}/${processedStations.length} stations)`);
+      console.log(`📦 Inserted batch ${i / batchSize + 1}/${Math.ceil(processedStations.length / batchSize)} (${insertedCount}/${processedStations.length} stations, ${mappingCount} mappings so far)`);
     }
 
-    console.log(`🎉 Successfully uploaded ${insertedCount} stations to database`);
-
+    console.log(`🎉 Successfully uploaded ${insertedCount} stations and created ${mappingCount} mappings`),
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Successfully uploaded ${insertedCount} stations`,
-        stationsCount: insertedCount 
+        message: `Successfully uploaded ${insertedCount} stations and ${mappingCount} mappings`,
+        stationsCount: insertedCount,
+        mappingsCount: mappingCount,
       }),
       { 
         status: 200, 

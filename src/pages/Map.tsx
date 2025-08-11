@@ -40,7 +40,7 @@ const MapPage = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ImportTfLStations />
+            <ImportTfLStations onComplete={() => window.location.reload()} />
             <Button variant="outline" onClick={() => navigate('/')}> 
               Back to Home
             </Button>
