@@ -116,6 +116,31 @@ const Map = () => {
     }
   }
 
+  // Build popup HTML with status
+  const buildPopupHTML = (station: Station, isVisited: boolean) => {
+    const badges = (station.lines || []).map((line) => {
+      const bg = tubeLineColors[line] || '#6b7280';
+      const fg = (line === 'Circle' || line === 'Hammersmith & City') ? '#000' : '#fff';
+      return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${line}</span>`;
+    }).join(' ');
+
+    const statusBg = isVisited ? '#DCFCE7' : '#F3F4F6';
+    const statusBorder = isVisited ? '#86EFAC' : '#E5E7EB';
+    const statusColor = isVisited ? '#166534' : '#374151';
+    const statusText = isVisited ? 'Visited' : 'Not visited';
+
+    return `
+      <div style="font-family: ui-sans-serif, system-ui, -apple-system; font-size: 12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-weight:600; font-size: 14px;">${station.name}</div>
+          <span style="border:1px solid ${statusBorder};background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:9999px;font-size:11px;white-space:nowrap;">${statusText}</span>
+        </div>
+        <div style="opacity:.7; margin:6px 0;">Zone ${station.zone}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">${badges}</div>
+        <div style="opacity:.6;margin-top:6px;">Tip: tap the roundel to ${isVisited ? 'unmark' : 'mark'} as visited</div>
+      </div>`;
+  };
+
   // Load stations from GeoJSON file
   const loadStationsFromGeoJSON = async () => {
     try {
@@ -441,18 +466,8 @@ const Map = () => {
             setSelectedStation(station);
 
             const coords = (feature.geometry as any)?.coordinates || [Number(station.longitude), Number(station.latitude)];
-            const badges = (station.lines || []).map((line) => {
-              const bg = tubeLineColors[line] || '#6b7280';
-              const fg = (line === 'Circle' || line === 'Hammersmith & City') ? '#000' : '#fff';
-              return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${line}</span>`;
-            }).join(' ');
-
-            const html = `
-              <div style="font-family: ui-sans-serif, system-ui, -apple-system; font-size: 12px;">
-                <div style="font-weight:600; font-size: 14px; margin-bottom: 4px;">${station.name}</div>
-                <div style="opacity:.7; margin-bottom: 6px;">Zone ${station.zone}</div>
-                <div style="display:flex;flex-wrap:wrap;gap:4px;">${badges}</div>
-              </div>`;
+            const isVisitedNow = visits.some(v => v.station_tfl_id === station.id || v.station_id === station.id);
+            const html = buildPopupHTML(station, isVisitedNow);
 
             if (popupRef.current) popupRef.current.remove();
             popupRef.current = new mapboxgl.Popup({ offset: 12, closeOnClick: true })
@@ -529,37 +544,35 @@ const Map = () => {
         }
       }
 
-      // Update map visualization
+      // Compute new visits and update source + popup
+      const newVisited = !existingVisit;
+      const updatedVisits = newVisited
+        ? [...visits, { id: 'local-temp', station_tfl_id: station.id, visited_at: new Date().toISOString() } as any]
+        : visits.filter(v => !(v.station_tfl_id === station.id || v.station_id === station.id));
+
       if (map.current) {
         const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
         if (source) {
           const stationsGeoJSON = {
             type: 'FeatureCollection' as const,
             features: stations.map((s) => {
-              const isVisited = s.id === station.id 
-                ? !existingVisit 
-                : visits.some(visit => 
-                    (visit.station_tfl_id === s.id || visit.station_id === s.id) && 
-                    (visit.station_tfl_id !== station.id && visit.station_id !== station.id)
-                  );
+              const isVisited = s.id === station.id
+                ? newVisited
+                : updatedVisits.some(v => v.station_tfl_id === s.id || v.station_id === s.id);
               return {
                 type: 'Feature' as const,
-                geometry: {
-                  type: 'Point' as const,
-                  coordinates: [s.longitude, s.latitude]
-                },
-                properties: {
-                  id: s.id,
-                  name: s.name,
-                  zone: s.zone,
-                  lines: s.lines,
-                  visited: isVisited
-                }
+                geometry: { type: 'Point' as const, coordinates: [Number(s.longitude), Number(s.latitude)] },
+                properties: { id: s.id, name: s.name, zone: s.zone, lines: s.lines, visited: isVisited }
               };
             })
           };
-          source.setData(stationsGeoJSON);
+          source.setData(stationsGeoJSON as any);
         }
+      }
+
+      // Update popup status if open for this station
+      if (popupRef.current && selectedStation?.id === station.id) {
+        popupRef.current.setHTML(buildPopupHTML(station, !existingVisit));
       }
     } catch (error) {
       console.error('Error toggling visit:', error);
