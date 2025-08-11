@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import ProfileSetup from "@/components/ProfileSetup";
-
 const Index = () => {
   const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -13,6 +15,27 @@ const Index = () => {
       navigate('/auth');
     }
   }, [user, loading, navigate]);
+
+  // SEO: set title and meta
+  useEffect(() => {
+    document.title = "Public Transport Dashboard | Tube Challenge";
+    const desc = "Track visited stations, line progress, and recent activities on your public transport dashboard.";
+    let meta = document.querySelector('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'description');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', desc);
+
+    let link: HTMLLinkElement | null = document.querySelector('link[rel="canonical"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.setAttribute('rel', 'canonical');
+      document.head.appendChild(link);
+    }
+    link.setAttribute('href', window.location.origin + '/');
+  }, []);
 
   if (loading) {
     return (
@@ -31,57 +54,248 @@ const Index = () => {
     return <ProfileSetup userId={user.id} onComplete={() => window.location.reload()} />;
   }
 
+  // Data queries
+  const { data: visitsData = [], isLoading: visitsLoading } = useQuery({
+    queryKey: ['station_visits'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('station_visits')
+        .select('station_tfl_id,status,visited_at')
+        .order('visited_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: stationsData = [], isLoading: stationsLoading } = useQuery({
+    queryKey: ['stations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('stations')
+        .select('tfl_id,lines');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: activitiesData = [], isLoading: activitiesLoading } = useQuery({
+    queryKey: ['activities'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const {
+    totalVisited,
+    linesCompleted,
+    totalDistance,
+    latestActivity,
+    weekly,
+    monthly,
+  } = useMemo(() => {
+    const visitedSet = new Set<string>();
+    (visitsData || [])
+      .filter((v: any) => v.status === 'verified' && v.station_tfl_id)
+      .forEach((v: any) => visitedSet.add(v.station_tfl_id as string));
+
+    const lineTotals = new Map<string, number>();
+    const lineVisited = new Map<string, number>();
+
+    (stationsData || []).forEach((s: any) => {
+      const lines: string[] = Array.isArray(s.lines) ? s.lines : [];
+      lines.forEach((ln) => {
+        lineTotals.set(ln, (lineTotals.get(ln) || 0) + 1);
+        if (visitedSet.has(s.tfl_id)) {
+          lineVisited.set(ln, (lineVisited.get(ln) || 0) + 1);
+        }
+      });
+    });
+
+    let completed = 0;
+    lineTotals.forEach((total, ln) => {
+      const v = lineVisited.get(ln) || 0;
+      if (total > 0 && v >= total) completed += 1;
+    });
+
+    const distance = (activitiesData || []).reduce((acc: number, a: any) => {
+      const d = a?.distance_km != null ? Number(a.distance_km) : 0;
+      return acc + (isNaN(d) ? 0 : d);
+    }, 0);
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    const weeklyActs = (activitiesData || []).filter((a: any) => a.started_at && new Date(a.started_at) >= sevenDaysAgo);
+    const monthlyActs = (activitiesData || []).filter((a: any) => a.started_at && new Date(a.started_at) >= thirtyDaysAgo);
+
+    const weekly = {
+      activities: weeklyActs.length,
+      distance: weeklyActs.reduce((acc: number, a: any) => acc + (a.distance_km ? Number(a.distance_km) : 0), 0),
+    };
+    const monthly = {
+      activities: monthlyActs.length,
+      distance: monthlyActs.reduce((acc: number, a: any) => acc + (a.distance_km ? Number(a.distance_km) : 0), 0),
+    };
+
+    return {
+      totalVisited: visitedSet.size,
+      linesCompleted: completed,
+      totalDistance: distance,
+      latestActivity: (activitiesData || [])[0] || null,
+      weekly,
+      monthly,
+    };
+  }, [visitsData, stationsData, activitiesData]);
+
+  const isLoadingAny = visitsLoading || stationsLoading || activitiesLoading;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
       <div className="container mx-auto px-4 py-8">
         <header className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Tube Challenge
-            </h1>
-            <p className="text-muted-foreground">
-              Welcome back, {profile.display_name || user.email}!
-            </p>
+            <h1 className="text-3xl font-bold text-foreground">Public Transport Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back, {profile.display_name || user.email}!</p>
           </div>
-          <Button variant="outline" onClick={signOut}>
-            Sign Out
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/map')}>Open Map</Button>
+            <Button variant="outline" onClick={signOut}>Sign Out</Button>
+          </div>
         </header>
-        
-        <div className="text-center max-w-2xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4">
-            Ready to conquer the London Underground?
-          </h2>
-          <p className="text-lg text-muted-foreground mb-8">
-            Track your progress through all 272 stations across the Tube network. 
-            Complete challenges, earn badges, and compete with fellow travelers.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-            <div className="p-6 border rounded-lg bg-card">
-              <h3 className="text-xl font-semibold mb-2">Zone 1 Sprint</h3>
-              <p className="text-muted-foreground mb-4">
-                Visit all Zone 1 stations as fast as possible
-              </p>
-              <Button className="w-full" disabled>
-                Coming Soon
-              </Button>
-            </div>
-            
-            <div className="p-6 border rounded-lg bg-card">
-              <h3 className="text-xl font-semibold mb-2">Interactive Map</h3>
-              <p className="text-muted-foreground mb-4">
-                Explore the Tube network and track your progress
-              </p>
-              <Button 
-                className="w-full" 
-                onClick={() => window.location.href = '/map'}
-              >
-                Open Map
-              </Button>
-            </div>
-          </div>
+
+        <main>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle>Total Stations Visited</CardTitle>
+              <CardDescription>Verified visits only</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-bold">{isLoadingAny ? '—' : totalVisited}</p>
+            </CardContent>
+          </Card>
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle>Lines Completed</CardTitle>
+              <CardDescription>Across all Tube lines</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-bold">{isLoadingAny ? '—' : linesCompleted}</p>
+            </CardContent>
+          </Card>
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle>Distance Travelled</CardTitle>
+              <CardDescription>From your activities (km)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-bold">{isLoadingAny ? '—' : totalDistance.toFixed(1)}</p>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Latest activity + Map section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Latest Activity</CardTitle>
+              <CardDescription>{latestActivity ? new Date(latestActivity.started_at).toLocaleString() : 'No activities yet'}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {latestActivity ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">{latestActivity.title || 'Untitled activity'}</p>
+                  <div className="text-sm">Stations: {Array.isArray(latestActivity.station_tfl_ids) ? latestActivity.station_tfl_ids.length : 0} · Distance: {latestActivity.distance_km ? Number(latestActivity.distance_km).toFixed(1) : '0.0'} km</div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Start your first activity from the map.</p>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button onClick={() => navigate('/map')}>Add Activity</Button>
+            </CardFooter>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Map</CardTitle>
+              <CardDescription>Open the interactive network map</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="relative w-full h-48 rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-secondary/20">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">Map preview</div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/map')}>Open Map</Button>
+            </CardFooter>
+          </Card>
+        </div>
+
+        {/* Weekly / Monthly */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>This Week</CardTitle>
+              <CardDescription>Last 7 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{isLoadingAny ? '—' : `${weekly.activities} activities`}</div>
+              <div className="text-muted-foreground">Distance: {isLoadingAny ? '—' : `${weekly.distance.toFixed(1)} km`}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>This Month</CardTitle>
+              <CardDescription>Last 30 days</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{isLoadingAny ? '—' : `${monthly.activities} activities`}</div>
+              <div className="text-muted-foreground">Distance: {isLoadingAny ? '—' : `${monthly.distance.toFixed(1)} km`}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent activities feed */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activities</CardTitle>
+            <CardDescription>Your last 5 activities</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {activitiesLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : activitiesData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activities yet.</p>
+            ) : (
+              <ul className="divide-y">
+                {activitiesData.map((a: any) => (
+                  <li key={a.id} className="py-3 flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">{a.title || 'Untitled activity'}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(a.started_at).toLocaleString()}</div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {a.distance_km ? Number(a.distance_km).toFixed(1) : '0.0'} km
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </main>
       </div>
     </div>
   );
