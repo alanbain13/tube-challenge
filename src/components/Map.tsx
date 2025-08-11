@@ -263,7 +263,6 @@ const Map = () => {
       });
 
       addTubeLinesToMap();
-      await loadRoundelImages();
       addStationsToMap();
 
       // Compute network bounds and add a fit control
@@ -398,13 +397,41 @@ const Map = () => {
         }
       });
     }
+    // Fallback circle layers with roundel-like appearance
+    if (!map.current!.getLayer('visited-stations')) {
+      map.current!.addLayer({
+        id: 'visited-stations',
+        type: 'circle',
+        source: 'stations',
+        filter: ['==', ['get', 'visited'], true],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#E32017',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+    }
 
-
+    if (!map.current!.getLayer('unvisited-stations')) {
+      map.current!.addLayer({
+        id: 'unvisited-stations',
+        type: 'circle',
+        source: 'stations',
+        filter: ['==', ['get', 'visited'], false],
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#ffffff',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#E32017'
+        }
+      });
+    }
 
     console.log('✅ Added station layers to map');
 
     // Add click handlers
-    ['stations-symbols'].forEach(layerId => {
+    ['stations-symbols', 'visited-stations', 'unvisited-stations'].forEach(layerId => {
       map.current!.on('click', layerId, (e) => {
         if (e.features && e.features[0]) {
           const feature = e.features[0] as mapboxgl.MapboxGeoJSONFeature;
