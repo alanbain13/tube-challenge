@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import Map from '@/components/Map';
+import ImportTfLStations from '@/components/ImportTfLStations';
 
 const MapPage = () => {
   const { user, loading } = useAuth();
@@ -38,9 +39,12 @@ const MapPage = () => {
               Click on stations to mark them as visited
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate('/')}>
-            Back to Home
-          </Button>
+          <div className="flex items-center gap-2">
+            <ImportTfLStations />
+            <Button variant="outline" onClick={() => navigate('/')}> 
+              Back to Home
+            </Button>
+          </div>
         </header>
         
         <Map />
