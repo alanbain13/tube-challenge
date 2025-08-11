@@ -22,6 +22,32 @@ Personas
 - Player: Authenticated user completing Tube challenges
 - Admin/Maintainer: Manages data sources and monitors system health
 
+Key Features
+- Tube Network Integration
+  - Real-time API integration (e.g., TfL for London) to track routes and station data.
+  - Offline map for navigation without connectivity.
+- Station Check-In
+  - GPS or NFC-based station check-in.
+  - Optionally scan signage or tap into WiFi/Cell ID.
+- Challenges & Modes
+  - Zone 1 Sprint: Visit all Zone 1 stations fastest.
+  - Alphabet Run: Visit stations starting with each letter.
+  - Line Mastery: Ride every station on a given line.
+  - Time Trial: Beat your own or others’ best times.
+  - Treasure Hunt: Solve clues to find and visit specific stations.
+- Route Optimiser
+  - Smart route planning using timetable and walking options.
+  - Suggest detours for extra achievements or hidden gems.
+- Leaderboards & Stats
+  - Global and friends-only rankings.
+  - Your best times, longest routes, most lines ridden.
+- Social & Sharing
+  - Share completed challenges on socials.
+  - Track friends live (opt-in) or compare runs.
+- Rewards System
+  - Virtual medals, badges, and trophies.
+  - Unlock facts about stations or hidden content.
+
 1) Authentication
 Context: Users must authenticate to access the app. Unauthed users go to /auth.
 
