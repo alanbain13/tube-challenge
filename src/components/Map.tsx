@@ -233,7 +233,6 @@ const Map = () => {
       style: 'mapbox://styles/mapbox/light-v11',
       center: [-0.1278, 51.5074], // London center
       zoom: 10,
-      cooperativeGestures: true,
       dragRotate: false,
       pitchWithRotate: false,
     });
@@ -247,6 +246,9 @@ const Map = () => {
       }),
       'top-right'
     );
+
+    // Re-enable standard scroll/trackpad zoom
+    map.current.scrollZoom.enable();
 
     // Add data to map when loaded
     map.current.on('load', async () => {
@@ -372,39 +374,32 @@ const Map = () => {
 
     console.log('📍 Created GeoJSON with', stationsGeoJSON.features.length, 'stations');
 
-    // Add source
-    map.current!.addSource('stations', {
-      type: 'geojson',
-      data: stationsGeoJSON
-    });
+    // Add or update source
+    const existing = map.current!.getSource('stations') as mapboxgl.GeoJSONSource | undefined;
+    if (existing) {
+      existing.setData(stationsGeoJSON as any);
+    } else {
+      map.current!.addSource('stations', {
+        type: 'geojson',
+        data: stationsGeoJSON
+      });
+    }
 
-    // Add visited stations layer - green circles
-    map.current!.addLayer({
-      id: 'visited-stations',
-      type: 'circle',
-      source: 'stations',
-      filter: ['==', ['get', 'visited'], true],
-      paint: {
-        'circle-radius': 8,
-        'circle-color': '#22c55e',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff'
-      }
-    });
+    // Add symbol layer with roundel icons (empty vs filled)
+    if (!map.current!.getLayer('stations-symbols')) {
+      map.current!.addLayer({
+        id: 'stations-symbols',
+        type: 'symbol',
+        source: 'stations',
+        layout: {
+          'icon-image': ['case', ['==', ['get', 'visited'], true], 'roundel-filled', 'roundel-empty'],
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 0.65, 16, 0.85],
+          'icon-allow-overlap': true,
+        }
+      });
+    }
 
-    // Add unvisited stations layer - black/white nodes
-    map.current!.addLayer({
-      id: 'unvisited-stations',
-      type: 'circle',
-      source: 'stations',
-      filter: ['==', ['get', 'visited'], false],
-      paint: {
-        'circle-radius': 6,
-        'circle-color': '#000000',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff'
-      }
-    });
+
 
     console.log('✅ Added station layers to map');
 
