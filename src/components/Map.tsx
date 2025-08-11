@@ -54,11 +54,15 @@ const Map = () => {
   });
   const [stations, setStations] = useState<Station[]>([]);
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
-  const [visits, setVisits] = useState<StationVisit[]>([]);
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
-  const { toast } = useToast();
+const [visits, setVisits] = useState<StationVisit[]>([]);
+const visitsRef = useRef<StationVisit[]>([]);
+useEffect(() => {
+  visitsRef.current = visits;
+}, [visits]);
+const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+const [loading, setLoading] = useState(true);
+const { user } = useAuth();
+const { toast } = useToast();
 
   // Popup and bounds refs
   const popupRef = useRef<mapboxgl.Popup | null>(null);
@@ -116,30 +120,30 @@ const Map = () => {
     }
   }
 
-  // Build popup HTML with status
-  const buildPopupHTML = (station: Station, isVisited: boolean) => {
-    const badges = (station.lines || []).map((line) => {
-      const bg = tubeLineColors[line] || '#6b7280';
-      const fg = (line === 'Circle' || line === 'Hammersmith & City') ? '#000' : '#fff';
-      return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${line}</span>`;
-    }).join(' ');
+// Build popup HTML with status
+const buildPopupHTML = (station: Station, isVisited: boolean) => {
+  const badges = (station.lines || []).map((line) => {
+    const bg = tubeLineColors[line] || '#6b7280';
+    const fg = (line === 'Circle' || line === 'Hammersmith & City') ? '#000' : '#fff';
+    return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${line}</span>`;
+  }).join(' ');
 
-    const statusBg = isVisited ? '#DCFCE7' : '#F3F4F6';
-    const statusBorder = isVisited ? '#86EFAC' : '#E5E7EB';
-    const statusColor = isVisited ? '#166534' : '#374151';
-    const statusText = isVisited ? 'Visited' : 'Not visited';
+  const statusBg = isVisited ? '#DCFCE7' : '#F3F4F6';
+  const statusBorder = isVisited ? '#86EFAC' : '#E5E7EB';
+  const statusColor = isVisited ? '#166534' : '#374151';
+  const statusText = isVisited ? 'Visited' : 'Not visited';
 
-    return `
-      <div style="font-family: ui-sans-serif, system-ui, -apple-system; font-size: 12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <div style="font-weight:600; font-size: 14px;">${station.name}</div>
-          <span style="border:1px solid ${statusBorder};background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:9999px;font-size:11px;white-space:nowrap;">${statusText}</span>
-        </div>
-        <div style="opacity:.7; margin:6px 0;">Zone ${station.zone}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;">${badges}</div>
-        <div style="opacity:.6;margin-top:6px;">Tip: tap the roundel to ${isVisited ? 'unmark' : 'mark'} as visited</div>
-      </div>`;
-  };
+  return `
+    <article style="font-family: ui-sans-serif, system-ui, -apple-system; font-size: 12px;">
+      <header style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h1 style="font-weight:600; font-size: 14px; margin:0;">${station.name}</h1>
+        <span style="border:1px solid ${statusBorder};background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:9999px;font-size:11px;white-space:nowrap;">${statusText}</span>
+      </header>
+      <div style="opacity:.7; margin:6px 0;">Zone ${station.zone}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${badges}</div>
+      <p style="opacity:.6;margin-top:6px;">Tip: tap the roundel to ${isVisited ? 'unmark' : 'mark'} as visited</p>
+    </article>`;
+};
 
   // Load stations from GeoJSON file
   const loadStationsFromGeoJSON = async () => {
@@ -191,28 +195,35 @@ const Map = () => {
     }
   };
 
-  // Load user visits
-  const loadUserVisits = async () => {
-    if (!user) return;
+// Load user visits (enrich with tfl_id from stations for legacy rows)
+const loadUserVisits = async () => {
+  if (!user) return;
+  
+  try {
+    console.log('🔄 Fetching station visits (with station relation)...');
+    const { data, error } = await supabase
+      .from('station_visits')
+      .select('id, user_id, station_id, station_tfl_id, visited_at, stations ( tfl_id )')
+      .eq('user_id', user.id);
     
-    try {
-      console.log('🔄 Fetching station visits...');
-      const { data, error } = await supabase
-        .from('station_visits')
-        .select('*')
-        .eq('user_id', user.id);
-      
-      if (error) {
-        console.error('❌ Error fetching visits:', error);
-        return;
-      }
-      
-      console.log('✅ Fetched visits:', data?.length || 0);
-      setVisits(data || []);
-    } catch (error) {
-      console.error('❌ Error fetching station visits:', error);
+    if (error) {
+      console.error('❌ Error fetching visits:', error);
+      return;
     }
-  };
+    
+    const normalized = (data || []).map((row: any) => ({
+      id: row.id,
+      station_id: row.station_id,
+      station_tfl_id: row.station_tfl_id || row.stations?.tfl_id || null,
+      visited_at: row.visited_at,
+    })) as StationVisit[];
+    
+    console.log('✅ Fetched visits:', normalized.length);
+    setVisits(normalized);
+  } catch (error) {
+    console.error('❌ Error fetching station visits:', error);
+  }
+};
 
   // Load all data
   const loadData = async () => {
@@ -373,28 +384,28 @@ const Map = () => {
     console.log('🚉 Adding stations to map...', stations.length);
 
     // Create GeoJSON data for stations
-    const stationsGeoJSON = {
-      type: 'FeatureCollection' as const,
-      features: stations.map((station) => {
-        const isVisited = visits.some(visit => 
-          visit.station_tfl_id === station.id || visit.station_id === station.id
-        );
-        return {
-          type: 'Feature' as const,
-          geometry: {
-            type: 'Point' as const,
-            coordinates: [Number(station.longitude), Number(station.latitude)]
-          },
-          properties: {
-            id: station.id,
-            name: station.name,
-            zone: station.zone,
-            lines: station.lines || [],
-            visited: isVisited
-          }
-        };
-      })
+const stationsGeoJSON = {
+  type: 'FeatureCollection' as const,
+  features: stations.map((station) => {
+const isVisited = visitsRef.current.some(visit => 
+  visit.station_tfl_id === station.id || visit.station_id === station.id
+);
+    return {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [Number(station.longitude), Number(station.latitude)]
+      },
+      properties: {
+        id: station.id,
+        name: station.name,
+        zone: station.zone,
+        lines: station.lines || [],
+        visited: isVisited
+      }
     };
+  })
+};
 
     console.log('📍 Created GeoJSON with', stationsGeoJSON.features.length, 'stations');
 
@@ -455,162 +466,160 @@ const Map = () => {
 
     console.log('✅ Added station layers to map');
 
-    // Add click handlers
-    ['stations-symbols', 'visited-stations', 'unvisited-stations'].forEach(layerId => {
-      map.current!.on('click', layerId, (e) => {
-        if (e.features && e.features[0]) {
-          const feature = e.features[0] as mapboxgl.MapboxGeoJSONFeature;
-          const stationId = (feature.properties as any)?.id as string;
-          const station = stations.find(s => s.id === stationId);
-          if (station) {
-            setSelectedStation(station);
+// Add click handlers
+['stations-symbols', 'visited-stations', 'unvisited-stations'].forEach(layerId => {
+  map.current!.on('click', layerId, (e) => {
+    if (e.features && e.features[0]) {
+      const feature = e.features[0] as mapboxgl.MapboxGeoJSONFeature;
+      const stationId = (feature.properties as any)?.id as string;
+      const station = stations.find(s => s.id === stationId);
+      if (station) {
+        setSelectedStation(station);
 
-            const coords = (feature.geometry as any)?.coordinates || [Number(station.longitude), Number(station.latitude)];
-            const isVisitedNow = visits.some(v => v.station_tfl_id === station.id || v.station_id === station.id);
-            const html = buildPopupHTML(station, isVisitedNow);
+        const coords = (feature.geometry as any)?.coordinates || [Number(station.longitude), Number(station.latitude)];
+        const isVisitedNow = visitsRef.current.some(v => v.station_tfl_id === station.id || v.station_id === station.id);
+        const html = buildPopupHTML(station, isVisitedNow);
 
-            if (popupRef.current) popupRef.current.remove();
-            popupRef.current = new mapboxgl.Popup({ offset: 12, closeOnClick: true })
-              .setLngLat(coords as [number, number])
-              .setHTML(html)
-              .addTo(map.current!);
+        if (popupRef.current) popupRef.current.remove();
+        popupRef.current = new mapboxgl.Popup({ offset: 12, closeOnClick: true })
+          .setLngLat(coords as [number, number])
+          .setHTML(html)
+          .addTo(map.current!);
 
-            // Toggle visit on click
-            void toggleStationVisit(station);
-          }
-        }
-      });
+        // Toggle visit on click
+        void toggleStationVisit(station);
+      }
+    }
+  });
 
-      // Change cursor on hover
-      map.current!.on('mouseenter', layerId, () => {
-        map.current!.getCanvas().style.cursor = 'pointer';
-      });
+  // Change cursor on hover
+  map.current!.on('mouseenter', layerId, () => {
+    map.current!.getCanvas().style.cursor = 'pointer';
+  });
 
-      map.current!.on('mouseleave', layerId, () => {
-        map.current!.getCanvas().style.cursor = '';
-      });
-    });
+  map.current!.on('mouseleave', layerId, () => {
+    map.current!.getCanvas().style.cursor = '';
+  });
+});
   };
 
-  const toggleStationVisit = async (station: Station) => {
-    if (!user) {
+const toggleStationVisit = async (station: Station) => {
+  if (!user) {
+    toast({
+      title: "Authentication required",
+      description: "Please sign in to track station visits.",
+      variant: "destructive"
+    });
+    return;
+  }
+
+  const current = visitsRef.current;
+  const existingVisit = current.find(v => v.station_tfl_id === station.id || v.station_id === station.id);
+
+  try {
+    let nextVisits: StationVisit[] = current;
+
+    if (existingVisit) {
+      const { error } = await supabase
+        .from('station_visits')
+        .delete()
+        .eq('id', existingVisit.id);
+      if (error) throw error;
+
+      nextVisits = current.filter(v => v.id !== existingVisit.id);
       toast({
-        title: "Authentication required",
-        description: "Please sign in to track station visits.",
-        variant: "destructive"
+        title: "Visit removed",
+        description: `Removed visit to ${station.name}`
       });
-      return;
-    }
+    } else {
+      // Add visit using mapping to DB station UUID
+      let stationUuid: string | undefined;
+      const { data: sRow } = await supabase
+        .from('stations')
+        .select('id')
+        .eq('tfl_id', station.id)
+        .maybeSingle();
+      stationUuid = (sRow as any)?.id as string | undefined;
 
-    // Check for existing visit using both new and legacy columns
-    const existingVisit = visits.find(visit => 
-      visit.station_tfl_id === station.id || visit.station_id === station.id
-    );
-
-    try {
-      if (existingVisit) {
-        // Remove visit
-        const { error } = await supabase
-          .from('station_visits')
-          .delete()
-          .eq('id', existingVisit.id);
-
-        if (error) throw error;
-
-        setVisits(prev => prev.filter(v => v.id !== existingVisit.id));
-        toast({
-          title: "Visit removed",
-          description: `Removed visit to ${station.name}`
-        });
-      } else {
-        // Add visit using mapping to DB station UUID
-        // 1) Try stations table by tfl_id
-        let stationUuid: string | undefined;
-        const { data: sRow } = await supabase
-          .from('stations')
-          .select('id')
+      if (!stationUuid) {
+        const { data: mapRow } = await supabase
+          .from('station_id_mapping')
+          .select('uuid_id')
           .eq('tfl_id', station.id)
           .maybeSingle();
-        stationUuid = (sRow as any)?.id as string | undefined;
-
-        // 2) Fallback to station_id_mapping
-        if (!stationUuid) {
-          const { data: mapRow } = await supabase
-            .from('station_id_mapping')
-            .select('uuid_id')
-            .eq('tfl_id', station.id)
-            .maybeSingle();
-          stationUuid = (mapRow as any)?.uuid_id as string | undefined;
-        }
-
-        if (!stationUuid) {
-          toast({
-            title: 'Station not linked',
-            description: 'This station is missing a database mapping. Please import stations or add a mapping for ' + station.name,
-            variant: 'destructive',
-          });
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('station_visits')
-          .insert({
-            user_id: user.id,
-            station_id: stationUuid,
-            station_tfl_id: station.id,
-          })
-          .select()
-          .maybeSingle();
-
-        if (error) throw error;
-        if (data) {
-          setVisits(prev => [...prev, data]);
-          toast({
-            title: 'Station visited!',
-            description: `Added ${station.name} to your visited stations`,
-          });
-        }
+        stationUuid = (mapRow as any)?.uuid_id as string | undefined;
       }
 
-      // Compute new visits and update source + popup
-      const newVisited = !existingVisit;
-      const updatedVisits = newVisited
-        ? [...visits, { id: 'local-temp', station_tfl_id: station.id, visited_at: new Date().toISOString() } as any]
-        : visits.filter(v => !(v.station_tfl_id === station.id || v.station_id === station.id));
-
-      if (map.current) {
-        const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
-        if (source) {
-          const stationsGeoJSON = {
-            type: 'FeatureCollection' as const,
-            features: stations.map((s) => {
-              const isVisited = s.id === station.id
-                ? newVisited
-                : updatedVisits.some(v => v.station_tfl_id === s.id || v.station_id === s.id);
-              return {
-                type: 'Feature' as const,
-                geometry: { type: 'Point' as const, coordinates: [Number(s.longitude), Number(s.latitude)] },
-                properties: { id: s.id, name: s.name, zone: s.zone, lines: s.lines, visited: isVisited }
-              };
-            })
-          };
-          source.setData(stationsGeoJSON as any);
-        }
+      if (!stationUuid) {
+        toast({
+          title: 'Station not linked',
+          description: 'This station is missing a database mapping. Please import stations or add a mapping for ' + station.name,
+          variant: 'destructive',
+        });
+        return;
       }
 
-      // Update popup status if open for this station
-      if (popupRef.current && selectedStation?.id === station.id) {
-        popupRef.current.setHTML(buildPopupHTML(station, !existingVisit));
+      const { data, error } = await supabase
+        .from('station_visits')
+        .insert({
+          user_id: user.id,
+          station_id: stationUuid,
+          station_tfl_id: station.id,
+        })
+        .select('id, station_id, station_tfl_id, visited_at')
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        const added: StationVisit = {
+          id: data.id as any,
+          station_id: data.station_id as any,
+          station_tfl_id: (data as any).station_tfl_id ?? station.id,
+          visited_at: (data as any).visited_at,
+        };
+        nextVisits = [...current, added];
+        toast({
+          title: 'Station visited!',
+          description: `Added ${station.name} to your visited stations`,
+        });
       }
-    } catch (error) {
-      console.error('Error toggling visit:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update station visit",
-        variant: "destructive"
-      });
     }
-  };
+
+    setVisits(nextVisits);
+
+    // Update map source using the new visit set
+    if (map.current) {
+      const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
+      if (source) {
+        const stationsGeoJSON = {
+          type: 'FeatureCollection' as const,
+          features: stations.map((s) => {
+            const isVisited = nextVisits.some(v => v.station_tfl_id === s.id || v.station_id === s.id);
+            return {
+              type: 'Feature' as const,
+              geometry: { type: 'Point' as const, coordinates: [Number(s.longitude), Number(s.latitude)] },
+              properties: { id: s.id, name: s.name, zone: s.zone, lines: s.lines, visited: isVisited }
+            };
+          })
+        };
+        source.setData(stationsGeoJSON as any);
+      }
+    }
+
+    // Update popup status if open
+    if (popupRef.current) {
+      const isVisitedNow = nextVisits.some(v => v.station_tfl_id === station.id || v.station_id === station.id);
+      popupRef.current.setHTML(buildPopupHTML(station, isVisitedNow));
+    }
+  } catch (error) {
+    console.error('Error toggling visit:', error);
+    toast({
+      title: "Error",
+      description: "Failed to update station visit",
+      variant: "destructive"
+    });
+  }
+};
 
   if (loading) {
     return (
