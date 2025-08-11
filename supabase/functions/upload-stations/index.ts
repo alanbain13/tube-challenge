@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
       console.log(`📦 Inserted batch ${i / batchSize + 1}/${Math.ceil(processedStations.length / batchSize)} (${insertedCount}/${processedStations.length} stations, ${mappingCount} mappings so far)`);
     }
 
-    console.log(`🎉 Successfully uploaded ${insertedCount} stations and created ${mappingCount} mappings`),
+    console.log(`🎉 Successfully uploaded ${insertedCount} stations and created ${mappingCount} mappings`);
     return new Response(
       JSON.stringify({ 
         success: true, 
