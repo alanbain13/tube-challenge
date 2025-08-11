@@ -523,23 +523,51 @@ const Map = () => {
           description: `Removed visit to ${station.name}`
         });
       } else {
-        // Add visit using the new column
+        // Add visit using mapping to DB station UUID
+        // 1) Try stations table by tfl_id
+        let stationUuid: string | undefined;
+        const { data: sRow } = await supabase
+          .from('stations')
+          .select('id')
+          .eq('tfl_id', station.id)
+          .maybeSingle();
+        stationUuid = (sRow as any)?.id as string | undefined;
+
+        // 2) Fallback to station_id_mapping
+        if (!stationUuid) {
+          const { data: mapRow } = await supabase
+            .from('station_id_mapping')
+            .select('uuid_id')
+            .eq('tfl_id', station.id)
+            .maybeSingle();
+          stationUuid = (mapRow as any)?.uuid_id as string | undefined;
+        }
+
+        if (!stationUuid) {
+          toast({
+            title: 'Station not linked',
+            description: 'This station is missing a database mapping. Please import stations or add a mapping for ' + station.name,
+            variant: 'destructive',
+          });
+          return;
+        }
+
         const { data, error } = await supabase
           .from('station_visits')
           .insert({
             user_id: user.id,
-            station_id: station.id, // Keep legacy column for compatibility
-            station_tfl_id: station.id // Use new column for TfL IDs
+            station_id: stationUuid,
+            station_tfl_id: station.id,
           })
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
         if (data) {
           setVisits(prev => [...prev, data]);
           toast({
-            title: "Station visited!",
-            description: `Added ${station.name} to your visited stations`
+            title: 'Station visited!',
+            description: `Added ${station.name} to your visited stations`,
           });
         }
       }
