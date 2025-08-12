@@ -37,23 +37,6 @@ const Index = () => {
     link.setAttribute('href', window.location.origin + '/');
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
-        <p className="text-lg">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  // Show profile setup if user hasn't completed their profile
-  if (!profile || !profile.display_name) {
-    return <ProfileSetup userId={user.id} onComplete={() => window.location.reload()} />;
-  }
-
   // Data queries
   const { data: visitsData = [], isLoading: visitsLoading } = useQuery({
     queryKey: ['station_visits'],
@@ -65,6 +48,7 @@ const Index = () => {
       if (error) throw error;
       return data ?? [];
     },
+    enabled: !!user,
   });
 
   const { data: stationsData = [], isLoading: stationsLoading } = useQuery({
@@ -89,6 +73,7 @@ const Index = () => {
       if (error) throw error;
       return data ?? [];
     },
+    enabled: !!user,
   });
 
   const {
@@ -157,6 +142,24 @@ const Index = () => {
   }, [visitsData, stationsData, activitiesData]);
 
   const isLoadingAny = visitsLoading || stationsLoading || activitiesLoading;
+
+  // Safe early returns after all hooks are declared
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
+        <p className="text-lg">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  // Show profile setup if user hasn't completed their profile
+  if (!profile || !profile.display_name) {
+    return <ProfileSetup userId={user.id} onComplete={() => window.location.reload()} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
