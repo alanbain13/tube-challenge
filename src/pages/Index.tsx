@@ -226,7 +226,7 @@ const Index = () => {
               )}
             </CardContent>
             <CardFooter>
-              <Button onClick={() => navigate('/map')}>Add Activity</Button>
+              <Button onClick={() => navigate('/activities/new')}>Add Activity</Button>
             </CardFooter>
           </Card>
 
