@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import MapComponent from '@/components/Map';
-import ImportTfLStations from '@/components/ImportTfLStations';
+
 
 const MapPage = () => {
   const { user, loading } = useAuth();
@@ -40,7 +40,6 @@ const MapPage = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ImportTfLStations onComplete={() => window.location.reload()} />
             <Button variant="outline" onClick={() => navigate('/')}> 
               Back to Home
             </Button>

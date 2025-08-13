@@ -49,6 +49,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
   }, []);
 
   useEffect(() => {
+    console.log('🗺️ RouteMap useEffect - Map initialization check:', {
+      hasContainer: !!mapContainer.current,
+      tokenValid,
+      loading,
+      stationsCount: stations.length,
+      mapboxToken: mapboxToken ? 'present' : 'missing'
+    });
+    
     if (!mapContainer.current || !tokenValid || loading || stations.length === 0) return;
 
     mapboxgl.accessToken = mapboxToken;
@@ -63,6 +71,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.current.on('load', () => {
+      console.log('🗺️ RouteMap - Map loaded, adding data...');
       addTubeLinesToMap();
       addStationsToMap();
     });
@@ -73,6 +82,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
   }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
 
   useEffect(() => {
+    console.log('🗺️ RouteMap - Station styles update:', {
+      hasMap: !!map.current,
+      stationsCount: stations.length,
+      selectedCount: selectedStations.length
+    });
+    
     if (map.current && stations.length > 0) {
       updateStationStyles();
     }

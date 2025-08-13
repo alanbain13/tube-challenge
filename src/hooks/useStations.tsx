@@ -22,15 +22,26 @@ export const useStations = () => {
         }
         
         const geoJsonData = await response.json();
-        const stationData = geoJsonData.features.map((feature: any) => ({
-          id: feature.properties.id,
-          name: feature.properties.name,
-          zone: feature.properties.zone,
-          lines: feature.properties.lines || [],
-          coordinates: feature.geometry.coordinates,
-        }));
         
-        setStations(stationData);
+        // Filter out duplicate station IDs to avoid React key warnings
+        const uniqueStations = new Map();
+        const stationData = geoJsonData.features
+          .filter((feature: any) => feature.geometry.type === 'Point')
+          .forEach((feature: any) => {
+            const station = {
+              id: feature.properties.id,
+              name: feature.properties.name,
+              zone: feature.properties.zone,
+              lines: feature.properties.lines || [],
+              coordinates: feature.geometry.coordinates,
+            };
+            // Keep the first occurrence of each station ID
+            if (!uniqueStations.has(station.id)) {
+              uniqueStations.set(station.id, station);
+            }
+          });
+        
+        setStations(Array.from(uniqueStations.values()));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
