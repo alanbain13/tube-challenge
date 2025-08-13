@@ -252,10 +252,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('click', 'stations', (e) => {
       if (e.features && e.features[0]) {
         const stationId = e.features[0].properties?.id;
+        console.log('🖱️ Station clicked:', stationId, 'Currently selected:', selectedStations);
         if (stationId) {
           if (selectedStations.includes(stationId)) {
+            console.log('🗑️ Removing station:', stationId);
             onStationRemove(stationId);
           } else {
+            console.log('➕ Adding station:', stationId);
             onStationSelect(stationId);
           }
         }
@@ -327,35 +330,39 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
   if (!tokenValid) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Mapbox Setup Required</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            To use the interactive map, please enter your Mapbox public token.
-            Get yours at <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">mapbox.com</a>
-          </p>
-          <div className="flex gap-2">
-            <Input
-              placeholder="pk.your-mapbox-token-here"
-              value={mapboxToken}
-              onChange={(e) => setMapboxToken(e.target.value)}
-            />
-            <Button onClick={validateToken}>Set Token</Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Mapbox Setup Required</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              To use the interactive map, please enter your Mapbox public token.
+              Get yours at <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">mapbox.com</a>
+            </p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="pk.your-mapbox-token-here"
+                value={mapboxToken}
+                onChange={(e) => setMapboxToken(e.target.value)}
+              />
+              <Button onClick={validateToken}>Set Token</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <p>Loading map...</p>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="p-6">
+            <p>Loading map...</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -369,7 +376,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
           </p>
         </CardHeader>
         <CardContent>
-          <div ref={mapContainer} className="h-96 rounded-lg" />
+          <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }} />
         </CardContent>
       </Card>
 

@@ -65,9 +65,9 @@ const RouteCreate = () => {
   const { setValue } = form;
 
   const handleStationSelect = (stationId: string) => {
-    const newSequence = selectedStations.includes(stationId)
-      ? selectedStations.filter(id => id !== stationId)
-      : [...selectedStations, stationId];
+    console.log('🔧 RouteCreate handleStationSelect called with:', stationId);
+    const newSequence = [...selectedStations, stationId];
+    console.log('🔧 New sequence will be:', newSequence);
     
     setSelectedStations(newSequence);
     setValue("station_sequence", newSequence, { shouldValidate: true });
