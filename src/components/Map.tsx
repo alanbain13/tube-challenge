@@ -230,25 +230,28 @@ const loadUserVisits = async () => {
 
   // Initialize map when token is set and data is loaded
   useEffect(() => {
-    // Add a small delay to ensure the container ref is available
-    const timer = setTimeout(() => {
-      console.log('🗺️ Map useEffect triggered:', {
-        hasContainer: !!mapContainer.current,
-        hasToken: !!mapboxToken,
-        isTokenSet,
-        stationsCount: stations.length
-      });
+    console.log('🗺️ Map useEffect triggered:', {
+      hasContainer: !!mapContainer.current,
+      hasToken: !!mapboxToken,
+      isTokenSet,
+      stationsCount: stations.length
+    });
 
-      if (!mapContainer.current || !mapboxToken || !isTokenSet || stations.length === 0 || stationsLoading) {
-        console.log('❌ Map initialization blocked:', {
-          container: !!mapContainer.current,
-          token: !!mapboxToken,
-          tokenSet: isTokenSet,
-          stations: stations.length,
-          loading: stationsLoading
-        });
-        return;
-      }
+    if (!mapboxToken || !isTokenSet || stations.length === 0 || stationsLoading) {
+      console.log('❌ Map initialization blocked:', {
+        container: !!mapContainer.current,
+        token: !!mapboxToken,
+        tokenSet: isTokenSet,
+        stations: stations.length,
+        loading: stationsLoading
+      });
+      return;
+    }
+
+    if (!mapContainer.current) {
+      console.log('❌ Map container not ready, will retry...');
+      return;
+    }
 
     console.log('✅ Initializing Mapbox map...');
     mapboxgl.accessToken = mapboxToken;
@@ -306,12 +309,8 @@ const loadUserVisits = async () => {
 
     return () => {
       console.log('🗺️ Cleaning up map...');
-      clearTimeout(timer);
       map.current?.remove();
     };
-    }, 100); // Small delay to ensure DOM is ready
-    
-    return () => clearTimeout(timer);
   }, [mapboxToken, isTokenSet, stations, stationsLoading]);
 
   const addTubeLinesToMap = () => {
