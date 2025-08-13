@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -31,10 +31,12 @@ const RouteCreate = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
+  const selectedStationsRef = useRef<string[]>([]);
   const { stations } = useStations();
 
   // Debug: Track selectedStations changes
   useEffect(() => {
+    selectedStationsRef.current = selectedStations;
     console.log('🔧 RouteCreate selectedStations state changed to:', selectedStations);
   }, [selectedStations]);
 
@@ -71,8 +73,9 @@ const RouteCreate = () => {
 
   const handleStationSelect = (stationId: string) => {
     console.log('🔧 RouteCreate handleStationSelect called with:', stationId);
-    console.log('🔧 RouteCreate current selectedStations before update:', selectedStations);
-    const newSequence = [...selectedStations, stationId];
+    const currentSelected = selectedStationsRef.current;
+    console.log('🔧 RouteCreate current selectedStations before update (from ref):', currentSelected);
+    const newSequence = [...currentSelected, stationId];
     console.log('🔧 New sequence will be:', newSequence);
     
     setSelectedStations(newSequence);
