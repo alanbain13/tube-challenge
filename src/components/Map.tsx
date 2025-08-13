@@ -277,6 +277,9 @@ const loadUserVisits = async () => {
     map.current.on('load', async () => {
       console.log('🗺️ Map loaded, styling and adding data...');
 
+      // Load roundel images first
+      await loadRoundelImages();
+
       // Minimal base map styling: hide POIs and most road labels to focus on Tube layers
       const styleLayers = map.current!.getStyle().layers;
       styleLayers?.forEach((l) => {
