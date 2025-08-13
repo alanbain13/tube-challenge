@@ -4,6 +4,8 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useStations } from '@/hooks/useStations';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import roundelEmpty from '@/assets/roundel-empty.svg';
 import roundelFilled from '@/assets/roundel-filled.svg';
@@ -11,10 +13,9 @@ import roundelFilled from '@/assets/roundel-filled.svg';
 interface Station {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
   zone: string;
-  lines: string[];
+  lines: Array<{ name: string; nightopened?: number }>;
+  coordinates: [number, number];
 }
 
 interface StationVisit {
@@ -52,17 +53,18 @@ const Map = () => {
     const savedToken = localStorage.getItem('mapbox_token');
     return Boolean(savedToken && savedToken.startsWith('pk.'));
   });
-  const [stations, setStations] = useState<Station[]>([]);
+  const { stations, loading: stationsLoading } = useStations();
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
-const [visits, setVisits] = useState<StationVisit[]>([]);
-const visitsRef = useRef<StationVisit[]>([]);
-useEffect(() => {
-  visitsRef.current = visits;
-}, [visits]);
-const [selectedStation, setSelectedStation] = useState<Station | null>(null);
-const [loading, setLoading] = useState(true);
-const { user } = useAuth();
-const { toast } = useToast();
+  const [visits, setVisits] = useState<StationVisit[]>([]);
+  const visitsRef = useRef<StationVisit[]>([]);
+  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    visitsRef.current = visits;
+  }, [visits]);
 
   // Popup and bounds refs
   const popupRef = useRef<mapboxgl.Popup | null>(null);
@@ -123,9 +125,10 @@ const { toast } = useToast();
 // Build popup HTML with status
 const buildPopupHTML = (station: Station, isVisited: boolean) => {
   const badges = (station.lines || []).map((line) => {
-    const bg = tubeLineColors[line] || '#6b7280';
-    const fg = (line === 'Circle' || line === 'Hammersmith & City') ? '#000' : '#fff';
-    return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${line}</span>`;
+    const lineName = line.name;
+    const bg = tubeLineColors[lineName] || '#6b7280';
+    const fg = (lineName === 'Circle' || lineName === 'Hammersmith & City') ? '#000' : '#fff';
+    return `<span style="background:${bg};color:${fg};padding:2px 6px;border-radius:9999px;font-size:10px;">${lineName}</span>`;
   }).join(' ');
 
   const statusBg = isVisited ? '#DCFCE7' : '#F3F4F6';
@@ -145,10 +148,10 @@ const buildPopupHTML = (station: Station, isVisited: boolean) => {
     </article>`;
 };
 
-  // Load stations from GeoJSON file
-  const loadStationsFromGeoJSON = async () => {
+  // Load line features from GeoJSON file
+  const loadLinesFromGeoJSON = async () => {
     try {
-      console.log('🔄 Loading station data from GeoJSON...');
+      console.log('🔄 Loading line data from GeoJSON...');
       
       const response = await fetch('/data/stations.json');
       if (!response.ok) {
@@ -158,39 +161,22 @@ const buildPopupHTML = (station: Station, isVisited: boolean) => {
       const geojsonData = await response.json();
       console.log('✅ Loaded GeoJSON data with', geojsonData.features.length, 'features');
       
-      // Separate stations (Point features) and lines (LineString features)
-      const stationFeatures = geojsonData.features.filter(
-        (feature: any) => feature.geometry.type === 'Point'
-      );
+      // Get line features (LineString features)
       const lineFeatures = geojsonData.features.filter(
         (feature: any) => feature.geometry.type === 'LineString'
       );
       
-      console.log('📍 Found', stationFeatures.length, 'station features');
       console.log('🚇 Found', lineFeatures.length, 'line features');
-      
-      // Transform station features to our Station interface
-      const transformedStations: Station[] = stationFeatures.map((feature: any) => ({
-        id: feature.properties.id,
-        name: feature.properties.name,
-        latitude: feature.geometry.coordinates[1],
-        longitude: feature.geometry.coordinates[0],
-        zone: feature.properties.zone || '1',
-        lines: feature.properties.lines?.map((line: any) => line.name) || []
-      }));
-      
-      setStations(transformedStations);
       setLineFeatures(lineFeatures);
       
-      console.log('✅ Successfully processed', transformedStations.length, 'stations');
+      console.log('✅ Successfully processed', lineFeatures.length, 'lines');
     } catch (error) {
       console.error('❌ Error loading GeoJSON data:', error);
       toast({
-        title: "Error loading station data",
-        description: "Failed to load station data from GeoJSON file.",
+        title: "Error loading line data",
+        description: "Failed to load line data from GeoJSON file.",
         variant: "destructive"
       });
-      setStations([]);
       setLineFeatures([]);
     }
   };
@@ -230,7 +216,7 @@ const loadUserVisits = async () => {
     setLoading(true);
     try {
       await Promise.all([
-        loadStationsFromGeoJSON(),
+        loadLinesFromGeoJSON(),
         loadUserVisits()
       ]);
     } finally {
@@ -251,12 +237,13 @@ const loadUserVisits = async () => {
       stationsCount: stations.length
     });
 
-    if (!mapContainer.current || !mapboxToken || !isTokenSet || stations.length === 0) {
+    if (!mapContainer.current || !mapboxToken || !isTokenSet || stations.length === 0 || stationsLoading) {
       console.log('❌ Map initialization blocked:', {
         container: !!mapContainer.current,
         token: !!mapboxToken,
         tokenSet: isTokenSet,
-        stations: stations.length
+        stations: stations.length,
+        loading: stationsLoading
       });
       return;
     }
@@ -303,7 +290,7 @@ const loadUserVisits = async () => {
 
       // Compute network bounds and add a fit control
       const b = new mapboxgl.LngLatBounds();
-      stations.forEach((s) => b.extend([Number(s.longitude), Number(s.latitude)]));
+      stations.forEach((s) => b.extend([s.coordinates[0], s.coordinates[1]]));
       networkBoundsRef.current = b;
       map.current!.addControl(new FitBoundsControl(), 'top-left');
 
@@ -316,7 +303,7 @@ const loadUserVisits = async () => {
       console.log('🗺️ Cleaning up map...');
       map.current?.remove();
     };
-  }, [mapboxToken, isTokenSet, stations]);
+  }, [mapboxToken, isTokenSet, stations, stationsLoading]);
 
   const addTubeLinesToMap = () => {
     if (!map.current || lineFeatures.length === 0) {
@@ -394,13 +381,13 @@ const isVisited = visitsRef.current.some(visit =>
       type: 'Feature' as const,
       geometry: {
         type: 'Point' as const,
-        coordinates: [Number(station.longitude), Number(station.latitude)]
+        coordinates: station.coordinates
       },
       properties: {
         id: station.id,
         name: station.name,
         zone: station.zone,
-        lines: station.lines || [],
+        lines: station.lines?.map(l => l.name) || [],
         visited: isVisited
       }
     };
@@ -476,7 +463,7 @@ const isVisited = visitsRef.current.some(visit =>
       if (station) {
         setSelectedStation(station);
 
-        const coords = (feature.geometry as any)?.coordinates || [Number(station.longitude), Number(station.latitude)];
+        const coords = (feature.geometry as any)?.coordinates || station.coordinates;
         const isVisitedNow = visitsRef.current.some(v => v.station_tfl_id === station.id || v.station_id === station.id);
         const html = buildPopupHTML(station, isVisitedNow);
 
@@ -590,8 +577,8 @@ const toggleStationVisit = async (station: Station) => {
             const isVisited = nextVisits.some(v => v.station_tfl_id === s.id || v.station_id === s.id);
             return {
               type: 'Feature' as const,
-              geometry: { type: 'Point' as const, coordinates: [Number(s.longitude), Number(s.latitude)] },
-              properties: { id: s.id, name: s.name, zone: s.zone, lines: s.lines, visited: isVisited }
+              geometry: { type: 'Point' as const, coordinates: s.coordinates },
+              properties: { id: s.id, name: s.name, zone: s.zone, lines: s.lines?.map(l => l.name) || [], visited: isVisited }
             };
           })
         };
@@ -614,7 +601,7 @@ const toggleStationVisit = async (station: Station) => {
   }
 };
 
-  if (loading) {
+  if (loading || stationsLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <p>Loading map...</p>
