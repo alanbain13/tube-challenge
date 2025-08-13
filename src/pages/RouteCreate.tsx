@@ -33,6 +33,11 @@ const RouteCreate = () => {
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
   const { stations } = useStations();
 
+  // Debug: Track selectedStations changes
+  useEffect(() => {
+    console.log('🔧 RouteCreate selectedStations state changed to:', selectedStations);
+  }, [selectedStations]);
+
   // Auth guard
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
