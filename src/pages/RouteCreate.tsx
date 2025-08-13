@@ -66,6 +66,7 @@ const RouteCreate = () => {
 
   const handleStationSelect = (stationId: string) => {
     console.log('🔧 RouteCreate handleStationSelect called with:', stationId);
+    console.log('🔧 RouteCreate current selectedStations before update:', selectedStations);
     const newSequence = [...selectedStations, stationId];
     console.log('🔧 New sequence will be:', newSequence);
     
