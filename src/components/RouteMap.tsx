@@ -90,10 +90,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
   }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
 
   useEffect(() => {
+    console.log('🔧 RouteMap useEffect - selectedStations changed:', selectedStations);
     console.log('🗺️ RouteMap - Station styles update:', {
       hasMap: !!map.current,
       stationsCount: stations.length,
-      selectedCount: selectedStations.length
+      selectedCount: selectedStations.length,
+      selectedStations: selectedStations
     });
     
     if (map.current && stations.length > 0) {
@@ -260,13 +262,17 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('click', 'stations', (e) => {
       if (e.features && e.features[0]) {
         const stationId = e.features[0].properties?.id;
-        console.log('🖱️ Station clicked:', stationId, 'Currently selected:', selectedStations);
+        console.log('🖱️ Station clicked:', stationId, 'Currently selected at click time:', selectedStations);
         if (stationId) {
-          if (selectedStations.includes(stationId)) {
+          // Check if station is already selected
+          const isAlreadySelected = selectedStations.includes(stationId);
+          console.log('🔍 Station', stationId, 'already selected?', isAlreadySelected);
+          
+          if (isAlreadySelected) {
             console.log('🗑️ Removing station:', stationId);
             onStationRemove(stationId);
           } else {
-            console.log('➕ Adding station:', stationId);
+            console.log('➕ Adding station:', stationId, 'to existing selection:', selectedStations);
             onStationSelect(stationId);
           }
         }
