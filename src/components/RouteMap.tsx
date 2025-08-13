@@ -21,6 +21,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const selectedStationsRef = useRef<string[]>(selectedStations);
   const [mapboxToken, setMapboxToken] = useState<string>('');
   const [tokenValid, setTokenValid] = useState<boolean>(false);
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
@@ -90,6 +91,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
   }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
 
   useEffect(() => {
+    // Update the ref whenever selectedStations changes
+    selectedStationsRef.current = selectedStations;
+    
     console.log('🔧 RouteMap useEffect - selectedStations changed:', selectedStations);
     console.log('🗺️ RouteMap - Station styles update:', {
       hasMap: !!map.current,
@@ -262,17 +266,18 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('click', 'stations', (e) => {
       if (e.features && e.features[0]) {
         const stationId = e.features[0].properties?.id;
-        console.log('🖱️ Station clicked:', stationId, 'Currently selected at click time:', selectedStations);
+        const currentSelected = selectedStationsRef.current;
+        console.log('🖱️ Station clicked:', stationId, 'Currently selected (from ref):', currentSelected);
         if (stationId) {
           // Check if station is already selected
-          const isAlreadySelected = selectedStations.includes(stationId);
+          const isAlreadySelected = currentSelected.includes(stationId);
           console.log('🔍 Station', stationId, 'already selected?', isAlreadySelected);
           
           if (isAlreadySelected) {
             console.log('🗑️ Removing station:', stationId);
             onStationRemove(stationId);
           } else {
-            console.log('➕ Adding station:', stationId, 'to existing selection:', selectedStations);
+            console.log('➕ Adding station:', stationId, 'to existing selection:', currentSelected);
             onStationSelect(stationId);
           }
         }
