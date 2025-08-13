@@ -237,8 +237,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('click', 'stations', (e) => {
       if (e.features && e.features[0]) {
         const stationId = e.features[0].properties?.id;
-        if (stationId && !selectedStations.includes(stationId)) {
-          onStationSelect(stationId);
+        if (stationId) {
+          if (selectedStations.includes(stationId)) {
+            onStationRemove(stationId);
+          } else {
+            onStationSelect(stationId);
+          }
         }
       }
     });

@@ -2,7 +2,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import Map from '@/components/Map';
+import MapComponent from '@/components/Map';
 import ImportTfLStations from '@/components/ImportTfLStations';
 
 const MapPage = () => {
@@ -47,7 +47,7 @@ const MapPage = () => {
           </div>
         </header>
         
-        <Map />
+        <MapComponent />
       </div>
     </div>
   );
