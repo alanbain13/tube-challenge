@@ -23,6 +23,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>('');
   const [tokenValid, setTokenValid] = useState<boolean>(false);
+  const [lineFeatures, setLineFeatures] = useState<any[]>([]);
   const { stations, loading } = useStations();
 
   // Check for existing token
@@ -44,6 +45,10 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   useEffect(() => {
+    loadLinesFromGeoJSON();
+  }, []);
+
+  useEffect(() => {
     if (!mapContainer.current || !tokenValid || loading || stations.length === 0) return;
 
     mapboxgl.accessToken = mapboxToken;
@@ -58,19 +63,106 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.current.on('load', () => {
+      addTubeLinesToMap();
       addStationsToMap();
     });
 
     return () => {
       map.current?.remove();
     };
-  }, [tokenValid, mapboxToken, stations, loading]);
+  }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
 
   useEffect(() => {
     if (map.current && stations.length > 0) {
       updateStationStyles();
     }
   }, [selectedStations, stations]);
+
+  // TfL official tube line colors
+  const tubeLineColors: { [key: string]: string } = {
+    'Bakerloo': '#B36305',
+    'Central': '#E32017', 
+    'Circle': '#FFD300',
+    'District': '#00782A',
+    'DLR': '#00A4A7',
+    'Hammersmith & City': '#F3A9BB',
+    'Jubilee': '#A0A5A9',
+    'Metropolitan': '#9B0056',
+    'Northern': '#000000',
+    'Piccadilly': '#003688',
+    'Victoria': '#0098D4',
+    'Waterloo & City': '#95CDBA',
+    'Elizabeth': '#7156A5',
+    'London Overground': '#FF6600'
+  };
+
+  // Load line features from GeoJSON file
+  const loadLinesFromGeoJSON = async () => {
+    try {
+      const response = await fetch('/data/stations.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stations data: ${response.status}`);
+      }
+      
+      const geojsonData = await response.json();
+      
+      // Get line features (LineString features)
+      const lineFeatures = geojsonData.features.filter(
+        (feature: any) => feature.geometry.type === 'LineString'
+      );
+      
+      setLineFeatures(lineFeatures);
+    } catch (error) {
+      console.error('Error loading GeoJSON data:', error);
+      setLineFeatures([]);
+    }
+  };
+
+  const addTubeLinesToMap = () => {
+    if (!map.current || lineFeatures.length === 0) return;
+    
+    lineFeatures.forEach((lineFeature, index) => {
+      const lineName = lineFeature.properties.line_name || `Line-${index}`;
+      const lineColor = lineFeature.properties.color || lineFeature.properties.stroke || '#666666';
+      
+      const sourceId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+      const layerId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+
+      try {
+        // Check if source already exists and remove it
+        if (map.current!.getSource(sourceId)) {
+          map.current!.removeLayer(layerId);
+          map.current!.removeSource(sourceId);
+        }
+        
+        // Create GeoJSON for this line
+        const lineGeoJSON = {
+          type: 'FeatureCollection' as const,
+          features: [lineFeature]
+        };
+        
+        // Add source
+        map.current!.addSource(sourceId, {
+          type: 'geojson',
+          data: lineGeoJSON
+        });
+        
+        // Add line layer
+        map.current!.addLayer({
+          id: layerId,
+          type: 'line',
+          source: sourceId,
+          paint: {
+            'line-color': lineColor,
+            'line-width': lineFeature.properties['stroke-width'] || 4,
+            'line-opacity': 0.8
+          }
+        });
+      } catch (error) {
+        console.error(`Error adding line layer ${layerId}:`, error);
+      }
+    });
+  };
 
   const addStationsToMap = () => {
     if (!map.current) return;
@@ -80,19 +172,24 @@ const RouteMap: React.FC<RouteMapProps> = ({
       type: 'geojson',
       data: {
         type: 'FeatureCollection',
-        features: stations.map(station => ({
-          type: 'Feature',
-          properties: {
-            id: station.id,
-            name: station.name,
-            zone: station.zone,
-            sequence: selectedStations.indexOf(station.id) + 1
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: station.coordinates
-          }
-        }))
+        features: stations.map(station => {
+          const sequenceIndex = selectedStations.indexOf(station.id);
+          const sequence = sequenceIndex >= 0 ? sequenceIndex + 1 : 0;
+          return {
+            type: 'Feature',
+            properties: {
+              id: station.id,
+              name: station.name,
+              zone: station.zone,
+              sequence: sequence,
+              isSelected: sequenceIndex >= 0
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: station.coordinates
+            }
+          };
+        })
       }
     });
 
@@ -104,13 +201,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
       paint: {
         'circle-radius': [
           'case',
-          ['in', ['get', 'id'], ['literal', selectedStations]],
+          ['get', 'isSelected'],
           8,
           5
         ],
         'circle-color': [
           'case',
-          ['in', ['get', 'id'], ['literal', selectedStations]],
+          ['get', 'isSelected'],
           '#dc2626',
           '#3b82f6'
         ],
@@ -124,7 +221,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       id: 'station-numbers',
       type: 'symbol',
       source: 'stations',
-      filter: ['in', ['get', 'id'], ['literal', selectedStations]],
+      filter: ['get', 'isSelected'],
       layout: {
         'text-field': ['get', 'sequence'],
         'text-font': ['Open Sans Bold'],
@@ -140,7 +237,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('click', 'stations', (e) => {
       if (e.features && e.features[0]) {
         const stationId = e.features[0].properties?.id;
-        if (stationId) {
+        if (stationId && !selectedStations.includes(stationId)) {
           onStationSelect(stationId);
         }
       }
@@ -167,37 +264,42 @@ const RouteMap: React.FC<RouteMapProps> = ({
     const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
     source.setData({
       type: 'FeatureCollection',
-      features: stations.map(station => ({
-        type: 'Feature',
-        properties: {
-          id: station.id,
-          name: station.name,
-          zone: station.zone,
-          sequence: selectedStations.indexOf(station.id) + 1
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: station.coordinates
-        }
-      }))
+      features: stations.map(station => {
+        const sequenceIndex = selectedStations.indexOf(station.id);
+        const sequence = sequenceIndex >= 0 ? sequenceIndex + 1 : 0;
+        return {
+          type: 'Feature',
+          properties: {
+            id: station.id,
+            name: station.name,
+            zone: station.zone,
+            sequence: sequence,
+            isSelected: sequenceIndex >= 0
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: station.coordinates
+          }
+        };
+      })
     });
 
     // Update layer filters and styles
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
-      ['in', ['get', 'id'], ['literal', selectedStations]],
+      ['get', 'isSelected'],
       '#dc2626',
       '#3b82f6'
     ]);
 
     map.current.setPaintProperty('stations', 'circle-radius', [
       'case',
-      ['in', ['get', 'id'], ['literal', selectedStations]],
+      ['get', 'isSelected'],
       8,
       5
     ]);
 
-    map.current.setFilter('station-numbers', ['in', ['get', 'id'], ['literal', selectedStations]]);
+    map.current.setFilter('station-numbers', ['get', 'isSelected']);
   };
 
   const getStationName = (stationId: string) => {
