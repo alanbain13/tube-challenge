@@ -170,6 +170,7 @@ const Index = () => {
             <p className="text-muted-foreground">Welcome back, {profile.display_name || user.email}!</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/routes/create')}>Create Route</Button>
             <Button variant="outline" onClick={() => navigate('/map')}>Open Map</Button>
             <Button variant="outline" onClick={signOut}>Sign Out</Button>
           </div>
@@ -226,7 +227,10 @@ const Index = () => {
               )}
             </CardContent>
             <CardFooter>
-              <Button onClick={() => navigate('/activities/new')}>Add Activity</Button>
+              <div className="flex gap-2">
+                <Button onClick={() => navigate('/activities/new')}>Log Activity</Button>
+                <Button variant="outline" onClick={() => navigate('/routes')}>View Routes</Button>
+              </div>
             </CardFooter>
           </Card>
 
