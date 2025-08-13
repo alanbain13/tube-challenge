@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import MapPage from "./pages/Map";
 import ActivityNew from "./pages/ActivityNew";
+import ActivityCheckin from "./pages/ActivityCheckin";
+import RouteCreate from "./pages/RouteCreate";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/activities/new" element={<ActivityNew />} />
+            <Route path="/activities/:activityId/checkin" element={<ActivityCheckin />} />
+            <Route path="/routes/new" element={<RouteCreate />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

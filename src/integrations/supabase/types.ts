@@ -49,42 +49,89 @@ export type Database = {
       }
       activities: {
         Row: {
+          activity_type: string | null
+          actual_duration_minutes: number | null
           created_at: string
           distance_km: number | null
+          end_latitude: number | null
+          end_longitude: number | null
           ended_at: string | null
+          estimated_duration_minutes: number | null
+          gate_end_at: string | null
+          gate_start_at: string | null
           id: string
           line_ids: string[] | null
           notes: string | null
+          platform_end_at: string | null
+          platform_start_at: string | null
+          route_id: string | null
+          start_latitude: number | null
+          start_longitude: number | null
           started_at: string
           station_tfl_ids: string[]
+          timing_mode: string | null
           title: string | null
           user_id: string
         }
         Insert: {
+          activity_type?: string | null
+          actual_duration_minutes?: number | null
           created_at?: string
           distance_km?: number | null
+          end_latitude?: number | null
+          end_longitude?: number | null
           ended_at?: string | null
+          estimated_duration_minutes?: number | null
+          gate_end_at?: string | null
+          gate_start_at?: string | null
           id?: string
           line_ids?: string[] | null
           notes?: string | null
+          platform_end_at?: string | null
+          platform_start_at?: string | null
+          route_id?: string | null
+          start_latitude?: number | null
+          start_longitude?: number | null
           started_at?: string
           station_tfl_ids: string[]
+          timing_mode?: string | null
           title?: string | null
           user_id: string
         }
         Update: {
+          activity_type?: string | null
+          actual_duration_minutes?: number | null
           created_at?: string
           distance_km?: number | null
+          end_latitude?: number | null
+          end_longitude?: number | null
           ended_at?: string | null
+          estimated_duration_minutes?: number | null
+          gate_end_at?: string | null
+          gate_start_at?: string | null
           id?: string
           line_ids?: string[] | null
           notes?: string | null
+          platform_end_at?: string | null
+          platform_start_at?: string | null
+          route_id?: string | null
+          start_latitude?: number | null
+          start_longitude?: number | null
           started_at?: string
           station_tfl_ids?: string[]
+          timing_mode?: string | null
           title?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "activities_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -114,6 +161,83 @@ export type Database = {
           home_station?: string | null
           id?: string
           last_active?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      route_stations: {
+        Row: {
+          created_at: string
+          estimated_arrival_offset_minutes: number | null
+          id: string
+          is_bypass_allowed: boolean
+          route_id: string
+          sequence_number: number
+          station_tfl_id: string
+        }
+        Insert: {
+          created_at?: string
+          estimated_arrival_offset_minutes?: number | null
+          id?: string
+          is_bypass_allowed?: boolean
+          route_id: string
+          sequence_number: number
+          station_tfl_id: string
+        }
+        Update: {
+          created_at?: string
+          estimated_arrival_offset_minutes?: number | null
+          id?: string
+          is_bypass_allowed?: boolean
+          route_id?: string
+          sequence_number?: number
+          station_tfl_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stations_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routes: {
+        Row: {
+          created_at: string
+          description: string | null
+          end_station_tfl_id: string
+          estimated_duration_minutes: number | null
+          id: string
+          is_public: boolean
+          name: string
+          start_station_tfl_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          end_station_tfl_id: string
+          estimated_duration_minutes?: number | null
+          id?: string
+          is_public?: boolean
+          name: string
+          start_station_tfl_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          end_station_tfl_id?: string
+          estimated_duration_minutes?: number | null
+          id?: string
+          is_public?: boolean
+          name?: string
+          start_station_tfl_id?: string
           updated_at?: string
           user_id?: string
         }
@@ -175,42 +299,79 @@ export type Database = {
       }
       station_visits: {
         Row: {
+          activity_id: string | null
+          ai_verification_result: Json | null
+          checkin_type: string | null
           created_at: string
           id: string
+          is_bypassed: boolean | null
+          is_end_station: boolean | null
+          is_start_station: boolean | null
+          latitude: number | null
+          longitude: number | null
           photo_url: string | null
+          sequence_number: number | null
           station_id: string | null
           station_tfl_id: string | null
           status: string
           user_id: string
+          verification_image_url: string | null
           verification_method: string | null
           verified_at: string | null
           visited_at: string
         }
         Insert: {
+          activity_id?: string | null
+          ai_verification_result?: Json | null
+          checkin_type?: string | null
           created_at?: string
           id?: string
+          is_bypassed?: boolean | null
+          is_end_station?: boolean | null
+          is_start_station?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
           photo_url?: string | null
+          sequence_number?: number | null
           station_id?: string | null
           station_tfl_id?: string | null
           status?: string
           user_id: string
+          verification_image_url?: string | null
           verification_method?: string | null
           verified_at?: string | null
           visited_at?: string
         }
         Update: {
+          activity_id?: string | null
+          ai_verification_result?: Json | null
+          checkin_type?: string | null
           created_at?: string
           id?: string
+          is_bypassed?: boolean | null
+          is_end_station?: boolean | null
+          is_start_station?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
           photo_url?: string | null
+          sequence_number?: number | null
           station_id?: string | null
           station_tfl_id?: string | null
           status?: string
           user_id?: string
+          verification_image_url?: string | null
           verification_method?: string | null
           verified_at?: string | null
           visited_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "station_visits_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "station_visits_station_id_fkey"
             columns: ["station_id"]
