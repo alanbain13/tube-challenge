@@ -28,18 +28,26 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
   // Check for existing token
   useEffect(() => {
+    console.log('🔧 RouteMap: Checking for existing Mapbox token...');
     const savedToken = localStorage.getItem('mapbox_token');
+    console.log('🔧 RouteMap: Saved token exists:', !!savedToken);
     if (savedToken) {
+      console.log('🔧 RouteMap: Setting token and marking as valid');
       setMapboxToken(savedToken);
       setTokenValid(true);
+    } else {
+      console.log('❌ RouteMap: No Mapbox token found in localStorage');
     }
   }, []);
 
   const validateToken = () => {
+    console.log('🔧 RouteMap: Validating token:', mapboxToken.substring(0, 10) + '...');
     if (mapboxToken.startsWith('pk.')) {
+      console.log('✅ RouteMap: Token is valid, saving to localStorage');
       localStorage.setItem('mapbox_token', mapboxToken);
       setTokenValid(true);
     } else {
+      console.log('❌ RouteMap: Invalid token format');
       alert('Please enter a valid Mapbox public token (starts with pk.)');
     }
   };
