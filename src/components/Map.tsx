@@ -7,8 +7,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useStations } from '@/hooks/useStations';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import roundelEmpty from '@/assets/roundel-empty.svg';
-import roundelFilled from '@/assets/roundel-filled.svg';
 
 interface Station {
   id: string;
@@ -46,6 +44,7 @@ const tubeLineColors: { [key: string]: string } = {
 const Map = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const [mapContainerReady, setMapContainerReady] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string>(() => {
     return localStorage.getItem('mapbox_token') || '';
   });
@@ -70,25 +69,10 @@ const Map = () => {
   const popupRef = useRef<mapboxgl.Popup | null>(null);
   const networkBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);
 
-  // Load roundel icons into the map style
-  const loadRoundelImages = async () => {
-    if (!map.current) return;
-    const loadImage = (url: string, name: string) =>
-      new Promise<void>((resolve, reject) => {
-        if (!map.current) return resolve();
-        if (map.current.hasImage(name)) return resolve();
-        map.current.loadImage(url, (error, image) => {
-          if (error || !image) return reject(error);
-          if (!map.current) return resolve();
-          map.current.addImage(name, image as any, { pixelRatio: 2 });
-          resolve();
-        });
-      });
-
-    await Promise.all([
-      loadImage(roundelEmpty, 'roundel-empty'),
-      loadImage(roundelFilled, 'roundel-filled'),
-    ]);
+  // Container ref callback to ensure proper timing
+  const mapContainerRef = (element: HTMLDivElement | null) => {
+    mapContainer.current = element;
+    setMapContainerReady(!!element);
   };
 
   // Simple custom control to fit to full network extent
@@ -234,22 +218,19 @@ const loadUserVisits = async () => {
       hasContainer: !!mapContainer.current,
       hasToken: !!mapboxToken,
       isTokenSet,
-      stationsCount: stations.length
+      stationsCount: stations.length,
+      mapContainerReady
     });
 
-    if (!mapboxToken || !isTokenSet || stations.length === 0 || stationsLoading) {
+    if (!mapboxToken || !isTokenSet || stations.length === 0 || stationsLoading || !mapContainerReady) {
       console.log('❌ Map initialization blocked:', {
         container: !!mapContainer.current,
         token: !!mapboxToken,
         tokenSet: isTokenSet,
         stations: stations.length,
-        loading: stationsLoading
+        loading: stationsLoading,
+        containerReady: mapContainerReady
       });
-      return;
-    }
-
-    if (!mapContainer.current) {
-      console.log('❌ Map container not ready, will retry...');
       return;
     }
 
@@ -282,9 +263,6 @@ const loadUserVisits = async () => {
     map.current.on('load', async () => {
       console.log('🗺️ Map loaded, styling and adding data...');
 
-      // Load roundel images first
-      await loadRoundelImages();
-
       // Minimal base map styling: hide POIs and most road labels to focus on Tube layers
       const styleLayers = map.current!.getStyle().layers;
       styleLayers?.forEach((l) => {
@@ -311,7 +289,7 @@ const loadUserVisits = async () => {
       console.log('🗺️ Cleaning up map...');
       map.current?.remove();
     };
-  }, [mapboxToken, isTokenSet, stations, stationsLoading]);
+  }, [mapboxToken, isTokenSet, stations, stationsLoading, mapContainerReady]);
 
   const addTubeLinesToMap = () => {
     if (!map.current || lineFeatures.length === 0) {
@@ -415,19 +393,7 @@ const isVisited = visitsRef.current.some(visit =>
       });
     }
 
-    // Add symbol layer with roundel icons (empty vs filled)
-    if (!map.current!.getLayer('stations-symbols')) {
-      map.current!.addLayer({
-        id: 'stations-symbols',
-        type: 'symbol',
-        source: 'stations',
-        layout: {
-          'icon-image': ['case', ['==', ['get', 'visited'], true], 'roundel-filled', 'roundel-empty'],
-          'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.5, 12, 0.65, 16, 0.85],
-          'icon-allow-overlap': true,
-        }
-      });
-    }
+    // Use circle layers for station visualization instead of SVG icons
     // Fallback circle layers with roundel-like appearance
     if (!map.current!.getLayer('visited-stations')) {
       map.current!.addLayer({
@@ -462,7 +428,7 @@ const isVisited = visitsRef.current.some(visit =>
     console.log('✅ Added station layers to map');
 
 // Add click handlers
-['stations-symbols', 'visited-stations', 'unvisited-stations'].forEach(layerId => {
+['visited-stations', 'unvisited-stations'].forEach(layerId => {
   map.current!.on('click', layerId, (e) => {
     if (e.features && e.features[0]) {
       const feature = e.features[0] as mapboxgl.MapboxGeoJSONFeature;
@@ -672,7 +638,7 @@ const toggleStationVisit = async (station: Station) => {
 
   return (
     <div className="relative">
-      <div ref={mapContainer} className="w-full h-[600px] rounded-lg" />
+      <div ref={mapContainerRef} className="w-full h-[600px] rounded-lg" />
       
 
       <div className="absolute bottom-4 right-4 bg-card p-3 rounded-lg shadow-lg border">
