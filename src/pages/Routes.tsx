@@ -135,9 +135,9 @@ const Routes = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => navigate(`/routes/${route.id}`)}
+                        onClick={() => navigate(`/routes/${route.id}/edit`)}
                       >
-                        View Details
+                        Edit Route
                       </Button>
                     </div>
                   </CardContent>

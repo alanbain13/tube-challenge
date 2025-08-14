@@ -30,7 +30,7 @@ const App = () => (
             <Route path="/activities/:activityId/checkin" element={<ActivityCheckin />} />
             <Route path="/routes" element={<RoutesPage />} />
             <Route path="/routes/create" element={<RouteCreate />} />
-            <Route path="/routes/:id" element={<RoutesPage />} />
+            <Route path="/routes/:id/edit" element={<RouteCreate />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -1,10 +1,11 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -30,9 +31,44 @@ const RouteCreate = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { id: routeId } = useParams();
+  const isEditMode = !!routeId;
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
   const selectedStationsRef = useRef<string[]>([]);
   const { stations } = useStations();
+
+  const form = useForm<RouteFormValues>({
+    resolver: zodResolver(RouteSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      start_station_tfl_id: "",
+      end_station_tfl_id: "",
+      station_sequence: [],
+    },
+  });
+
+  const { setValue } = form;
+
+  // Fetch existing route data if in edit mode
+  const { data: existingRoute, isLoading: routeLoading } = useQuery({
+    queryKey: ["route", routeId],
+    queryFn: async () => {
+      if (!routeId) return null;
+      const { data, error } = await supabase
+        .from("routes")
+        .select(`
+          *,
+          route_stations(station_tfl_id, sequence_number)
+        `)
+        .eq("id", routeId)
+        .eq("user_id", user?.id || "")
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!routeId && !!user,
+  });
 
   // Debug: Track selectedStations changes
   useEffect(() => {
@@ -47,8 +83,8 @@ const RouteCreate = () => {
 
   // SEO tags
   useEffect(() => {
-    document.title = "Create Route | Tube Challenge";
-    const desc = "Create a new tube route or challenge with station sequences.";
+    document.title = `${isEditMode ? 'Edit' : 'Create'} Route | Tube Challenge`;
+    const desc = `${isEditMode ? 'Edit an existing' : 'Create a new'} tube route or challenge with station sequences.`;
     let meta = document.querySelector('meta[name="description"]');
     if (!meta) {
       meta = document.createElement("meta");
@@ -56,20 +92,27 @@ const RouteCreate = () => {
       document.head.appendChild(meta);
     }
     meta.setAttribute("content", desc);
-  }, []);
+  }, [isEditMode]);
 
-  const form = useForm<RouteFormValues>({
-    resolver: zodResolver(RouteSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      start_station_tfl_id: "",
-      end_station_tfl_id: "",
-      station_sequence: [],
-    },
-  });
-
-  const { setValue } = form;
+  // Populate form when editing existing route
+  useEffect(() => {
+    if (isEditMode && existingRoute) {
+      const sortedStations = (existingRoute.route_stations || [])
+        .sort((a: any, b: any) => a.sequence_number - b.sequence_number)
+        .map((rs: any) => rs.station_tfl_id);
+      
+      form.reset({
+        name: existingRoute.name,
+        description: existingRoute.description || "",
+        start_station_tfl_id: existingRoute.start_station_tfl_id,
+        end_station_tfl_id: existingRoute.end_station_tfl_id,
+        estimated_duration_minutes: existingRoute.estimated_duration_minutes || undefined,
+        station_sequence: sortedStations,
+      });
+      
+      setSelectedStations(sortedStations);
+    }
+  }, [existingRoute, isEditMode, form]);
 
   const handleStationSelect = (stationId: string) => {
     console.log('🔧 RouteCreate handleStationSelect called with:', stationId);
@@ -124,39 +167,84 @@ const RouteCreate = () => {
   const onSubmit = async (values: RouteFormValues) => {
     if (!user) return;
     try {
-      // Create route
-      const { data: route, error: routeError } = await supabase
-        .from("routes")
-        .insert({
-          user_id: user.id,
-          name: values.name,
-          description: values.description || null,
-          start_station_tfl_id: values.start_station_tfl_id,
-          end_station_tfl_id: values.end_station_tfl_id,
-          estimated_duration_minutes: values.estimated_duration_minutes || null,
-        })
-        .select()
-        .single();
+      if (isEditMode && routeId) {
+        // Update existing route
+        const { error: routeError } = await supabase
+          .from("routes")
+          .update({
+            name: values.name,
+            description: values.description || null,
+            start_station_tfl_id: values.start_station_tfl_id,
+            end_station_tfl_id: values.end_station_tfl_id,
+            estimated_duration_minutes: values.estimated_duration_minutes || null,
+          })
+          .eq("id", routeId)
+          .eq("user_id", user.id);
 
-      if (routeError) throw routeError;
+        if (routeError) throw routeError;
 
-      // Create route stations
-      const routeStations = selectedStations.map((tfl_id, index) => ({
-        route_id: route.id,
-        station_tfl_id: tfl_id,
-        sequence_number: index + 1,
-      }));
+        // Delete existing route stations
+        const { error: deleteError } = await supabase
+          .from("route_stations")
+          .delete()
+          .eq("route_id", routeId);
 
-      const { error: stationsError } = await supabase
-        .from("route_stations")
-        .insert(routeStations);
+        if (deleteError) throw deleteError;
 
-      if (stationsError) throw stationsError;
+        // Create new route stations
+        const routeStations = selectedStations.map((tfl_id, index) => ({
+          route_id: routeId,
+          station_tfl_id: tfl_id,
+          sequence_number: index + 1,
+        }));
 
-      toast({ title: "Route created", description: "Your route was created successfully." });
+        const { error: stationsError } = await supabase
+          .from("route_stations")
+          .insert(routeStations);
+
+        if (stationsError) throw stationsError;
+
+        toast({ title: "Route updated", description: "Your route was updated successfully." });
+      } else {
+        // Create new route
+        const { data: route, error: routeError } = await supabase
+          .from("routes")
+          .insert({
+            user_id: user.id,
+            name: values.name,
+            description: values.description || null,
+            start_station_tfl_id: values.start_station_tfl_id,
+            end_station_tfl_id: values.end_station_tfl_id,
+            estimated_duration_minutes: values.estimated_duration_minutes || null,
+          })
+          .select()
+          .single();
+
+        if (routeError) throw routeError;
+
+        // Create route stations
+        const routeStations = selectedStations.map((tfl_id, index) => ({
+          route_id: route.id,
+          station_tfl_id: tfl_id,
+          sequence_number: index + 1,
+        }));
+
+        const { error: stationsError } = await supabase
+          .from("route_stations")
+          .insert(routeStations);
+
+        if (stationsError) throw stationsError;
+
+        toast({ title: "Route created", description: "Your route was created successfully." });
+      }
+      
       navigate("/routes");
     } catch (e: any) {
-      toast({ title: "Failed to create route", description: e?.message || "Please try again.", variant: "destructive" });
+      toast({ 
+        title: `Failed to ${isEditMode ? 'update' : 'create'} route`, 
+        description: e?.message || "Please try again.", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -178,8 +266,12 @@ const RouteCreate = () => {
       <div className="container mx-auto px-4 py-8">
         <header className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Create Route</h1>
-            <p className="text-muted-foreground">Design a custom tube route using the interactive map</p>
+            <h1 className="text-3xl font-bold text-foreground">
+              {isEditMode ? 'Edit Route' : 'Create Route'}
+            </h1>
+            <p className="text-muted-foreground">
+              {isEditMode ? 'Modify your existing tube route' : 'Design a custom tube route using the interactive map'}
+            </p>
           </div>
           <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
         </header>
@@ -301,11 +393,11 @@ const RouteCreate = () => {
                       className="w-full"
                       disabled={selectedStations.length < 2}
                     >
-                      Create Route
+                      {isEditMode ? 'Update Route' : 'Create Route'}
                     </Button>
                     {selectedStations.length < 2 && (
                       <p className="text-sm text-muted-foreground text-center mt-2">
-                        Select at least 2 stations on the map to create a route
+                        Select at least 2 stations on the map to {isEditMode ? 'update' : 'create'} a route
                       </p>
                     )}
                   </div>
