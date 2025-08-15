@@ -101,11 +101,15 @@ const RouteCreate = () => {
         .sort((a: any, b: any) => a.sequence_number - b.sequence_number)
         .map((rs: any) => rs.station_tfl_id);
       
+      // Set start and end stations from the actual sequence
+      const startStation = sortedStations.length > 0 ? sortedStations[0] : "";
+      const endStation = sortedStations.length > 0 ? sortedStations[sortedStations.length - 1] : "";
+      
       form.reset({
         name: existingRoute.name,
         description: existingRoute.description || "",
-        start_station_tfl_id: existingRoute.start_station_tfl_id,
-        end_station_tfl_id: existingRoute.end_station_tfl_id,
+        start_station_tfl_id: startStation,
+        end_station_tfl_id: endStation,
         estimated_duration_minutes: existingRoute.estimated_duration_minutes || undefined,
         station_sequence: sortedStations,
       });
