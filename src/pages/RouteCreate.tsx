@@ -331,7 +331,9 @@ const RouteCreate = () => {
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Auto-set from map selection" />
+                              <SelectValue placeholder="Auto-set from map selection">
+                                {field.value ? getStationName(field.value) : "Auto-set from map selection"}
+                              </SelectValue>
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -356,7 +358,9 @@ const RouteCreate = () => {
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Auto-set from map selection" />
+                              <SelectValue placeholder="Auto-set from map selection">
+                                {field.value ? getStationName(field.value) : "Auto-set from map selection"}
+                              </SelectValue>
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
