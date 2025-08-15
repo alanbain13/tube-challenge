@@ -97,13 +97,20 @@ const RouteCreate = () => {
   // Populate form when editing existing route
   useEffect(() => {
     if (isEditMode && existingRoute) {
+      console.log('🔧 Loading existing route:', existingRoute);
       const sortedStations = (existingRoute.route_stations || [])
         .sort((a: any, b: any) => a.sequence_number - b.sequence_number)
         .map((rs: any) => rs.station_tfl_id);
       
+      console.log('🔧 Sorted stations:', sortedStations);
+      
       // Set start and end stations from the actual sequence
       const startStation = sortedStations.length > 0 ? sortedStations[0] : "";
       const endStation = sortedStations.length > 0 ? sortedStations[sortedStations.length - 1] : "";
+      
+      console.log('🔧 Start station:', startStation, 'End station:', endStation);
+      console.log('🔧 Start station name:', getStationName(startStation));
+      console.log('🔧 End station name:', getStationName(endStation));
       
       form.reset({
         name: existingRoute.name,
@@ -115,6 +122,8 @@ const RouteCreate = () => {
       });
       
       setSelectedStations(sortedStations);
+      
+      console.log('🔧 Form values after reset:', form.getValues());
     }
   }, [existingRoute, isEditMode, form]);
 
@@ -253,7 +262,10 @@ const RouteCreate = () => {
   };
 
   const getStationName = (tfl_id: string) => {
+    console.log('🔧 getStationName called with:', tfl_id);
+    console.log('🔧 Available stations:', stations.length);
     const station = stations.find(s => s.id === tfl_id);
+    console.log('🔧 Found station:', station);
     return station?.name || tfl_id;
   };
 
