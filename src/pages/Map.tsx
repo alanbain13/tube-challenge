@@ -1,13 +1,16 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 import MapComponent from '@/components/Map';
+import ActivityStartModal from '@/components/ActivityStartModal';
 
 
 const MapPage = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [showActivityModal, setShowActivityModal] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -40,6 +43,13 @@ const MapPage = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => setShowActivityModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Start Activity
+            </Button>
             <Button variant="outline" onClick={() => navigate('/')}> 
               Back to Home
             </Button>
@@ -47,6 +57,11 @@ const MapPage = () => {
         </header>
         
         <MapComponent />
+        
+        <ActivityStartModal 
+          open={showActivityModal} 
+          onOpenChange={setShowActivityModal} 
+        />
       </div>
     </div>
   );

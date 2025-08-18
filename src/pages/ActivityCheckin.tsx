@@ -128,6 +128,17 @@ const ActivityCheckin = () => {
         .single();
 
       if (error) throw error;
+
+      // If activity is in draft status, activate it on first check-in
+      if (activity.status === 'draft') {
+        const { error: updateError } = await supabase
+          .from('activities')
+          .update({ status: 'active' })
+          .eq('id', activity.id);
+        
+        if (updateError) throw updateError;
+      }
+
       return data;
     },
     onSuccess: () => {

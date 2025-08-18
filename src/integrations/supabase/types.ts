@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.12 (cd3cf9e)"
@@ -55,6 +55,7 @@ export type Database = {
           distance_km: number | null
           end_latitude: number | null
           end_longitude: number | null
+          end_station_tfl_id: string | null
           ended_at: string | null
           estimated_duration_minutes: number | null
           gate_end_at: string | null
@@ -67,8 +68,10 @@ export type Database = {
           route_id: string | null
           start_latitude: number | null
           start_longitude: number | null
+          start_station_tfl_id: string | null
           started_at: string
           station_tfl_ids: string[]
+          status: string | null
           timing_mode: string | null
           title: string | null
           user_id: string
@@ -80,6 +83,7 @@ export type Database = {
           distance_km?: number | null
           end_latitude?: number | null
           end_longitude?: number | null
+          end_station_tfl_id?: string | null
           ended_at?: string | null
           estimated_duration_minutes?: number | null
           gate_end_at?: string | null
@@ -92,8 +96,10 @@ export type Database = {
           route_id?: string | null
           start_latitude?: number | null
           start_longitude?: number | null
+          start_station_tfl_id?: string | null
           started_at?: string
           station_tfl_ids: string[]
+          status?: string | null
           timing_mode?: string | null
           title?: string | null
           user_id: string
@@ -105,6 +111,7 @@ export type Database = {
           distance_km?: number | null
           end_latitude?: number | null
           end_longitude?: number | null
+          end_station_tfl_id?: string | null
           ended_at?: string | null
           estimated_duration_minutes?: number | null
           gate_end_at?: string | null
@@ -117,8 +124,10 @@ export type Database = {
           route_id?: string | null
           start_latitude?: number | null
           start_longitude?: number | null
+          start_station_tfl_id?: string | null
           started_at?: string
           station_tfl_ids?: string[]
+          status?: string | null
           timing_mode?: string | null
           title?: string | null
           user_id?: string

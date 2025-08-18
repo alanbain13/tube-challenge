@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useStations } from "@/hooks/useStations";
@@ -7,12 +7,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Clock } from "lucide-react";
+import { Plus, MapPin, Clock, Play } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import ActivityStartModal from "@/components/ActivityStartModal";
 
 const Routes = () => {
   const { user, loading } = useAuth();
   const { stations } = useStations();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [showActivityModal, setShowActivityModal] = useState(false);
 
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
@@ -56,6 +60,42 @@ const Routes = () => {
     enabled: !!user,
   });
 
+  const createRouteActivity = async (route: any) => {
+    if (!user) return;
+
+    try {
+      const { data: activity, error } = await supabase
+        .from('activities')
+        .insert({
+          user_id: user.id,
+          title: `${route.name} Challenge`,
+          notes: route.description,
+          route_id: route.id,
+          start_station_tfl_id: route.start_station_tfl_id,
+          end_station_tfl_id: route.end_station_tfl_id,
+          status: 'draft',
+          station_tfl_ids: [route.start_station_tfl_id, route.end_station_tfl_id]
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Route activity created",
+        description: "Check in at the start station to begin"
+      });
+
+      navigate(`/activities/${activity.id}/checkin`);
+    } catch (error) {
+      toast({
+        title: "Error creating activity",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
@@ -73,7 +113,11 @@ const Routes = () => {
             <p className="text-muted-foreground">Your saved tube routes and challenges</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => navigate("/routes/create")}>
+            <Button onClick={() => setShowActivityModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Start Activity
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/routes/create")}>
               <Plus className="w-4 h-4 mr-2" />
               Create Route
             </Button>
@@ -134,11 +178,13 @@ const Routes = () => {
                         Created {new Date(route.created_at).toLocaleDateString()}
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-4">
+                     <div className="flex gap-2 mt-4">
                       <Button
                         size="sm"
-                        onClick={() => navigate(`/activities/new?route=${route.id}`)}
+                        onClick={() => createRouteActivity(route)}
+                        className="flex items-center gap-1"
                       >
+                        <Play className="w-4 h-4" />
                         Start Activity
                       </Button>
                       <Button
@@ -155,6 +201,11 @@ const Routes = () => {
             </div>
           )}
         </main>
+        
+        <ActivityStartModal 
+          open={showActivityModal} 
+          onOpenChange={setShowActivityModal} 
+        />
       </div>
     </div>
   );
