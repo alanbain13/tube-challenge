@@ -60,7 +60,7 @@ interface Route {
 
 const RouteCreate = () => {
   const navigate = useNavigate();
-  const { routeId } = useParams<{ routeId: string }>();
+  const { id: routeId } = useParams<{ id?: string }>();
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
@@ -81,9 +81,10 @@ const RouteCreate = () => {
   });
 
   useEffect(() => {
-    if (routeId) {
+    const id = routeId;
+    if (id) {
       setIsEditMode(true);
-      loadRouteData(routeId);
+      loadRouteData(id);
     } else {
       setIsEditMode(false);
       form.reset();

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useStations } from "@/hooks/useStations";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,14 @@ import { Plus, MapPin, Clock } from "lucide-react";
 
 const Routes = () => {
   const { user, loading } = useAuth();
+  const { stations } = useStations();
   const navigate = useNavigate();
+
+  // Helper function to get station name by TfL ID
+  const getStationName = (tflId: string) => {
+    const station = stations.find(s => s.id === tflId);
+    return station ? station.name : tflId;
+  };
 
   // Auth guard
   useEffect(() => {
@@ -109,12 +117,12 @@ const Routes = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="w-4 h-4" />
-                        <span>
-                          {route.start_station_tfl_id} → {route.end_station_tfl_id}
-                        </span>
-                      </div>
+                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                         <MapPin className="w-4 h-4" />
+                         <span>
+                           {getStationName(route.start_station_tfl_id)} → {getStationName(route.end_station_tfl_id)}
+                         </span>
+                       </div>
                       {route.estimated_duration_minutes && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />
