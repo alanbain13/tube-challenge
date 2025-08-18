@@ -81,11 +81,13 @@ const RouteCreate = () => {
   });
 
   useEffect(() => {
-    const id = routeId;
-    if (id) {
+    console.log('🔄 RouteCreate useEffect - routeId:', routeId);
+    if (routeId) {
+      console.log('📝 Setting edit mode for route:', routeId);
       setIsEditMode(true);
-      loadRouteData(id);
+      loadRouteData(routeId);
     } else {
+      console.log('✨ Setting create mode');
       setIsEditMode(false);
       form.reset();
       setSelectedStations([]);
@@ -93,6 +95,7 @@ const RouteCreate = () => {
   }, [routeId, form]);
 
   const loadRouteData = async (routeId: string) => {
+    console.log('📥 Loading route data for ID:', routeId);
     try {
       const { data, error } = await supabase
         .from('routes')

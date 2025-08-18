@@ -17,6 +17,7 @@ const Routes = () => {
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
     const station = stations.find(s => s.id === tflId);
+    console.log(`🔍 Looking for station ${tflId}, found:`, station?.name || 'NOT FOUND');
     return station ? station.name : tflId;
   };
 
