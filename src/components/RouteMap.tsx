@@ -262,6 +262,28 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
+    // Add station name labels for all stations
+    map.current.addLayer({
+      id: 'station-labels',
+      type: 'symbol',
+      source: 'stations',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+        'text-size': 11,
+        'text-anchor': 'top',
+        'text-offset': [0, 1.2],
+        'text-max-width': 8,
+        'text-allow-overlap': false,
+        'text-ignore-placement': false
+      },
+      paint: {
+        'text-color': '#333333',
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 1.5
+      }
+    });
+
     // Add click handler
     map.current.on('click', 'stations', (e) => {
       if (e.features && e.features[0]) {

@@ -425,6 +425,30 @@ const isVisited = visitsRef.current.some(visit =>
       });
     }
 
+    // Add station name labels
+    if (!map.current!.getLayer('station-labels')) {
+      map.current!.addLayer({
+        id: 'station-labels',
+        type: 'symbol',
+        source: 'stations',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+          'text-size': 11,
+          'text-anchor': 'top',
+          'text-offset': [0, 1.2],
+          'text-max-width': 8,
+          'text-allow-overlap': false,
+          'text-ignore-placement': false
+        },
+        paint: {
+          'text-color': '#333333',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 1.5
+        }
+      });
+    }
+
     console.log('✅ Added station layers to map');
 
 // Add click handlers
@@ -634,7 +658,6 @@ const toggleStationVisit = async (station: Station) => {
       </div>
     );
   }
-
 
   return (
     <div className="relative">
