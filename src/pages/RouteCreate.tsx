@@ -49,12 +49,12 @@ interface Route {
   id: string;
   name: string;
   description?: string;
-  stations: string[];
-  startStation?: string;
-  endStation?: string;
-  estimatedDuration?: number;
-  isPublic: boolean;
+  start_station_tfl_id: string;
+  end_station_tfl_id: string;
+  estimated_duration_minutes?: number;
+  is_public: boolean;
   created_at: string;
+  updated_at: string;
   user_id: string;
 }
 
@@ -112,11 +112,21 @@ const RouteCreate = () => {
       const route = data as Route;
       form.setValue('name', route.name);
       form.setValue('description', route.description || '');
-      form.setValue('startStation', route.startStation || '');
-      form.setValue('endStation', route.endStation || '');
-      form.setValue('estimatedDuration', route.estimatedDuration || 0);
-      form.setValue('isPublic', route.isPublic);
-      setSelectedStations(route.stations);
+      form.setValue('startStation', route.start_station_tfl_id || '');
+      form.setValue('endStation', route.end_station_tfl_id || '');
+      form.setValue('estimatedDuration', route.estimated_duration_minutes || 0);
+      form.setValue('isPublic', route.is_public);
+      
+      // Load route stations from the separate route_stations table
+      const { data: routeStations } = await supabase
+        .from('route_stations')
+        .select('station_tfl_id')
+        .eq('route_id', routeId)
+        .order('sequence_number');
+      
+      if (routeStations) {
+        setSelectedStations(routeStations.map(rs => rs.station_tfl_id));
+      }
     } catch (error) {
       console.error('Error loading route data:', error);
       toast({
@@ -139,9 +149,14 @@ const RouteCreate = () => {
         return;
       }
 
+      // Map form values to database column names
       const routeData = {
-        ...values,
-        stations: selectedStations,
+        name: values.name,
+        description: values.description,
+        start_station_tfl_id: values.startStation || selectedStations[0] || '',
+        end_station_tfl_id: values.endStation || selectedStations[selectedStations.length - 1] || '',
+        estimated_duration_minutes: values.estimatedDuration,
+        is_public: values.isPublic,
         user_id: user.id,
       };
 
@@ -155,6 +170,32 @@ const RouteCreate = () => {
         response = await supabase
           .from('routes')
           .insert([routeData]);
+      }
+
+      // Handle route stations separately
+      if (!response.error) {
+        const currentRouteId = isEditMode ? routeId : response.data?.[0]?.id;
+        
+        if (currentRouteId && selectedStations.length > 0) {
+          // Delete existing route stations for edit mode
+          if (isEditMode) {
+            await supabase
+              .from('route_stations')
+              .delete()
+              .eq('route_id', currentRouteId);
+          }
+
+          // Insert new route stations
+          const routeStations = selectedStations.map((stationId, index) => ({
+            route_id: currentRouteId,
+            station_tfl_id: stationId,
+            sequence_number: index + 1,
+          }));
+
+          await supabase
+            .from('route_stations')
+            .insert(routeStations);
+        }
       }
 
       if (response.error) {
