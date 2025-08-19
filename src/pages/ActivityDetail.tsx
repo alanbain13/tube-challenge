@@ -271,7 +271,7 @@ const ActivityDetail = () => {
               )}
               <Button 
                 variant="outline" 
-                onClick={() => navigate(`/map?activity=${activity.id}`)}
+                onClick={() => navigate(`/activities/${activity.id}/map`)}
                 className="flex items-center gap-2"
               >
                 <Eye className="w-4 h-4" />

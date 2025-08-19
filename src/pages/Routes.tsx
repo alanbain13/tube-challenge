@@ -182,7 +182,7 @@ const Routes = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => navigate(`/routes/${route.id}`)}
+                        onClick={() => navigate(`/routes/${route.id}/view`)}
                         className="flex items-center gap-1"
                       >
                         <Eye className="w-4 h-4" />

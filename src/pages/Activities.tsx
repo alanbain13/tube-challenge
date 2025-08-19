@@ -151,24 +151,24 @@ const Activities = () => {
                         </div>
                       </div>
                       <div className="flex gap-2 mt-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/activities/${activity.id}`)}
-                          className="flex items-center gap-1"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Activity
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/activities/${activity.id}/edit`)}
-                          className="flex items-center gap-1"
-                        >
-                          <Edit className="w-4 h-4" />
-                          Edit Activity
-                        </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => navigate(`/activities/${activity.id}`)}
+                        className="flex items-center gap-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Activity
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => navigate(`/activities/${activity.id}/edit`)}
+                        className="flex items-center gap-1"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Edit Activity
+                      </Button>
                         <Button
                           size="sm"
                           onClick={() => navigate(`/activities/${activity.id}/checkin`)}

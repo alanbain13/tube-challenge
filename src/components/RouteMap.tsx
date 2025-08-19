@@ -11,13 +11,15 @@ interface RouteMapProps {
   onStationSelect: (stationId: string) => void;
   onStationRemove: (stationId: string) => void;
   onSequenceChange: (fromIndex: number, toIndex: number) => void;
+  readOnly?: boolean;
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
   selectedStations,
   onStationSelect,
   onStationRemove,
-  onSequenceChange
+  onSequenceChange,
+  readOnly = false
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -284,40 +286,44 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add click handler
-    map.current.on('click', 'stations', (e) => {
-      if (e.features && e.features[0]) {
-        const stationId = e.features[0].properties?.id;
-        const currentSelected = selectedStationsRef.current;
-        console.log('🖱️ Station clicked:', stationId, 'Currently selected (from ref):', currentSelected);
-        if (stationId) {
-          // Check if station is already selected
-          const isAlreadySelected = currentSelected.includes(stationId);
-          console.log('🔍 Station', stationId, 'already selected?', isAlreadySelected);
-          
-          if (isAlreadySelected) {
-            console.log('🗑️ Removing station:', stationId);
-            onStationRemove(stationId);
-          } else {
-            console.log('➕ Adding station:', stationId, 'to existing selection:', currentSelected);
-            onStationSelect(stationId);
+    // Add click handler (only if not read-only)
+    if (!readOnly) {
+      map.current.on('click', 'stations', (e) => {
+        if (e.features && e.features[0]) {
+          const stationId = e.features[0].properties?.id;
+          const currentSelected = selectedStationsRef.current;
+          console.log('🖱️ Station clicked:', stationId, 'Currently selected (from ref):', currentSelected);
+          if (stationId) {
+            // Check if station is already selected
+            const isAlreadySelected = currentSelected.includes(stationId);
+            console.log('🔍 Station', stationId, 'already selected?', isAlreadySelected);
+            
+            if (isAlreadySelected) {
+              console.log('🗑️ Removing station:', stationId);
+              onStationRemove(stationId);
+            } else {
+              console.log('➕ Adding station:', stationId, 'to existing selection:', currentSelected);
+              onStationSelect(stationId);
+            }
           }
         }
-      }
-    });
+      });
+    }
 
-    // Change cursor on hover
-    map.current.on('mouseenter', 'stations', () => {
-      if (map.current) {
-        map.current.getCanvas().style.cursor = 'pointer';
-      }
-    });
+    // Change cursor on hover (only if not read-only)
+    if (!readOnly) {
+      map.current.on('mouseenter', 'stations', () => {
+        if (map.current) {
+          map.current.getCanvas().style.cursor = 'pointer';
+        }
+      });
 
-    map.current.on('mouseleave', 'stations', () => {
-      if (map.current) {
-        map.current.getCanvas().style.cursor = '';
-      }
-    });
+      map.current.on('mouseleave', 'stations', () => {
+        if (map.current) {
+          map.current.getCanvas().style.cursor = '';
+        }
+      });
+    }
   };
 
   const updateStationStyles = () => {
@@ -411,9 +417,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Route Map</CardTitle>
+          <CardTitle>{readOnly ? 'Route Map (Read-Only)' : 'Route Map'}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Click stations to add them to your route. Selected stations show sequence numbers.
+            {readOnly 
+              ? 'Interactive map showing the selected route stations.'
+              : 'Click stations to add them to your route. Selected stations show sequence numbers.'
+            }
           </p>
         </CardHeader>
         <CardContent>
@@ -436,33 +445,35 @@ const RouteMap: React.FC<RouteMapProps> = ({
                     </span>
                     <span className="font-medium">{getStationName(stationId)}</span>
                   </div>
-                  <div className="flex gap-1">
-                    {index > 0 && (
+                  {!readOnly && (
+                    <div className="flex gap-1">
+                      {index > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onSequenceChange(index, index - 1)}
+                        >
+                          ↑
+                        </Button>
+                      )}
+                      {index < selectedStations.length - 1 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onSequenceChange(index, index + 1)}
+                        >
+                          ↓
+                        </Button>
+                      )}
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => onSequenceChange(index, index - 1)}
+                        variant="destructive"
+                        onClick={() => onStationRemove(stationId)}
                       >
-                        ↑
+                        Remove
                       </Button>
-                    )}
-                    {index < selectedStations.length - 1 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onSequenceChange(index, index + 1)}
-                      >
-                        ↓
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => onStationRemove(stationId)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
