@@ -46,12 +46,12 @@ export function JourneyTimer() {
         .from("activities")
         .select("*")
         .eq("user_id", user.id)
-        .eq("status", "active")
+        .in("status", ["active"])
+        .is("gate_end_at", null) // Only show if journey hasn't finished
         .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") {
+      if (error) {
         console.error("Error fetching active activity:", error);
         return null;
       }
@@ -99,19 +99,29 @@ export function JourneyTimer() {
       console.log('🏁 Finishing journey for activity:', activeActivity.id);
       const now = new Date().toISOString();
       
+      // Calculate journey duration
+      const startTime = new Date(activeActivity.gate_start_at!);
+      const endTime = new Date(now);
+      const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+      
       const { error } = await supabase
         .from("activities")
-        .update({ gate_end_at: now })
+        .update({ 
+          gate_end_at: now,
+          status: "completed",
+          actual_duration_minutes: durationMinutes
+        })
         .eq("id", activeActivity.id);
 
       if (error) throw error;
 
       toast({
-        title: "Journey timer finished",
-        description: "Official journey timing completed"
+        title: "Journey completed!",
+        description: `Finished in ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`
       });
 
-      refetch();
+      // Force immediate refetch to hide the HUD
+      await refetch();
     } catch (error) {
       console.error('Error finishing journey timer:', error);
       toast({
