@@ -82,17 +82,17 @@ const RouteCreate = () => {
 
   useEffect(() => {
     console.log('🔄 RouteCreate useEffect - routeId:', routeId);
-    if (routeId) {
+    if (routeId && stations.length > 0) {
       console.log('📝 Setting edit mode for route:', routeId);
       setIsEditMode(true);
       loadRouteData(routeId);
-    } else {
+    } else if (!routeId) {
       console.log('✨ Setting create mode');
       setIsEditMode(false);
       form.reset();
       setSelectedStations([]);
     }
-  }, [routeId, form]);
+  }, [routeId, form, stations]);
 
   const loadRouteData = async (routeId: string) => {
     console.log('📥 Loading route data for ID:', routeId);
@@ -116,8 +116,13 @@ const RouteCreate = () => {
       const route = data as Route;
       form.setValue('name', route.name);
       form.setValue('description', route.description || '');
-      form.setValue('startStation', route.start_station_tfl_id || '');
-      form.setValue('endStation', route.end_station_tfl_id || '');
+      
+      // Find stations by TFL ID and set the form values with the internal station IDs
+      const startStation = stations.find(s => s.id === route.start_station_tfl_id);
+      const endStation = stations.find(s => s.id === route.end_station_tfl_id);
+      
+      form.setValue('startStation', startStation?.id || '');
+      form.setValue('endStation', endStation?.id || '');
       form.setValue('estimatedDuration', route.estimated_duration_minutes || 0);
       form.setValue('isPublic', route.is_public);
       
@@ -322,11 +327,11 @@ const RouteCreate = () => {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {stations.map((station) => (
-                                  <SelectItem key={station.id} value={station.id}>
-                                    {station.name}
-                                  </SelectItem>
-                                ))}
+                                 {stations.map((station) => (
+                                   <SelectItem key={station.id} value={station.id}>
+                                     {station.name}
+                                   </SelectItem>
+                                 ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -347,11 +352,11 @@ const RouteCreate = () => {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {stations.map((station) => (
-                                  <SelectItem key={station.id} value={station.id}>
-                                    {station.name}
-                                  </SelectItem>
-                                ))}
+                                 {stations.map((station) => (
+                                   <SelectItem key={station.id} value={station.id}>
+                                     {station.name}
+                                   </SelectItem>
+                                 ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
