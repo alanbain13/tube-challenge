@@ -11,6 +11,8 @@ import ActivityNew from "./pages/ActivityNew";
 import ActivityCheckin from "./pages/ActivityCheckin";
 import RouteCreate from "@/pages/RouteCreate";
 import RoutesPage from "@/pages/Routes";
+import ActivitiesPage from "@/pages/Activities";
+import ActivityDetail from "@/pages/ActivityDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +33,8 @@ const App = () => (
             <Route path="/routes" element={<RoutesPage />} />
             <Route path="/routes/create" element={<RouteCreate />} />
             <Route path="/routes/:id/edit" element={<RouteCreate />} />
+            <Route path="/activities" element={<ActivitiesPage />} />
+            <Route path="/activities/:id" element={<ActivityDetail />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

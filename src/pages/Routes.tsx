@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Clock, Play } from "lucide-react";
+import { Plus, MapPin, Clock, Play, Eye, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 
@@ -181,18 +181,29 @@ const Routes = () => {
                      <div className="flex gap-2 mt-4">
                       <Button
                         size="sm"
-                        onClick={() => createRouteActivity(route)}
+                        variant="outline"
+                        onClick={() => navigate(`/routes/${route.id}`)}
                         className="flex items-center gap-1"
                       >
-                        <Play className="w-4 h-4" />
-                        Start Activity
+                        <Eye className="w-4 h-4" />
+                        View Route
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => navigate(`/routes/${route.id}/edit`)}
+                        className="flex items-center gap-1"
                       >
+                        <Edit className="w-4 h-4" />
                         Edit Route
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => createRouteActivity(route)}
+                        className="flex items-center gap-1"
+                      >
+                        <Play className="w-4 h-4" />
+                        Start Activity
                       </Button>
                     </div>
                   </CardContent>

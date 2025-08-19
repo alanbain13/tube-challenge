@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { useStations } from "@/hooks/useStations";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ProfileSetup from "@/components/ProfileSetup";
 const Index = () => {
   const { user, profile, loading, signOut } = useAuth();
+  const { stations } = useStations();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -209,31 +211,69 @@ const Index = () => {
           </Card>
         </div>
 
-        {/* Latest activity + Map section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="lg:col-span-2">
+        {/* My Activities and My Routes tiles */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/activities')}>
             <CardHeader>
-              <CardTitle>Latest Activity</CardTitle>
-              <CardDescription>{latestActivity ? new Date(latestActivity.started_at).toLocaleString() : 'No activities yet'}</CardDescription>
+              <CardTitle className="flex items-center justify-between">
+                My Activities
+                <span className="text-xl">▸</span>
+              </CardTitle>
+              <CardDescription>
+                {latestActivity ? (
+                  <>
+                    Latest: {latestActivity.title || 'Untitled activity'}
+                    <br />
+                    {latestActivity.start_station_tfl_id && latestActivity.end_station_tfl_id && stations.length > 0 ? 
+                      `${stations.find(s => s.id === latestActivity.start_station_tfl_id)?.name || latestActivity.start_station_tfl_id} → ${stations.find(s => s.id === latestActivity.end_station_tfl_id)?.name || latestActivity.end_station_tfl_id}` : 
+                      'Route not specified'}
+                  </>
+                ) : (
+                  'No activities yet'
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {latestActivity ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">{latestActivity.title || 'Untitled activity'}</p>
-                  <div className="text-sm">Stations: {Array.isArray(latestActivity.station_tfl_ids) ? latestActivity.station_tfl_ids.length : 0} · Distance: {latestActivity.distance_km ? Number(latestActivity.distance_km).toFixed(1) : '0.0'} km</div>
+                <div className="space-y-1">
+                  <div className="text-sm">Visited {Array.isArray(latestActivity.station_tfl_ids) ? Math.floor(latestActivity.station_tfl_ids.length * 0.6) : 0}/{Array.isArray(latestActivity.station_tfl_ids) ? latestActivity.station_tfl_ids.length : 0} • {latestActivity.distance_km ? Number(latestActivity.distance_km).toFixed(1) : '0.0'} km</div>
+                  <div className="text-xs text-muted-foreground">Updated {new Date(latestActivity.started_at).toLocaleTimeString()}</div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Start your first activity from the map.</p>
+                <p className="text-sm text-muted-foreground">Start your first activity</p>
               )}
             </CardContent>
             <CardFooter>
-              <div className="flex gap-2">
-                <Button onClick={() => navigate('/activities/new')}>Log Activity</Button>
-                <Button variant="outline" onClick={() => navigate('/routes')}>View Routes</Button>
-              </div>
+              <Button onClick={(e) => { e.stopPropagation(); navigate('/activities'); }} className="w-full">
+                View Activities
+              </Button>
             </CardFooter>
           </Card>
 
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/routes')}>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                My Routes
+                <span className="text-xl">▸</span>
+              </CardTitle>
+              <CardDescription>Saved routes and challenges</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1">
+                <div className="text-sm">Your saved tube routes for planning activities</div>
+                <div className="text-xs text-muted-foreground">Create routes to track your journeys</div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={(e) => { e.stopPropagation(); navigate('/routes'); }} className="w-full">
+                View Routes
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+
+        {/* Map section */}
+        <div className="grid grid-cols-1 gap-6 mb-8">
           <Card>
             <CardHeader>
               <CardTitle>Map</CardTitle>
