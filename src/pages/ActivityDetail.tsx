@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useStations } from "@/hooks/useStations";
@@ -7,8 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Play, Square, Eye } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 const ActivityDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,12 @@ const ActivityDetail = () => {
   const { stations } = useStations();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; activityId: string; title: string }>({
+    open: false,
+    activityId: "",
+    title: ""
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
@@ -29,7 +36,7 @@ const ActivityDetail = () => {
   }, [loading, user, navigate]);
 
   // Fetch activity details
-  const { data: activity, isLoading } = useQuery({
+  const { data: activity, isLoading, refetch: refetchActivity } = useQuery({
     queryKey: ["activity", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -102,12 +109,52 @@ const ActivityDetail = () => {
         title: "Journey completed",
         description: "Your activity has been marked as complete"
       });
+
+      refetchActivity();
     } catch (error) {
       toast({
         title: "Error finishing journey",
         description: "Please try again",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleDeleteActivity = async () => {
+    if (!deleteModal.activityId) return;
+    
+    setIsDeleting(true);
+    try {
+      // First delete related station visits
+      const { error: visitsError } = await supabase
+        .from("station_visits")
+        .delete()
+        .eq("activity_id", deleteModal.activityId);
+      
+      if (visitsError) throw visitsError;
+
+      // Then delete the activity
+      const { error } = await supabase
+        .from("activities")
+        .delete()
+        .eq("id", deleteModal.activityId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Activity deleted",
+        description: "The activity has been removed"
+      });
+
+      navigate("/activities");
+    } catch (error) {
+      toast({
+        title: "Error deleting activity",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -203,11 +250,16 @@ const ActivityDetail = () => {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Elapsed Time</div>
-                  <div className="font-medium">{formatDuration(elapsedTime)}</div>
+                  <div className="font-medium">
+                    {activity.actual_duration_minutes ? 
+                      `${Math.floor(activity.actual_duration_minutes / 60).toString().padStart(2, '0')}:${(activity.actual_duration_minutes % 60).toString().padStart(2, '0')}:00` :
+                      formatDuration(elapsedTime)
+                    }
+                  </div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Distance</div>
-                  <div className="font-medium">{activity.distance_km ? `${Number(activity.distance_km).toFixed(1)} km` : '0.0 km'}</div>
+                  <div className="text-sm text-muted-foreground">Visited Count</div>
+                  <div className="font-medium">{visits.filter(v => v.status === 'verified').length}/{stationList.length} stations</div>
                 </div>
               </div>
             </CardContent>
@@ -277,9 +329,30 @@ const ActivityDetail = () => {
                 <Eye className="w-4 h-4" />
                 View on Map
               </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setDeleteModal({ 
+                  open: true, 
+                  activityId: activity.id, 
+                  title: activity.title || "Untitled Activity" 
+                })}
+                className="flex items-center gap-2 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Activity
+              </Button>
             </div>
           </div>
         </main>
+        
+        <DeleteConfirmModal
+          open={deleteModal.open}
+          onOpenChange={(open) => setDeleteModal(prev => ({ ...prev, open }))}
+          title="Delete this Activity?"
+          description="This action can't be undone. You'll lose this activity and its local progress."
+          onConfirm={handleDeleteActivity}
+          isDeleting={isDeleting}
+        />
       </div>
     </div>
   );

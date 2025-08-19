@@ -36,7 +36,7 @@ export function JourneyTimer() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch current active activity
+  // Fetch current active activity with verified check-in
   const { data: activeActivity, refetch } = useQuery({
     queryKey: ["activeActivity", user?.id],
     queryFn: async () => {
@@ -44,22 +44,64 @@ export function JourneyTimer() {
       
       const { data, error } = await supabase
         .from("activities")
-        .select("*")
+        .select(`
+          *,
+          station_visits!inner(id, status, verified_at, is_start_station)
+        `)
         .eq("user_id", user.id)
-        .in("status", ["active"])
-        .is("gate_end_at", null) // Only show if journey hasn't finished
+        .eq("status", "active")
+        .is("gate_end_at", null)
+        .eq("station_visits.is_start_station", true)
+        .in("station_visits.status", ["verified"])
         .order("created_at", { ascending: false })
-        .maybeSingle();
+        .limit(1);
 
       if (error) {
         console.error("Error fetching active activity:", error);
         return null;
       }
 
-      return data as Activity | null;
+      return data?.[0] as Activity | null;
     },
     enabled: !!user,
     refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Check if user has an active activity without verified start
+  const { data: pendingActivity } = useQuery({
+    queryKey: ["pendingActivity", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .is("gate_end_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (error) return null;
+
+      // Check if this activity has a verified start check-in
+      if (data?.[0]) {
+        const { data: startVisit } = await supabase
+          .from("station_visits")
+          .select("status")
+          .eq("activity_id", data[0].id)
+          .eq("is_start_station", true)
+          .eq("status", "verified")
+          .limit(1);
+
+        // Return activity only if no verified start exists
+        return startVisit?.length ? null : data[0];
+      }
+      
+      return null;
+    },
+    enabled: !!user && !activeActivity,
+    refetchInterval: 30000,
   });
 
   const handleStartJourney = async () => {
@@ -116,8 +158,8 @@ export function JourneyTimer() {
       if (error) throw error;
 
       toast({
-        title: "Journey completed!",
-        description: `Finished in ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`
+        title: "Journey finished",
+        description: `${Math.floor(durationMinutes / 60).toString().padStart(2, '0')}:${(durationMinutes % 60).toString().padStart(2, '0')}:00 recorded`
       });
 
       // Force immediate refetch to hide the HUD
@@ -143,7 +185,26 @@ export function JourneyTimer() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Don't show if no active activity
+  // Show pending notice if activity exists but no verified start
+  if (pendingActivity && !activeActivity) {
+    return (
+      <Card className="fixed bottom-4 right-4 z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg">
+        <div className="flex items-center gap-3 min-w-[280px]">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <div className="text-sm">
+            <div className="font-medium text-foreground">
+              Check in at your start station to begin
+            </div>
+            <div className="text-muted-foreground">
+              {pendingActivity.title}
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // Don't show if no active activity with verified start
   if (!activeActivity) {
     return null;
   }
@@ -169,10 +230,13 @@ export function JourneyTimer() {
                   hasFinished ? (
                     `Completed in ${formatElapsedTime(activeActivity.gate_start_at!)}`
                   ) : (
-                    formatElapsedTime(activeActivity.gate_start_at!)
+                    <span className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      {formatElapsedTime(activeActivity.gate_start_at!)}
+                    </span>
                   )
                 ) : (
-                  "Ready to start"
+                  "Ready to start official timing"
                 )}
               </div>
             </div>
@@ -190,11 +254,11 @@ export function JourneyTimer() {
                   className="h-8"
                 >
                   <Play className="h-3 w-3 mr-1" />
-                  Start
+                  {canStart ? "Start" : "Running..."}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {canStart ? "Start official journey timing" : "Journey already started"}
+                {canStart ? "Start official journey timing" : "Official timing is running"}
               </TooltipContent>
             </Tooltip>
 

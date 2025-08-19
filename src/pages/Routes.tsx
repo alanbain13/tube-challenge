@@ -7,9 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Clock, Play, Eye, Edit } from "lucide-react";
+import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 const Routes = () => {
   const { user, loading } = useAuth();
@@ -17,6 +18,12 @@ const Routes = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; routeId: string; title: string }>({
+    open: false,
+    routeId: "",
+    title: ""
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
@@ -44,7 +51,7 @@ const Routes = () => {
   }, []);
 
   // Fetch user's routes
-  const { data: routes = [], isLoading } = useQuery({
+  const { data: routes = [], isLoading, refetch } = useQuery({
     queryKey: ["routes"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -59,6 +66,45 @@ const Routes = () => {
     },
     enabled: !!user,
   });
+
+  const handleDeleteRoute = async () => {
+    if (!deleteModal.routeId) return;
+    
+    setIsDeleting(true);
+    try {
+      // First delete related route stations
+      const { error: stationsError } = await supabase
+        .from("route_stations")
+        .delete()
+        .eq("route_id", deleteModal.routeId);
+      
+      if (stationsError) throw stationsError;
+
+      // Then delete the route
+      const { error } = await supabase
+        .from("routes")
+        .delete()
+        .eq("id", deleteModal.routeId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Route deleted",
+        description: "The route has been removed"
+      });
+
+      setDeleteModal({ open: false, routeId: "", title: "" });
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error deleting route",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const createRouteActivity = async (route: any) => {
     if (!user) return;
@@ -179,33 +225,45 @@ const Routes = () => {
                       </div>
                     </div>
                      <div className="flex gap-2 mt-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/routes/${route.id}/view`)}
-                        className="flex items-center gap-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View Route
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/routes/${route.id}/edit`)}
-                        className="flex items-center gap-1"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit Route
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => createRouteActivity(route)}
-                        className="flex items-center gap-1"
-                      >
-                        <Play className="w-4 h-4" />
-                        Start Activity
-                      </Button>
-                    </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/routes/${route.id}/view`)}
+                          className="flex items-center gap-1"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/routes/${route.id}/edit`)}
+                          className="flex items-center gap-1"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => createRouteActivity(route)}
+                          className="flex items-center gap-1"
+                        >
+                          <Play className="w-4 h-4" />
+                          Start Activity
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDeleteModal({ 
+                            open: true, 
+                            routeId: route.id, 
+                            title: route.name 
+                          })}
+                          className="flex items-center gap-1 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                   </CardContent>
                 </Card>
               ))}
@@ -216,6 +274,15 @@ const Routes = () => {
         <ActivityStartModal 
           open={showActivityModal} 
           onOpenChange={setShowActivityModal} 
+        />
+        
+        <DeleteConfirmModal
+          open={deleteModal.open}
+          onOpenChange={(open) => setDeleteModal(prev => ({ ...prev, open }))}
+          title="Delete this Route?"
+          description="This action can't be undone. You'll lose this route and its local progress."
+          onConfirm={handleDeleteRoute}
+          isDeleting={isDeleting}
         />
       </div>
     </div>

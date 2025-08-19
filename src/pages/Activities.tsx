@@ -7,9 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Clock, Play, Eye, Edit } from "lucide-react";
+import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 const Activities = () => {
   const { user, loading } = useAuth();
@@ -17,6 +18,12 @@ const Activities = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; activityId: string; title: string }>({
+    open: false,
+    activityId: "",
+    title: ""
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
@@ -53,7 +60,7 @@ const Activities = () => {
   }, []);
 
   // Fetch user's activities
-  const { data: activities = [], isLoading } = useQuery({
+  const { data: activities = [], isLoading, refetch } = useQuery({
     queryKey: ["activities"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -65,6 +72,45 @@ const Activities = () => {
     },
     enabled: !!user,
   });
+
+  const handleDeleteActivity = async () => {
+    if (!deleteModal.activityId) return;
+    
+    setIsDeleting(true);
+    try {
+      // First delete related station visits
+      const { error: visitsError } = await supabase
+        .from("station_visits")
+        .delete()
+        .eq("activity_id", deleteModal.activityId);
+      
+      if (visitsError) throw visitsError;
+
+      // Then delete the activity
+      const { error } = await supabase
+        .from("activities")
+        .delete()
+        .eq("id", deleteModal.activityId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Activity deleted",
+        description: "The activity and its progress have been removed"
+      });
+
+      setDeleteModal({ open: false, activityId: "", title: "" });
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error deleting activity",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   if (loading || !user) {
     return (
@@ -151,24 +197,24 @@ const Activities = () => {
                         </div>
                       </div>
                       <div className="flex gap-2 mt-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/activities/${activity.id}`)}
-                        className="flex items-center gap-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View Activity
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/activities/${activity.id}/edit`)}
-                        className="flex items-center gap-1"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit Activity
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/activities/${activity.id}`)}
+                          className="flex items-center gap-1"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/activities/${activity.id}/edit`)}
+                          className="flex items-center gap-1"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </Button>
                         <Button
                           size="sm"
                           onClick={() => navigate(`/activities/${activity.id}/checkin`)}
@@ -176,6 +222,18 @@ const Activities = () => {
                         >
                           <Play className="w-4 h-4" />
                           {activity.status === 'draft' ? 'Start' : 'Resume'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDeleteModal({ 
+                            open: true, 
+                            activityId: activity.id, 
+                            title: activity.title || "Untitled Activity" 
+                          })}
+                          className="flex items-center gap-1 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </CardContent>
@@ -189,6 +247,15 @@ const Activities = () => {
         <ActivityStartModal 
           open={showActivityModal} 
           onOpenChange={setShowActivityModal} 
+        />
+        
+        <DeleteConfirmModal
+          open={deleteModal.open}
+          onOpenChange={(open) => setDeleteModal(prev => ({ ...prev, open }))}
+          title="Delete this Activity?"
+          description="This action can't be undone. You'll lose this activity and its local progress."
+          onConfirm={handleDeleteActivity}
+          isDeleting={isDeleting}
         />
       </div>
     </div>
