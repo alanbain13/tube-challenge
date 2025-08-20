@@ -309,6 +309,8 @@ export type Database = {
       station_visits: {
         Row: {
           activity_id: string | null
+          ai_confidence: number | null
+          ai_station_text: string | null
           ai_verification_result: Json | null
           checkin_type: string | null
           created_at: string
@@ -327,10 +329,14 @@ export type Database = {
           verification_image_url: string | null
           verification_method: string | null
           verified_at: string | null
+          visit_lat: number | null
+          visit_lon: number | null
           visited_at: string
         }
         Insert: {
           activity_id?: string | null
+          ai_confidence?: number | null
+          ai_station_text?: string | null
           ai_verification_result?: Json | null
           checkin_type?: string | null
           created_at?: string
@@ -349,10 +355,14 @@ export type Database = {
           verification_image_url?: string | null
           verification_method?: string | null
           verified_at?: string | null
+          visit_lat?: number | null
+          visit_lon?: number | null
           visited_at?: string
         }
         Update: {
           activity_id?: string | null
+          ai_confidence?: number | null
+          ai_station_text?: string | null
           ai_verification_result?: Json | null
           checkin_type?: string | null
           created_at?: string
@@ -371,6 +381,8 @@ export type Database = {
           verification_image_url?: string | null
           verification_method?: string | null
           verified_at?: string | null
+          visit_lat?: number | null
+          visit_lon?: number | null
           visited_at?: string
         }
         Relationships: [
