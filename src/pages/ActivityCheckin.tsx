@@ -10,16 +10,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
+import { DevPanel, useSimulationMode } from "@/components/DevPanel";
+import { SimulationBanner } from "@/components/SimulationBanner";
 
 // Configuration
 const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
-const SIMULATION_MODE = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
-
-console.log('🧭 Checkin: Config loaded -', { 
-  GEOFENCE_RADIUS_METERS, 
-  SIMULATION_MODE, 
-  isDev: import.meta.env.DEV 
-});
 
 // Types for validation pipeline
 interface OCRResult {
@@ -42,8 +37,10 @@ interface ValidationLogEntry {
   geofence_radius_m?: number;
   geofence_passed?: boolean;
   geofence_bypassed?: boolean;
-  simulation_mode: boolean;
-  result: 'success' | 'error';
+  simulation_mode_env?: boolean;
+  simulation_mode_user?: boolean;
+  simulation_mode_effective?: boolean;
+  result: 'success' | 'error' | 'bypassed';
   error_code?: string;
   error_message?: string;
 }
@@ -76,6 +73,7 @@ const ActivityCheckin = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { stations } = useStations();
+  const { simulationModeEnv, simulationModeUser, simulationModeEffective } = useSimulationMode();
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -93,6 +91,17 @@ const ActivityCheckin = () => {
     distance?: number;
     ocrResult?: OCRResult;
   } | null>(null);
+
+  // Log simulation mode config on component mount
+  useEffect(() => {
+    console.log('🧭 Checkin: Config loaded -', { 
+      GEOFENCE_RADIUS_METERS, 
+      simulationModeEnv,
+      simulationModeUser,
+      simulationModeEffective,
+      isDev: import.meta.env.DEV 
+    });
+  }, [simulationModeEnv, simulationModeUser, simulationModeEffective]);
 
   // Auth guard
   useEffect(() => {
@@ -170,7 +179,9 @@ const ActivityCheckin = () => {
   const runValidationPipeline = async (imageData: string) => {
     const logEntry: ValidationLogEntry = {
       step: 'ocr',
-      simulation_mode: SIMULATION_MODE,
+      simulation_mode_env: simulationModeEnv,
+      simulation_mode_user: simulationModeUser,
+      simulation_mode_effective: simulationModeEffective,
       result: 'error'
     };
 
@@ -259,11 +270,11 @@ const ActivityCheckin = () => {
       logEntry.station_lat = resolvedStation.coords.lat;
       logEntry.station_lng = resolvedStation.coords.lon;
 
-      if (SIMULATION_MODE) {
+      if (simulationModeEffective) {
         console.log('🧭 Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
-        logEntry.result = 'success';
+        logEntry.result = 'bypassed';
         logEntry.geofence_bypassed = true;
-        logEntry.error_message = 'Skipped in simulation mode';
+        logEntry.error_message = 'Bypassed in simulation mode';
       } else {
         console.log('🧭 Checkin: Step 3 - Geofencing validation');
         
@@ -333,7 +344,9 @@ const ActivityCheckin = () => {
           ai_station_text: normalizedOCR.station_text_raw,
           ai_confidence: normalizedOCR.confidence,
           matching_rule: resolvedStation.matching_rule,
-          simulation_mode: SIMULATION_MODE,
+          simulation_mode_env: simulationModeEnv,
+          simulation_mode_user: simulationModeUser,
+          simulation_mode_effective: simulationModeEffective,
           geofence_distance_m: logEntry.distance_m || 0,
           geofence_radius_m: GEOFENCE_RADIUS_METERS,
           geofence_passed: logEntry.geofence_passed || false,
@@ -345,7 +358,7 @@ const ActivityCheckin = () => {
       console.log('🧭 Checkin: Step 4 SUCCESS -', logEntry);
 
       // Success toast
-      const simulationSuffix = SIMULATION_MODE ? ' (simulation)' : '';
+      const simulationSuffix = simulationModeEffective ? ' (simulation)' : '';
       toast({
         title: `✅ Checked in at ${resolvedStation.display_name}${simulationSuffix}`,
         description: `Verification: ${resolvedStation.matching_rule}`,
@@ -678,9 +691,17 @@ const ActivityCheckin = () => {
           </Button>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Simulation Mode Banner */}
+        <SimulationBanner visible={simulationModeEffective} className="mb-6" />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Dev Panel */}
+          <div className="lg:col-span-3">
+            <DevPanel />
+          </div>
+
           {/* Camera Section */}
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Camera className="w-5 h-5" />
@@ -688,12 +709,6 @@ const ActivityCheckin = () => {
               </CardTitle>
             <CardDescription>
               Take or upload a photo of the station roundel to verify your check-in
-              {SIMULATION_MODE && (
-                <div className="flex items-center gap-2 mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-orange-800 text-sm">
-                  <AlertTriangle className="w-4 h-4" />
-                  Simulation mode is ON — GPS checks bypassed
-                </div>
-              )}
             </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -968,7 +983,7 @@ const ActivityCheckin = () => {
           </Card>
 
           {/* Current Activity Status */}
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-3">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
