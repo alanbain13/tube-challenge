@@ -11,7 +11,7 @@ const corsHeaders = {
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const openAIModel = Deno.env.get('OPENAI_MODEL') || 'gpt-4o';
 const openAIApiBase = Deno.env.get('OPENAI_API_BASE') || 'https://api.openai.com/v1';
-const aiVerificationEnabled = Deno.env.get('AI_VERIFICATION_ENABLED') === 'true';
+const aiVerificationEnabled = !!openAIApiKey; // Auto-enable when API key is present
 const aiSimulationMode = Deno.env.get('AI_SIMULATION_MODE') === 'true';
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -23,6 +23,7 @@ serve(async (req) => {
 
   try {
     console.log('🧠 AI: Starting roundel verification...');
+    console.log(`🧠 AI: AI_VERIFICATION=${aiVerificationEnabled ? 'ON' : 'OFF'}`);
     
     const { imageData, stationTflId } = await req.json();
     
@@ -33,14 +34,17 @@ serve(async (req) => {
       );
     }
 
-    // Check if AI verification is disabled
+    // Check if AI verification is disabled (no API key)
     if (!aiVerificationEnabled) {
       console.log('🧠 AI: Verification disabled, returning pending status');
       return new Response(
         JSON.stringify({
-          success: false,
+          is_roundel: true, // Assume roundel for pending save
+          station_text_raw: '',
+          station_name: null,
+          confidence: 0,
           error: 'verification_disabled',
-          message: 'AI verification is currently disabled. Photo saved as pending.',
+          message: 'AI verification unavailable. You can still save as Pending.',
           pending: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -189,6 +193,10 @@ serve(async (req) => {
       console.log('🧠 AI: No roundel detected');
       return new Response(
         JSON.stringify({
+          is_roundel: false,
+          station_text_raw: '',
+          station_name: null,
+          confidence: 0,
           success: false,
           error: 'no_roundel',
           message: "We couldn't detect a Tube roundel in your photo. Try a clearer picture showing the full roundel."
@@ -202,6 +210,10 @@ serve(async (req) => {
       console.log('🧠 AI: Roundel detected but name not readable');
       return new Response(
         JSON.stringify({
+          is_roundel: true,
+          station_text_raw: '',
+          station_name: null,
+          confidence: 0,
           success: false,
           error: 'name_not_readable',
           message: "We detected a roundel but couldn't read the station name. Please retake the photo closer and centered."
@@ -231,9 +243,13 @@ serve(async (req) => {
       
       return new Response(
         JSON.stringify({
+          is_roundel: true,
+          station_text_raw: extractedName,
+          station_name: null,
+          confidence: aiResult.confidence || 0,
           success: false,
           error: 'name_not_recognized',
-          message: `Recognized name: ${extractedName}. This doesn't match any station in our database.`,
+          message: `We read '${extractedName}' but couldn't match a station. Retake or try GPS check-in.`,
           extracted_name: extractedName,
           suggestions: suggestions.map(s => ({ tfl_id: s.tfl_id, name: s.name }))
         }),
@@ -246,11 +262,13 @@ serve(async (req) => {
     // Success - roundel detected, name extracted and matched
     return new Response(
       JSON.stringify({
+        is_roundel: true,
+        station_text_raw: extractedName,
+        station_name: matchedStation.name,
+        confidence: aiResult.confidence || 0.9,
         success: true,
         station_tfl_id: matchedStation.tfl_id,
-        station_name: matchedStation.name,
         extracted_name: extractedName,
-        confidence: aiResult.confidence || 0.9,
         debug: aiResult.debug || {}
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

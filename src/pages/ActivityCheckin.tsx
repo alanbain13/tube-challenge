@@ -204,21 +204,52 @@ const ActivityCheckin = () => {
       };
 
       // Check if roundel was detected
-      if (!normalizedResult.is_roundel) {
+      if (!result.is_roundel) {
         toast({
           title: "No roundel detected",
-          description: "Try a clearer photo of the station roundel",
+          description: result.message || "Try a clearer photo of the station roundel",
           variant: "destructive"
         });
         setVerificationError("No TfL roundel detected in image");
         return;
       }
 
-      // Station matching logic
+      // If edge function already matched a station, use it
+      if (result.success && result.station_tfl_id) {
+        const edgeMatchedStation = stations.find(s => s.id === result.station_tfl_id);
+        if (edgeMatchedStation) {
+          console.log('🧭 Checkin: chosen_match =', {
+            station_tfl_id: result.station_tfl_id,
+            name: result.station_name,
+            distance_m: 0, // Server-side matched
+            confidence: result.confidence
+          });
+
+          // Create verified check-in
+          checkinMutation.mutate({
+            stationTflId: result.station_tfl_id,
+            checkinType: 'image',
+            imageData: capturedImage!,
+            verificationResult: {
+              success: true,
+              pending: false,
+              station_name: result.station_name!,
+              confidence: result.confidence,
+              distance_m: 0,
+              verification_method: 'roundel_ai',
+              ai_station_text: result.station_text_raw,
+              ai_confidence: result.confidence
+            }
+          });
+          return;
+        }
+      }
+
+      // Fallback: Station matching logic for cases where edge function didn't match
       let matchedStation = null;
       let matchDistance = Infinity;
 
-      if (normalizedResult.station_name) {
+      if (result.station_name) {
         // GPS-based matching within 750m if location available
         if (location && stations.length) {
           const nearbyMatches = stations.filter(station => {
@@ -226,7 +257,7 @@ const ActivityCheckin = () => {
               location.lat, location.lng,
               station.coordinates[1], station.coordinates[0]
             );
-            return distance <= 750 && fuzzyMatch(normalizedResult.station_name!, station.name) >= 0.85;
+            return distance <= 750 && fuzzyMatch(result.station_name!, station.name) >= 0.85;
           });
 
           if (nearbyMatches.length > 0) {
@@ -250,7 +281,7 @@ const ActivityCheckin = () => {
           const globalMatches = stations
             .map(station => ({
               station,
-              similarity: fuzzyMatch(normalizedResult.station_name!, station.name)
+              similarity: fuzzyMatch(result.station_name!, station.name)
             }))
             .filter(match => match.similarity >= 0.85)
             .sort((a, b) => b.similarity - a.similarity);
@@ -268,10 +299,10 @@ const ActivityCheckin = () => {
       if (!matchedStation) {
         toast({
           title: "Station not recognized",
-          description: `We read '${normalizedResult.station_text_raw}' but couldn't match a station. Retake or try GPS check-in.`,
+          description: result.message || `We read '${result.station_text_raw}' but couldn't match a station. Retake or try GPS check-in.`,
           variant: "destructive"
         });
-        setVerificationError(`Could not match station: ${normalizedResult.station_text_raw}`);
+        setVerificationError(`Could not match station: ${result.station_text_raw}`);
         return;
       }
 
@@ -279,11 +310,11 @@ const ActivityCheckin = () => {
         station_tfl_id: matchedStation.id,
         name: matchedStation.name,
         distance_m: Math.round(matchDistance),
-        confidence: normalizedResult.confidence
+        confidence: result.confidence
       });
 
       // Determine verification status based on confidence and GPS proximity
-      const isHighConfidence = normalizedResult.confidence >= 0.8;
+      const isHighConfidence = result.confidence >= 0.8;
       const isNearGPS = location && matchDistance <= 750;
       const isVerified = isHighConfidence && (isNearGPS || matchDistance === 999999);
 
@@ -296,9 +327,11 @@ const ActivityCheckin = () => {
           success: isVerified,
           pending: !isVerified,
           station_name: matchedStation.name,
-          confidence: normalizedResult.confidence,
+          confidence: result.confidence,
           distance_m: matchDistance,
-          ai_station_text: normalizedResult.station_text_raw
+          verification_method: 'roundel_ai',
+          ai_station_text: result.station_text_raw,
+          ai_confidence: result.confidence
         }
       });
 
