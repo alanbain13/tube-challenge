@@ -7,9 +7,34 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
+
+// Configuration
+const GEOFENCE_THRESHOLD_M = 500; // 500m radius
+const SIMULATION_MODE = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
+
+// Types for validation pipeline
+interface OCRResult {
+  is_roundel: boolean;
+  station_text_raw: string;
+  station_name?: string;
+  confidence: number;
+}
+
+interface ValidationLogEntry {
+  step: 'ocr' | 'resolve' | 'geofence' | 'persist';
+  station_text_raw?: string;
+  resolved_display_name?: string;
+  station_id?: string;
+  distance_m?: number;
+  geofence_threshold_m?: number;
+  simulation_mode: boolean;
+  result: 'success' | 'error';
+  error_code?: string;
+  error_message?: string;
+}
 
 // Helper functions
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -21,45 +46,6 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
-};
-
-const fuzzyMatch = (str1: string, str2: string): number => {
-  // Simple Jaro-Winkler similarity implementation
-  const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').trim();
-  const a = normalize(str1);
-  const b = normalize(str2);
-  
-  if (a === b) return 1;
-  if (a.length === 0 || b.length === 0) return 0;
-  
-  // Calculate simple similarity based on common substrings
-  const longer = a.length > b.length ? a : b;
-  const shorter = a.length > b.length ? b : a;
-  
-  if (longer.length === 0) return 1;
-  
-  const editDistance = levenshteinDistance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-};
-
-const levenshteinDistance = (str1: string, str2: string): number => {
-  const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
-  
-  for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
-  for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
-  
-  for (let j = 1; j <= str2.length; j++) {
-    for (let i = 1; i <= str1.length; i++) {
-      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[j][i] = Math.min(
-        matrix[j][i - 1] + 1,
-        matrix[j - 1][i] + 1,
-        matrix[j - 1][i - 1] + indicator
-      );
-    }
-  }
-  
-  return matrix[str2.length][str1.length];
 };
 
 const ActivityCheckin = () => {
@@ -152,119 +138,135 @@ const ActivityCheckin = () => {
     enabled: !!location,
   });
 
-  // AI Roundel verification  
-  const verifyRoundelMutation = useMutation({
-    mutationFn: async ({ imageData }: { imageData: string }) => {
-      console.log('🧭 Checkin: image bytes size=', imageData.length);
-      const { data, error } = await supabase.functions.invoke('verify-roundel', {
+  // 3-Step Validation Pipeline
+  const runValidationPipeline = async (imageData: string) => {
+    const logEntry: ValidationLogEntry = {
+      step: 'ocr',
+      simulation_mode: SIMULATION_MODE,
+      result: 'error'
+    };
+
+    try {
+      // STEP 1: OCR Validation
+      logEntry.step = 'ocr';
+      console.log('🧭 Checkin: Step 1 - OCR validation, image bytes size=', imageData.length);
+      
+      const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('verify-roundel', {
         body: { imageData }
       });
 
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (result) => {
-      console.log('🧭 Checkin: OCR result =', result);
-      setIsVerifying(false);
-      
-      // Handle different response scenarios
-      if (result.pending) {
-        // AI is unavailable or disabled - save as pending
-        const fallbackStation = nearbyStations[0];
-        if (fallbackStation) {
-          checkinMutation.mutate({
-            stationTflId: fallbackStation.tfl_id,
-            checkinType: 'image',
-            imageData: capturedImage!,
-            verificationResult: { success: false, pending: true }
-          });
-        }
-        
-        if (result.setup_required) {
-          toast({
-            title: "⚙️ Setup Required",
-            description: "AI verification not configured. Photo saved as pending.",
-            duration: 5000,
-          });
+      if (ocrError) throw ocrError;
+
+      // Handle pending/setup scenarios
+      if (ocrResult.pending) {
+        if (ocrResult.setup_required) {
+          throw new Error("AI verification not configured. Photo saved as pending.");
         } else {
-          toast({
-            title: "📋 Saved as Pending", 
-            description: result.message,
-            duration: 4000,
-          });
+          throw new Error(ocrResult.message || "AI verification temporarily unavailable.");
         }
-        return;
       }
 
-      // Normalize AI response to expected contract
-      const normalizedResult = {
-        is_roundel: result.success || false,
-        station_text_raw: result.station_name || result.text_seen || '',
-        station_name: result.station_name,
-        confidence: result.confidence || 0
+      // Normalize OCR result
+      const normalizedOCR: OCRResult = {
+        is_roundel: ocrResult.is_roundel || ocrResult.success || false,
+        station_text_raw: ocrResult.station_text_raw || ocrResult.text_seen || '',
+        station_name: ocrResult.station_name,
+        confidence: ocrResult.confidence || 0
       };
 
-      // Check if roundel was detected
-      if (!result.is_roundel) {
-        toast({
-          title: "No roundel detected",
-          description: result.message || "Try a clearer photo of the station roundel",
-          variant: "destructive"
-        });
-        setVerificationError("No TfL roundel detected in image");
-        return;
+      logEntry.station_text_raw = normalizedOCR.station_text_raw;
+
+      // Validate roundel detection
+      if (!normalizedOCR.is_roundel) {
+        logEntry.error_code = 'no_roundel';
+        logEntry.error_message = 'Roundel not detected. Try again with the roundel centered and in focus.';
+        throw new Error(logEntry.error_message);
       }
 
-      // Use centralized station resolver
-      const stationTextRaw = result.station_text_raw || result.text_seen || '';
-      const stationName = result.station_name;
+      logEntry.result = 'success';
+      console.log('🧭 Checkin: Step 1 SUCCESS -', logEntry);
+
+      // STEP 2: Station Resolution
+      logEntry.step = 'resolve';
+      logEntry.result = 'error';
       
-      console.log('🧭 Checkin: Resolving station:', { stationTextRaw, stationName });
-      
+      console.log('🧭 Checkin: Step 2 - Station resolution:', {
+        stationTextRaw: normalizedOCR.station_text_raw,
+        stationName: normalizedOCR.station_name
+      });
+
       const resolverResult = resolveStation(
-        stationTextRaw,
-        stationName,
+        normalizedOCR.station_text_raw,
+        normalizedOCR.station_name,
         stations,
         location ? { lat: location.lat, lng: location.lng } : undefined
       );
 
-      // Handle resolver error (no match found)
       if ('error' in resolverResult) {
-        console.log('🧭 Checkin: Station resolver failed:', resolverResult.error);
+        logEntry.error_code = 'station_not_found';
+        logEntry.error_message = `Station not found: ${normalizedOCR.station_text_raw}. (We looked for '${normalizedOCR.station_text_raw.toLowerCase().trim()}' and common variants.)`;
         
-        // Show error with suggestions if available
+        // Show suggestions if available
         if (resolverResult.suggestions && resolverResult.suggestions.length > 0) {
-          const suggestionNames = resolverResult.suggestions.map(s => s.name).join(', ');
-          toast({
-            title: "Station not recognized",
-            description: `${resolverResult.error}. Did you mean: ${suggestionNames}?`,
-            variant: "destructive"
-          });
-          setSuggestions(resolverResult.suggestions.map(s => ({ tfl_id: s.id, name: s.name })));
-        } else {
-          toast({
-            title: "Station not recognized", 
-            description: result.message || resolverResult.error,
-            variant: "destructive"
-          });
+          const suggestionNames = resolverResult.suggestions.slice(0, 3).map(s => s.name).join(', ');
+          logEntry.error_message += ` Did you mean: ${suggestionNames}?`;
+          setSuggestions(resolverResult.suggestions.slice(0, 3).map(s => ({ tfl_id: s.id, name: s.name })));
         }
         
-        setVerificationError(resolverResult.error);
-        return;
+        throw new Error(logEntry.error_message);
       }
 
-      // Success - we have a resolved station
       const resolvedStation = resolverResult as ResolvedStation;
-      
-      console.log('🧭 Checkin: Station resolved:', {
-        station_tfl_id: resolvedStation.station_id,
-        display_name: resolvedStation.display_name,
-        matching_rule: resolvedStation.matching_rule,
-        confidence: result.confidence
-      });
+      logEntry.resolved_display_name = resolvedStation.display_name;
+      logEntry.station_id = resolvedStation.station_id;
+      logEntry.result = 'success';
+      console.log('🧭 Checkin: Step 2 SUCCESS -', logEntry);
 
-      // Create verified check-in
-      checkinMutation.mutate({
+      // STEP 3: Geofencing (skip if simulation mode)
+      logEntry.step = 'geofence';
+      logEntry.result = 'error';
+      logEntry.geofence_threshold_m = GEOFENCE_THRESHOLD_M;
+
+      if (SIMULATION_MODE) {
+        console.log('🧭 Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
+        logEntry.result = 'success';
+        logEntry.error_message = 'Skipped in simulation mode';
+      } else {
+        console.log('🧭 Checkin: Step 3 - Geofencing validation');
+        
+        if (!location) {
+          logEntry.error_code = 'gps_unavailable';
+          logEntry.error_message = 'Location unavailable. Enable location services or switch to simulation mode for testing.';
+          throw new Error(logEntry.error_message);
+        }
+
+        // Calculate distance to resolved station
+        const distance = calculateDistance(
+          location.lat,
+          location.lng,
+          resolvedStation.coords.lat,
+          resolvedStation.coords.lon
+        );
+
+        logEntry.distance_m = Math.round(distance);
+
+        if (distance > GEOFENCE_THRESHOLD_M) {
+          logEntry.error_code = 'out_of_range';
+          logEntry.error_message = `Out of range: ${resolvedStation.display_name} is ${Math.round(distance)}m from your current location. Move closer and try again (limit ${GEOFENCE_THRESHOLD_M}m).`;
+          throw new Error(logEntry.error_message);
+        }
+
+        logEntry.result = 'success';
+        console.log('🧭 Checkin: Step 3 SUCCESS -', logEntry);
+      }
+
+      // STEP 4: Persist Visit
+      logEntry.step = 'persist';
+      logEntry.result = 'error';
+
+      console.log('🧭 Checkin: Step 4 - Persist visit');
+      
+      await checkinMutation.mutateAsync({
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
         imageData: capturedImage!,
@@ -272,47 +274,59 @@ const ActivityCheckin = () => {
           success: true,
           pending: false,
           station_name: resolvedStation.display_name,
-          confidence: result.confidence,
-          distance_m: 0, // Resolver handles distance internally
+          confidence: normalizedOCR.confidence,
+          distance_m: logEntry.distance_m || 0,
           verification_method: 'ai_image',
-          ai_station_text: stationTextRaw,
-          ai_confidence: result.confidence,
-          matching_rule: resolvedStation.matching_rule
+          ai_station_text: normalizedOCR.station_text_raw,
+          ai_confidence: normalizedOCR.confidence,
+          matching_rule: resolvedStation.matching_rule,
+          simulation_mode: SIMULATION_MODE
         }
+      });
+
+      logEntry.result = 'success';
+      console.log('🧭 Checkin: Step 4 SUCCESS -', logEntry);
+
+      // Success toast
+      const simulationSuffix = SIMULATION_MODE ? ' (simulation)' : '';
+      toast({
+        title: `✅ Checked in at ${resolvedStation.display_name}${simulationSuffix}`,
+        description: `Verification: ${resolvedStation.matching_rule}`,
       });
 
       setVerificationError(null);
       setSuggestions(null);
+
+    } catch (error: any) {
+      console.error('🧭 Checkin: Pipeline failed at step', logEntry.step, '-', logEntry);
       
-      // Show simulation notice if applicable
-      if (result.debug?.simulation) {
-        toast({
-          title: "🧪 Simulation Mode",
-          description: "Using simulated AI verification for development",
-          duration: 3000,
-        });
-      }
-    },
-    onError: (error: any) => {
-      console.error('🧭 Checkin: AI verification error:', error);
-      setIsVerifying(false);
+      // Set appropriate error message and suggestions
+      setVerificationError(logEntry.error_message || error.message);
       
-      // Save as pending on error
-      const fallbackStation = nearbyStations[0];
-      if (fallbackStation) {
-        checkinMutation.mutate({
-          stationTflId: fallbackStation.tfl_id,
-          checkinType: 'image', 
-          imageData: capturedImage!,
-          verificationResult: { success: false, pending: true }
-        });
-      }
-      
+      // Show specific error toast
       toast({
-        title: "📋 Saved as Pending",
-        description: "Verification failed. Photo saved for manual review.",
-        duration: 4000,
+        title: logEntry.step === 'ocr' ? "Roundel not detected" : 
+               logEntry.step === 'resolve' ? "Station not found" :
+               logEntry.step === 'geofence' ? "Location check failed" : "Check-in failed",
+        description: logEntry.error_message || error.message,
+        variant: "destructive"
       });
+    }
+  };
+
+  // AI Roundel verification mutation
+  const verifyRoundelMutation = useMutation({
+    mutationFn: async ({ imageData }: { imageData: string }) => {
+      await runValidationPipeline(imageData);
+    },
+    onSuccess: () => {
+      setIsVerifying(false);
+      setCapturedImage(null);
+      setIsCamera(false);
+      setShowCheckinFlow(false);
+    },
+    onError: () => {
+      setIsVerifying(false);
     }
   });
 
@@ -401,24 +415,18 @@ const ActivityCheckin = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["activity", activityId] });
       
-      if (variables.checkinType === 'image') {
-        const isVerified = variables.verificationResult?.success;
-        if (isVerified) {
-          toast({
-            title: "✅ Checked in at " + variables.verificationResult?.station_name,
-            description: `Verification: ${variables.verificationResult?.matching_rule || 'AI match'}`,
-          });
-        } else {
-          toast({
-            title: "📋 Pending verification", 
-            description: "Photo saved for review. You can proceed.",
-            className: "border-yellow-200 bg-yellow-50",
-          });
-        }
-      } else {
+      // Only show toast for GPS checkins since image checkins handle their own success toasts
+      if (variables.checkinType === 'gps') {
         toast({
-          title: "Station checked in",
-          description: "Your visit has been recorded.",
+          title: "✅ Station checked in",
+          description: "Your GPS visit has been recorded.",
+        });
+      } else if (variables.checkinType === 'image' && !variables.verificationResult?.success) {
+        // Only show pending toast for failed image verifications
+        toast({
+          title: "📋 Pending verification", 
+          description: "Photo saved for review. You can proceed.",
+          className: "border-yellow-200 bg-yellow-50",
         });
       }
       
@@ -576,9 +584,15 @@ const ActivityCheckin = () => {
                 <Camera className="w-5 h-5" />
                 Check-in with Roundel Photo
               </CardTitle>
-              <CardDescription>
-                Take or upload a photo of the station roundel to verify your check-in
-              </CardDescription>
+            <CardDescription>
+              Take or upload a photo of the station roundel to verify your check-in
+              {SIMULATION_MODE && (
+                <div className="flex items-center gap-2 mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-orange-800 text-sm">
+                  <AlertTriangle className="w-4 h-4" />
+                  Simulation mode is ON — GPS checks bypassed
+                </div>
+              )}
+            </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!location && (
