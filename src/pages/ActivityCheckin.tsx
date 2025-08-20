@@ -12,8 +12,14 @@ import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 
 // Configuration
-const GEOFENCE_THRESHOLD_M = 500; // 500m radius
+const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
 const SIMULATION_MODE = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
+
+console.log('🧭 Checkin: Config loaded -', { 
+  GEOFENCE_RADIUS_METERS, 
+  SIMULATION_MODE, 
+  isDev: import.meta.env.DEV 
+});
 
 // Types for validation pipeline
 interface OCRResult {
@@ -28,8 +34,14 @@ interface ValidationLogEntry {
   station_text_raw?: string;
   resolved_display_name?: string;
   station_id?: string;
+  user_lat?: number;
+  user_lng?: number;
+  station_lat?: number;
+  station_lng?: number;
   distance_m?: number;
-  geofence_threshold_m?: number;
+  geofence_radius_m?: number;
+  geofence_passed?: boolean;
+  geofence_bypassed?: boolean;
   simulation_mode: boolean;
   result: 'success' | 'error';
   error_code?: string;
@@ -45,7 +57,16 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
+  const distance = R * c;
+  
+  console.log('🧭 Geofence: Distance calculation -', {
+    user_coords: { lat: lat1, lng: lon1 },
+    station_coords: { lat: lat2, lng: lon2 },
+    distance_m: Math.round(distance),
+    formula: 'haversine'
+  });
+  
+  return distance;
 };
 
 const ActivityCheckin = () => {
@@ -65,6 +86,13 @@ const ActivityCheckin = () => {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string}> | null>(null);
   const [showCheckinFlow, setShowCheckinFlow] = useState(false);
+  const [geofenceError, setGeofenceError] = useState<{ 
+    message: string; 
+    code: string; 
+    resolvedStation?: ResolvedStation; 
+    distance?: number;
+    ocrResult?: OCRResult;
+  } | null>(null);
 
   // Auth guard
   useEffect(() => {
@@ -225,18 +253,32 @@ const ActivityCheckin = () => {
       // STEP 3: Geofencing (skip if simulation mode)
       logEntry.step = 'geofence';
       logEntry.result = 'error';
-      logEntry.geofence_threshold_m = GEOFENCE_THRESHOLD_M;
+      logEntry.geofence_radius_m = GEOFENCE_RADIUS_METERS;
+      logEntry.user_lat = location?.lat;
+      logEntry.user_lng = location?.lng;
+      logEntry.station_lat = resolvedStation.coords.lat;
+      logEntry.station_lng = resolvedStation.coords.lon;
 
       if (SIMULATION_MODE) {
         console.log('🧭 Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
         logEntry.result = 'success';
+        logEntry.geofence_bypassed = true;
         logEntry.error_message = 'Skipped in simulation mode';
       } else {
         console.log('🧭 Checkin: Step 3 - Geofencing validation');
         
         if (!location) {
           logEntry.error_code = 'gps_unavailable';
-          logEntry.error_message = 'Location unavailable. Enable location services or switch to simulation mode for testing.';
+          logEntry.error_message = 'Location unavailable — we can\'t verify proximity. You can save this check-in as Pending.';
+          
+          // Set geofence error for UI handling
+          setGeofenceError({
+            message: logEntry.error_message,
+            code: logEntry.error_code,
+            resolvedStation,
+            ocrResult: normalizedOCR
+          });
+          
           throw new Error(logEntry.error_message);
         }
 
@@ -249,10 +291,21 @@ const ActivityCheckin = () => {
         );
 
         logEntry.distance_m = Math.round(distance);
+        logEntry.geofence_passed = distance <= GEOFENCE_RADIUS_METERS;
 
-        if (distance > GEOFENCE_THRESHOLD_M) {
+        if (distance > GEOFENCE_RADIUS_METERS) {
           logEntry.error_code = 'out_of_range';
-          logEntry.error_message = `Out of range: ${resolvedStation.display_name} is ${Math.round(distance)}m from your current location. Move closer and try again (limit ${GEOFENCE_THRESHOLD_M}m).`;
+          logEntry.error_message = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Enable Simulation Mode for testing or try again near the station.`;
+          
+          // Set geofence error for UI handling
+          setGeofenceError({
+            message: logEntry.error_message,
+            code: logEntry.error_code,
+            resolvedStation,
+            distance: Math.round(distance),
+            ocrResult: normalizedOCR
+          });
+          
           throw new Error(logEntry.error_message);
         }
 
@@ -276,11 +329,15 @@ const ActivityCheckin = () => {
           station_name: resolvedStation.display_name,
           confidence: normalizedOCR.confidence,
           distance_m: logEntry.distance_m || 0,
-          verification_method: 'ai_image',
+          verification_method: 'roundel_ai',
           ai_station_text: normalizedOCR.station_text_raw,
           ai_confidence: normalizedOCR.confidence,
           matching_rule: resolvedStation.matching_rule,
-          simulation_mode: SIMULATION_MODE
+          simulation_mode: SIMULATION_MODE,
+          geofence_distance_m: logEntry.distance_m || 0,
+          geofence_radius_m: GEOFENCE_RADIUS_METERS,
+          geofence_passed: logEntry.geofence_passed || false,
+          geofence_bypassed: logEntry.geofence_bypassed || false
         }
       });
 
@@ -296,6 +353,7 @@ const ActivityCheckin = () => {
 
       setVerificationError(null);
       setSuggestions(null);
+      setGeofenceError(null);
 
     } catch (error: any) {
       console.error('🧭 Checkin: Pipeline failed at step', logEntry.step, '-', logEntry);
@@ -447,6 +505,7 @@ const ActivityCheckin = () => {
       setIsCamera(false);
       setVerificationError(null);
       setSuggestions(null);
+      setGeofenceError(null);
       setShowCheckinFlow(false);
     },
     onError: (error: any) => {
@@ -554,6 +613,36 @@ const ActivityCheckin = () => {
     }
   };
 
+  const handleSaveAsPending = () => {
+    if (capturedImage && geofenceError?.resolvedStation && geofenceError?.ocrResult) {
+      checkinMutation.mutate({
+        stationTflId: geofenceError.resolvedStation.station_id,
+        checkinType: 'image',
+        imageData: capturedImage,
+        verificationResult: {
+          success: false,
+          pending: true,
+          station_name: geofenceError.resolvedStation.display_name,
+          confidence: geofenceError.ocrResult.confidence,
+          verification_method: 'roundel_ai',
+          ai_station_text: geofenceError.ocrResult.station_text_raw,
+          ai_confidence: geofenceError.ocrResult.confidence,
+          geofence_failed: true,
+          geofence_distance_m: geofenceError.distance || 0,
+          geofence_radius_m: GEOFENCE_RADIUS_METERS,
+          verification_note: `Geofence failed: ${geofenceError.code}`
+        }
+      });
+    }
+  };
+
+  const handleCancelGeofence = () => {
+    setGeofenceError(null);
+    setCapturedImage(null);
+    setVerificationError(null);
+    setSuggestions(null);
+  };
+
   const getStationName = (tflId: string) => {
     // Try to find station name from nearby stations first
     const nearbyStation = nearbyStations.find((s: any) => s.tfl_id === tflId);
@@ -655,6 +744,7 @@ const ActivityCheckin = () => {
                       setCapturedImage(null);
                       setVerificationError(null);
                       setSuggestions(null);
+                      setGeofenceError(null);
                     }}
                     className="w-full"
                   >
@@ -692,7 +782,7 @@ const ActivityCheckin = () => {
                     </div>
                   )}
 
-                  {verificationError && (
+                  {verificationError && !geofenceError && (
                     <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                       <div className="flex items-start gap-2">
                         <XCircle className="w-4 h-4 text-destructive mt-0.5" />
@@ -723,21 +813,63 @@ const ActivityCheckin = () => {
                       </div>
                     </div>
                   )}
+
+                  {geofenceError && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm text-yellow-800 font-medium">
+                            {geofenceError.code === 'gps_unavailable' ? 'Location Unavailable' : 'Outside Geofence'}
+                          </p>
+                          <p className="text-sm text-yellow-700 mt-1">{geofenceError.message}</p>
+                          
+                          {geofenceError.code === 'out_of_range' && geofenceError.resolvedStation && (
+                            <div className="mt-2 text-sm text-yellow-700">
+                              <p><strong>Station:</strong> {geofenceError.resolvedStation.display_name}</p>
+                              <p><strong>Distance:</strong> {geofenceError.distance}m (limit {GEOFENCE_RADIUS_METERS}m)</p>
+                            </div>
+                          )}
+
+                          <div className="mt-4 flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleSaveAsPending}
+                              disabled={checkinMutation.isPending}
+                              className="bg-white hover:bg-yellow-50"
+                            >
+                              Save as Pending
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleCancelGeofence}
+                              disabled={checkinMutation.isPending}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                    <div className="flex gap-2">
                      <Button
                        variant="outline"
                        onClick={() => {
-                         setCapturedImage(null);
-                         setVerificationError(null);
-                         setSuggestions(null);
+                          setCapturedImage(null);
+                          setVerificationError(null);
+                          setSuggestions(null);
+                          setGeofenceError(null);
                        }}
                        className="flex-1"
                        disabled={isVerifying}
                      >
                        Retake
                      </Button>
-                     {!verificationError && (
+                     {!verificationError && !geofenceError && (
                        <Button 
                          onClick={handleImageCheckin} 
                          className="flex-1"
