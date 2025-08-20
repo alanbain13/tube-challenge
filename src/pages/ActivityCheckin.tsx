@@ -15,6 +15,7 @@ import { SimulationBanner } from "@/components/SimulationBanner";
 
 // Configuration
 const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
+const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
 
 // Types for validation pipeline
 interface OCRResult {
@@ -695,10 +696,12 @@ const ActivityCheckin = () => {
         <SimulationBanner visible={simulationModeEffective} className="mb-6" />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Dev Panel */}
-          <div className="lg:col-span-3">
-            <DevPanel />
-          </div>
+          {/* Dev Panel - Always visible in development */}
+          {SIMULATION_MODE_ENV && (
+            <div className="lg:col-span-3 mb-4">
+              <DevPanel />
+            </div>
+          )}
 
           {/* Camera Section */}
           <Card className="lg:col-span-2">

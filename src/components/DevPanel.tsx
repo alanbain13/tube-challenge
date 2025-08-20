@@ -7,6 +7,12 @@ import { Settings } from "lucide-react";
 
 const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
 
+console.log('🛠️ DevPanel: Environment check -', { 
+  isDev: import.meta.env.DEV, 
+  viteSimMode: import.meta.env.VITE_SIMULATION_MODE,
+  SIMULATION_MODE_ENV 
+});
+
 interface DevPanelProps {
   className?: string;
 }
@@ -30,18 +36,24 @@ export const DevPanel = ({ className }: DevPanelProps) => {
 
   // Don't render if simulation mode is not available in environment
   if (!SIMULATION_MODE_ENV) {
+    console.log('🛠️ DevPanel: Not rendering - simulation mode not available in environment');
     return null;
   }
+
+  console.log('🛠️ DevPanel: Rendering with state -', { 
+    userSimulationMode, 
+    simulationModeEffective: SIMULATION_MODE_ENV && userSimulationMode 
+  });
 
   const simulationModeEffective = SIMULATION_MODE_ENV && userSimulationMode;
 
   return (
-    <Card className={className}>
+    <Card className={`border-dashed border-orange-200 bg-orange-50/50 ${className}`}>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm">
+        <CardTitle className="flex items-center gap-2 text-sm text-orange-700">
           <Settings className="h-4 w-4" />
           Dev Tools
-          <Badge variant="secondary" className="text-xs">
+          <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
             DEV
           </Badge>
         </CardTitle>
@@ -59,8 +71,14 @@ export const DevPanel = ({ className }: DevPanelProps) => {
         </div>
         
         {simulationModeEffective && (
+          <div className="text-xs text-orange-700 bg-orange-100 p-2 rounded border border-orange-200">
+            ✅ Simulation mode is ON — geofence checks will be bypassed for roundel verification.
+          </div>
+        )}
+        
+        {!simulationModeEffective && (
           <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-            Simulation mode is ON — geofence checks will be bypassed for roundel verification.
+            Simulation mode is OFF — normal geofence validation will apply.
           </div>
         )}
       </CardContent>
