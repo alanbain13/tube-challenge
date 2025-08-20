@@ -73,6 +73,29 @@ const Activities = () => {
     enabled: !!user,
   });
 
+  const handleStartOrResumeActivity = async (activityId: string, currentStatus: string) => {
+    try {
+      // If starting a new activity, pause any currently active activities
+      if (currentStatus === 'draft') {
+        const { error: pauseError } = await supabase
+          .from("activities")
+          .update({ status: 'paused' })
+          .eq('user_id', user!.id)
+          .eq('status', 'active');
+
+        if (pauseError) throw pauseError;
+      }
+
+      navigate(`/activities/${activityId}/checkin`);
+    } catch (error) {
+      toast({
+        title: "Error starting activity",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleDeleteActivity = async () => {
     if (!deleteModal.activityId) return;
     
@@ -162,29 +185,42 @@ const Activities = () => {
               {activities.map((activity: any) => {
                 const { visited, total } = getVisitedCount(activity);
                 const statusText = activity.status === 'draft' ? 'Not started' : 
-                                 activity.status === 'active' ? 'Active' : 'Completed';
+                                 activity.status === 'active' ? 'Active' : 
+                                 activity.status === 'paused' ? 'Paused' : 'Completed';
                 
                 return (
                   <Card key={activity.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between">
                         <span>{activity.title || "Untitled Activity"}</span>
-                        <Badge variant={activity.status === 'completed' ? 'default' : 'outline'}>
-                          Visited {visited}/{total}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={activity.status === 'completed' ? 'default' : 
+                                           activity.status === 'active' ? 'secondary' : 
+                                           activity.status === 'paused' ? 'outline' : 'outline'}>
+                            {statusText}
+                          </Badge>
+                          <Badge variant="outline">
+                            Visited {visited}/{total}
+                          </Badge>
+                        </div>
                       </CardTitle>
                       <CardDescription>
-                        {statusText}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
                         {activity.start_station_tfl_id && activity.end_station_tfl_id && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2 text-sm">
                             <MapPin className="w-4 h-4" />
                             <span>
                               {getStationName(activity.start_station_tfl_id)} → {getStationName(activity.end_station_tfl_id)}
                             </span>
+                          </div>
+                        )}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {!activity.start_station_tfl_id && !activity.end_station_tfl_id && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <MapPin className="w-4 h-4" />
+                            <span>No route defined</span>
                           </div>
                         )}
                         {activity.distance_km && (
@@ -217,11 +253,13 @@ const Activities = () => {
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => navigate(`/activities/${activity.id}/checkin`)}
+                          onClick={() => handleStartOrResumeActivity(activity.id, activity.status)}
                           className="flex items-center gap-1"
+                          disabled={activity.status !== 'active' && activities.some((a: any) => a.status === 'active' && a.id !== activity.id)}
                         >
                           <Play className="w-4 h-4" />
-                          {activity.status === 'draft' ? 'Start' : 'Resume'}
+                          {activity.status === 'draft' ? 'Start' : 
+                           activity.status === 'active' ? 'Continue' : 'Resume'}
                         </Button>
                         <Button
                           size="sm"

@@ -19,10 +19,12 @@ const ActivityCheckin = () => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCamera, setIsCamera] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string}> | null>(null);
+  const [showCheckinFlow, setShowCheckinFlow] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -225,6 +227,16 @@ const ActivityCheckin = () => {
 
       // If activity is in draft status, activate it on first check-in
       if (activity.status === 'draft') {
+        // First pause any other active activities
+        const { error: pauseError } = await supabase
+          .from('activities')
+          .update({ status: 'paused' })
+          .eq('user_id', user.id)
+          .eq('status', 'active');
+        
+        if (pauseError) console.warn('Error pausing other activities:', pauseError);
+
+        // Then activate this activity
         const { error: updateError } = await supabase
           .from('activities')
           .update({ status: 'active' })
@@ -254,6 +266,7 @@ const ActivityCheckin = () => {
       setIsCamera(false);
       setVerificationError(null);
       setSuggestions(null);
+      setShowCheckinFlow(false);
     },
     onError: (error: any) => {
       toast({
@@ -299,6 +312,24 @@ const ActivityCheckin = () => {
       const stream = video.srcObject as MediaStream;
       stream?.getTracks().forEach(track => track.stop());
       setIsCamera(false);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageData = e.target?.result as string;
+        setCapturedImage(imageData);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -376,18 +407,59 @@ const ActivityCheckin = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Camera className="w-5 h-5" />
-                Roundel Image Capture
+                Check-in with Roundel Photo
               </CardTitle>
               <CardDescription>
-                Take a photo of the station roundel for verification
+                Take or upload a photo of the station roundel to verify your check-in
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!isCamera && !capturedImage && (
-                <Button onClick={startCamera} className="w-full">
-                  <Camera className="w-4 h-4 mr-2" />
-                  Start Camera
-                </Button>
+              {!showCheckinFlow && !isCamera && !capturedImage && (
+                <div className="space-y-4">
+                  <Button onClick={() => setShowCheckinFlow(true)} className="w-full">
+                    Check-in with Roundel Photo
+                  </Button>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Take or upload a photo of the station roundel to verify your location
+                  </p>
+                </div>
+              )}
+
+              {showCheckinFlow && !isCamera && !capturedImage && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button onClick={startCamera} className="flex-1">
+                      <Camera className="w-4 h-4 mr-2" />
+                      Take Photo
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1"
+                    >
+                      Upload Image
+                    </Button>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setShowCheckinFlow(false);
+                      setCapturedImage(null);
+                      setVerificationError(null);
+                      setSuggestions(null);
+                    }}
+                    className="w-full"
+                  >
+                    Cancel
+                  </Button>
+                </div>
               )}
 
               {isCamera && (

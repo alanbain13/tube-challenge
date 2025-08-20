@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Clock, Play, Square } from "lucide-react";
+import { Clock, Play, Square, ArrowRight, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Tooltip,
   TooltipContent,
@@ -26,7 +27,12 @@ interface Activity {
 export function JourneyTimer() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Only show HUD when user is actively checking in
+  const isOnCheckinPage = location.pathname.includes('/checkin');
 
   // Update timer every second
   useEffect(() => {
@@ -77,7 +83,7 @@ export function JourneyTimer() {
         .from("activities")
         .select("*")
         .eq("user_id", user.id)
-        .eq("status", "active")
+        .in("status", ["active", "draft"])
         .is("gate_end_at", null)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -185,8 +191,8 @@ export function JourneyTimer() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Show pending notice if activity exists but no verified start
-  if (pendingActivity && !activeActivity) {
+  // Show pending notice if activity exists but no verified start (on any page)
+  if (pendingActivity && !activeActivity && !isOnCheckinPage) {
     return (
       <Card className="fixed bottom-4 right-4 z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg">
         <div className="flex items-center gap-3 min-w-[280px]">
@@ -199,13 +205,20 @@ export function JourneyTimer() {
               {pendingActivity.title}
             </div>
           </div>
+          <Button
+            size="sm"
+            onClick={() => navigate(`/activities/${pendingActivity.id}/checkin`)}
+            className="ml-auto"
+          >
+            Check-in
+          </Button>
         </div>
       </Card>
     );
   }
 
-  // Don't show if no active activity with verified start
-  if (!activeActivity) {
+  // Don't show if no active activity with verified start or not on checkin page
+  if (!activeActivity || !isOnCheckinPage) {
     return null;
   }
 
@@ -249,34 +262,41 @@ export function JourneyTimer() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleStartJourney}
-                  disabled={!canStart}
+                  onClick={() => navigate(`/activities/${activeActivity.id}`)}
                   className="h-8"
                 >
-                  <Play className="h-3 w-3 mr-1" />
-                  {canStart ? "Start" : "Running..."}
+                  <X className="h-3 w-3 mr-1" />
+                  Cancel
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {canStart ? "Start official journey timing" : "Official timing is running"}
+                Exit check-in and return to activity
               </TooltipContent>
             </Tooltip>
 
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="outline"
                   size="sm"
-                  onClick={handleFinishJourney}
-                  disabled={!canFinish}
+                  onClick={hasStarted ? handleFinishJourney : handleStartJourney}
+                  disabled={hasFinished}
                   className="h-8"
                 >
-                  <Square className="h-3 w-3 mr-1" />
-                  Finish
+                  {hasStarted ? (
+                    <>
+                      <Square className="h-3 w-3 mr-1" />
+                      Finish
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="h-3 w-3 mr-1" />
+                      Continue
+                    </>
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {!hasStarted ? "Start journey first" : 
+                {!hasStarted ? "Continue with check-in process" : 
                  hasFinished ? "Journey already finished" : 
                  "Finish official journey timing"}
               </TooltipContent>
