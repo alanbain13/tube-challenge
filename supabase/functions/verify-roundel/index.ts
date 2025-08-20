@@ -229,16 +229,58 @@ serve(async (req) => {
     console.log('🧠 AI: Extracted name:', extractedName);
     console.log('🧠 AI: Normalized extracted:', normalizedExtracted);
 
-    // Find matching station in catalogue
-    const matchedStation = stations.find((station: any) => {
+    // Find matching station in catalogue with improved case-insensitive matching
+    let matchedStation = null;
+
+    // Try exact match first (after normalization)
+    matchedStation = stations.find((station: any) => {
       const normalizedCatalogue = normalizeStationName(station.name);
+      console.log(`🧠 AI: Comparing "${normalizedExtracted}" with "${normalizedCatalogue}" (${station.name})`);
       return normalizedCatalogue === normalizedExtracted;
     });
+
+    // If no exact match, try partial matches (handles cases like "EUSTON" matching "Euston Underground Station")
+    if (!matchedStation) {
+      matchedStation = stations.find((station: any) => {
+        const normalizedCatalogue = normalizeStationName(station.name);
+        const extractedWords = normalizedExtracted.split(' ');
+        const catalogueWords = normalizedCatalogue.split(' ');
+        
+        // Check if the extracted name is contained in the catalogue name
+        const isSubstring = normalizedCatalogue.includes(normalizedExtracted);
+        // Or if the catalogue name starts with the extracted name
+        const startsWithExtracted = normalizedCatalogue.startsWith(normalizedExtracted);
+        // Or if all words from extracted name are in catalogue name
+        const allWordsMatch = extractedWords.every(word => catalogueWords.includes(word));
+        
+        if (isSubstring || startsWithExtracted || allWordsMatch) {
+          console.log(`🧠 AI: Partial match found: "${normalizedExtracted}" matches "${normalizedCatalogue}" (${station.name})`);
+          return true;
+        }
+        return false;
+      });
+    }
+
+    // If still no match, try fuzzy matching with higher threshold
+    if (!matchedStation) {
+      const fuzzyMatches = stations
+        .map((station: any) => ({
+          ...station,
+          similarity: calculateSimilarity(normalizedExtracted, normalizeStationName(station.name))
+        }))
+        .filter(s => s.similarity >= 0.85) // Higher threshold for fuzzy matches
+        .sort((a, b) => b.similarity - a.similarity);
+      
+      if (fuzzyMatches.length > 0) {
+        matchedStation = fuzzyMatches[0];
+        console.log(`🧠 AI: Fuzzy match found: "${normalizedExtracted}" matches "${normalizeStationName(matchedStation.name)}" (${matchedStation.name}) with similarity ${matchedStation.similarity}`);
+      }
+    }
 
     if (!matchedStation) {
       console.log('🧠 AI: No station match found for:', extractedName);
       
-      // Find potential fuzzy matches for suggestions
+      // Find potential fuzzy matches for suggestions (lower threshold for suggestions)
       const suggestions = findSimilarStations(normalizedExtracted, stations, 3);
       
       return new Response(
@@ -307,11 +349,21 @@ function normalizeStationName(name: string): string {
   return name
     .toLowerCase()
     .trim()
+    // Remove common station suffixes that might be inconsistent
+    .replace(/\s+(underground\s+)?station$/i, '')
+    .replace(/\s+tube\s+station$/i, '')
+    // Normalize whitespace
     .replace(/\s+/g, ' ')
+    // Normalize dashes and hyphens  
     .replace(/[-–—]/g, ' ')
+    // Normalize ampersand
     .replace(/&/g, 'and')
-    .replace(/['']/g, '')
-    .replace(/[^\w\s]/g, '');
+    // Remove apostrophes and quotes
+    .replace(/[''`"]/g, '')
+    // Remove other punctuation and special characters
+    .replace(/[^\w\s]/g, '')
+    // Final cleanup
+    .trim();
 }
 
 // Helper function to find similar station names using simple string similarity
