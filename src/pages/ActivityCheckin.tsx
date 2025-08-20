@@ -347,13 +347,15 @@ const ActivityCheckin = () => {
 
       const sequenceNumber = (activity.station_visits?.length || 0) + 1;
       
-      // Determine status and verification method
-      let status = 'verified';
+      // Determine status and verification method based on CHECK constraints
+      // status must be 'pending' or 'visited' per station_visits_status_check
+      // verification_method must be 'gps', 'roundel_ai', or 'manual' per station_visits_verification_method_check
+      let status = 'visited';
       let verificationMethod = 'gps';
       
       if (checkinType === 'image') {
-        verificationMethod = 'ai_image';
-        status = verificationResult?.success ? 'verified' : 'pending';
+        verificationMethod = 'roundel_ai';
+        status = verificationResult?.success ? 'visited' : 'pending';
       } else if (checkinType === 'manual') {
         verificationMethod = 'manual';
       }
@@ -378,6 +380,7 @@ const ActivityCheckin = () => {
       };
 
       console.log('🧭 Checkin: insert payload =', visitData);
+      console.log('🧭 Checkin: status=', visitData.status, 'verification_method=', visitData.verification_method);
 
       const { data, error } = await supabase
         .from("station_visits")
@@ -387,6 +390,16 @@ const ActivityCheckin = () => {
 
       if (error) {
         console.error('🧭 Checkin: insert error =', error);
+        
+        // Provide helpful error message for constraint violations
+        if (error.code === '23514') {
+          if (error.message?.includes('status_check')) {
+            throw new Error('Save failed: invalid status value. Please try again or contact support.');
+          } else if (error.message?.includes('verification_method')) {
+            throw new Error('Save failed: invalid verification method. Please try again or contact support.');
+          }
+        }
+        
         throw error;
       }
 
