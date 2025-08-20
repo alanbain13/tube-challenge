@@ -60,3 +60,9 @@ inspector_port = 8083
 
 [functions.fetch-tfl-stations]
 verify_jwt = false
+
+[functions.upload-stations]
+verify_jwt = false
+
+[functions.verify-roundel]
+verify_jwt = true

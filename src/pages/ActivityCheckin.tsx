@@ -20,6 +20,9 @@ const ActivityCheckin = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isCamera, setIsCamera] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string}> | null>(null);
 
   // Auth guard
   useEffect(() => {
@@ -93,16 +96,57 @@ const ActivityCheckin = () => {
     enabled: !!location,
   });
 
+  // AI Roundel verification
+  const verifyRoundelMutation = useMutation({
+    mutationFn: async ({ imageData }: { imageData: string }) => {
+      console.log('🧠 AI: Starting roundel verification...');
+      const { data, error } = await supabase.functions.invoke('verify-roundel', {
+        body: { imageData }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (result) => {
+      console.log('🧠 AI: Verification result:', result);
+      setIsVerifying(false);
+      
+      if (result.success) {
+        // AI verification successful - create verified check-in
+        checkinMutation.mutate({
+          stationTflId: result.station_tfl_id,
+          checkinType: 'image',
+          imageData: capturedImage!,
+          verificationResult: result
+        });
+        setVerificationError(null);
+        setSuggestions(null);
+      } else {
+        // AI verification failed - show error
+        setVerificationError(result.message);
+        setSuggestions(result.suggestions || null);
+      }
+    },
+    onError: (error: any) => {
+      console.error('🧠 AI: Verification error:', error);
+      setIsVerifying(false);
+      setVerificationError('Photo verification failed. Please try again.');
+      setSuggestions(null);
+    }
+  });
+
   // Checkin mutation
   const checkinMutation = useMutation({
     mutationFn: async ({ 
       stationTflId, 
       checkinType, 
-      imageData 
+      imageData,
+      verificationResult
     }: { 
       stationTflId: string; 
       checkinType: 'gps' | 'image' | 'manual';
       imageData?: string;
+      verificationResult?: any;
     }) => {
       if (!user || !activity) throw new Error("Missing data");
 
@@ -117,7 +161,9 @@ const ActivityCheckin = () => {
         longitude: location?.lng || null,
         checkin_type: checkinType,
         verification_image_url: imageData || null,
-        status: checkinType === 'image' ? 'pending' : 'verified',
+        status: checkinType === 'image' && verificationResult?.success ? 'verified' : (checkinType === 'image' ? 'pending' : 'verified'),
+        verification_method: checkinType === 'image' ? 'ai_roundel' : 'gps',
+        ai_verification_result: verificationResult || null,
         visited_at: new Date().toISOString(),
       };
 
@@ -141,14 +187,25 @@ const ActivityCheckin = () => {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["activity", activityId] });
-      toast({
-        title: "Station checked in",
-        description: "Your visit has been recorded.",
-      });
+      
+      if (variables.checkinType === 'image') {
+        toast({
+          title: "Roundel verified!",
+          description: `Verified: ${variables.verificationResult?.station_name}`,
+        });
+      } else {
+        toast({
+          title: "Station checked in",
+          description: "Your visit has been recorded.",
+        });
+      }
+      
       setCapturedImage(null);
       setIsCamera(false);
+      setVerificationError(null);
+      setSuggestions(null);
     },
     onError: (error: any) => {
       toast({
@@ -204,13 +261,12 @@ const ActivityCheckin = () => {
     });
   };
 
-  const handleImageCheckin = (stationTflId: string) => {
+  const handleImageCheckin = () => {
     if (capturedImage) {
-      checkinMutation.mutate({
-        stationTflId,
-        checkinType: 'image',
-        imageData: capturedImage,
-      });
+      setIsVerifying(true);
+      setVerificationError(null);
+      setSuggestions(null);
+      verifyRoundelMutation.mutate({ imageData: capturedImage });
     } else {
       toast({
         title: "No image captured",
@@ -218,6 +274,26 @@ const ActivityCheckin = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleSuggestionSelect = (suggestionTflId: string) => {
+    if (capturedImage) {
+      checkinMutation.mutate({
+        stationTflId: suggestionTflId,
+        checkinType: 'image',
+        imageData: capturedImage,
+        verificationResult: { success: true, user_selected: true }
+      });
+    }
+  };
+
+  const getStationName = (tflId: string) => {
+    // Try to find station name from nearby stations first
+    const nearbyStation = nearbyStations.find((s: any) => s.tfl_id === tflId);
+    if (nearbyStation) return nearbyStation.name;
+    
+    // Fallback to tfl_id if name not found
+    return tflId;
   };
 
   if (loading || activityLoading || !user || !activity) {
@@ -287,17 +363,75 @@ const ActivityCheckin = () => {
                     alt="Captured roundel"
                     className="w-full rounded-lg border"
                   />
+                  
+                  {isVerifying && (
+                    <div className="flex items-center justify-center p-4 bg-muted/50 rounded-lg">
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      <span>Analyzing photo...</span>
+                    </div>
+                  )}
+
+                  {verificationError && (
+                    <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="w-4 h-4 text-destructive mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm text-destructive font-medium">Verification Failed</p>
+                          <p className="text-sm text-destructive/80 mt-1">{verificationError}</p>
+                          
+                          {suggestions && suggestions.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-sm font-medium mb-2">Did you mean one of these?</p>
+                              <div className="space-y-1">
+                                {suggestions.map((suggestion) => (
+                                  <Button
+                                    key={suggestion.tfl_id}
+                                    variant="outline"
+                                    size="sm"
+                                    className="mr-2 mb-1"
+                                    onClick={() => handleSuggestionSelect(suggestion.tfl_id)}
+                                    disabled={checkinMutation.isPending}
+                                  >
+                                    {suggestion.name}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setCapturedImage(null)}
+                      onClick={() => {
+                        setCapturedImage(null);
+                        setVerificationError(null);
+                        setSuggestions(null);
+                      }}
                       className="flex-1"
+                      disabled={isVerifying}
                     >
                       Retake
                     </Button>
-                    <Button onClick={startCamera} variant="outline" className="flex-1">
-                      New Photo
-                    </Button>
+                    {!verificationError && (
+                      <Button 
+                        onClick={handleImageCheckin} 
+                        className="flex-1"
+                        disabled={isVerifying || checkinMutation.isPending}
+                      >
+                        {isVerifying ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Verifying...
+                          </>
+                        ) : (
+                          'Verify Roundel'
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
@@ -357,14 +491,6 @@ const ActivityCheckin = () => {
                           >
                             <MapPin className="w-4 h-4 mr-1" />
                             GPS
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleImageCheckin(station.tfl_id)}
-                            disabled={!capturedImage || checkinMutation.isPending || isVisited}
-                          >
-                            <Camera className="w-4 h-4 mr-1" />
-                            Image
                           </Button>
                         </div>
                       </div>
