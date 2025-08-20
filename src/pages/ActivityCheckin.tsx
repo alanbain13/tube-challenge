@@ -121,17 +121,63 @@ const ActivityCheckin = () => {
         });
         setVerificationError(null);
         setSuggestions(null);
+        
+        // Show simulation notice if applicable
+        if (result.debug?.simulation) {
+          toast({
+            title: "🧪 Simulation Mode",
+            description: "Using simulated AI verification for development",
+            duration: 3000,
+          });
+        }
       } else {
-        // AI verification failed - show error
-        setVerificationError(result.message);
-        setSuggestions(result.suggestions || null);
+        // Handle different failure types
+        if (result.pending) {
+          // Save as pending if AI is unavailable/disabled
+          checkinMutation.mutate({
+            stationTflId: nearbyStations[0]?.tfl_id || '',
+            checkinType: 'image',
+            imageData: capturedImage!,
+            verificationResult: { success: false, pending: true }
+          });
+          
+          if (result.setup_required) {
+            toast({
+              title: "⚙️ Setup Required",
+              description: "AI verification not configured. Photo saved as pending.",
+              duration: 5000,
+            });
+          } else {
+            toast({
+              title: "📋 Saved as Pending",
+              description: result.message,
+              duration: 4000,
+            });
+          }
+        } else {
+          // AI verification failed - show error for retry
+          setVerificationError(result.message);
+          setSuggestions(result.suggestions || null);
+        }
       }
     },
     onError: (error: any) => {
       console.error('🧠 AI: Verification error:', error);
       setIsVerifying(false);
-      setVerificationError('Photo verification failed. Please try again.');
-      setSuggestions(null);
+      
+      // Save as pending on error
+      checkinMutation.mutate({
+        stationTflId: nearbyStations[0]?.tfl_id || '',
+        checkinType: 'image',
+        imageData: capturedImage!,
+        verificationResult: { success: false, pending: true }
+      });
+      
+      toast({
+        title: "📋 Saved as Pending",
+        description: "Verification failed. Photo saved for manual review.",
+        duration: 4000,
+      });
     }
   });
 
@@ -161,7 +207,9 @@ const ActivityCheckin = () => {
         longitude: location?.lng || null,
         checkin_type: checkinType,
         verification_image_url: imageData || null,
-        status: checkinType === 'image' && verificationResult?.success ? 'verified' : (checkinType === 'image' ? 'pending' : 'verified'),
+        status: checkinType === 'image' && verificationResult?.success ? 'verified' : 
+                (checkinType === 'image' && verificationResult?.pending ? 'pending' : 
+                (checkinType === 'image' ? 'pending' : 'verified')),
         verification_method: checkinType === 'image' ? 'ai_roundel' : 'gps',
         ai_verification_result: verificationResult || null,
         visited_at: new Date().toISOString(),

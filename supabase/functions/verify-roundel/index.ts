@@ -7,7 +7,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Environment configuration
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const openAIModel = Deno.env.get('OPENAI_MODEL') || 'gpt-4o';
+const openAIApiBase = Deno.env.get('OPENAI_API_BASE') || 'https://api.openai.com/v1';
+const aiVerificationEnabled = Deno.env.get('AI_VERIFICATION_ENABLED') === 'true';
+const aiSimulationMode = Deno.env.get('AI_SIMULATION_MODE') === 'true';
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -28,6 +33,51 @@ serve(async (req) => {
       );
     }
 
+    // Check if AI verification is disabled
+    if (!aiVerificationEnabled) {
+      console.log('🧠 AI: Verification disabled, returning pending status');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'verification_disabled',
+          message: 'AI verification is currently disabled. Photo saved as pending.',
+          pending: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Handle simulation mode
+    if (aiSimulationMode) {
+      console.log('🧠 AI: SIMULATION MODE - Returning mock verified result');
+      return new Response(
+        JSON.stringify({
+          success: true,
+          station_tfl_id: stationTflId || '940GZZLUBND',
+          station_name: 'Bond Street',
+          extracted_name: 'Bond Street',
+          confidence: 0.95,
+          debug: { simulation: true }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if OpenAI API key is available
+    if (!openAIApiKey) {
+      console.log('🧠 AI: OpenAI API key not configured');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'api_key_missing',
+          message: 'AI verification is not configured. Photo saved as pending.',
+          pending: true,
+          setup_required: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -43,14 +93,14 @@ serve(async (req) => {
 
     // Call OpenAI Vision API to analyze the image
     console.log('🧠 AI: Analyzing image with OpenAI Vision...');
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`${openAIApiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openAIApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: openAIModel,
         messages: [
           {
             role: 'system',
@@ -89,9 +139,22 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('🧠 AI: OpenAI API error:', error);
-      throw new Error(`OpenAI API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('🧠 AI: OpenAI API error - Status:', response.status);
+      // Don't log full error body for security - only log error ID if available
+      const errorId = `err_${Date.now()}`;
+      console.error(`🧠 AI: Error ID ${errorId} - Check logs for details`);
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'api_error',
+          message: 'AI service is temporarily unavailable. Photo saved as pending.',
+          pending: true,
+          error_id: errorId
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const aiResponse = await response.json();
@@ -195,14 +258,28 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('🧠 AI: Verification error:', error);
+    
+    // Handle network/timeout errors gracefully
+    if (error.name === 'TypeError' || error.message.includes('fetch')) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'network_error',
+          message: 'Network error occurred. Photo saved as pending. Please check your connection and try again.',
+          pending: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: false,
         error: 'verification_failed',
-        message: 'Photo verification failed. Please try again.',
-        details: error.message
+        message: 'Photo verification failed. Photo saved as pending.',
+        pending: true
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
