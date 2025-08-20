@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useStations } from "@/hooks/useStations";
+import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 
 // Helper functions
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -214,124 +215,69 @@ const ActivityCheckin = () => {
         return;
       }
 
-      // If edge function already matched a station, use it
-      if (result.success && result.station_tfl_id) {
-        const edgeMatchedStation = stations.find(s => s.id === result.station_tfl_id);
-        if (edgeMatchedStation) {
-          console.log('🧭 Checkin: chosen_match =', {
-            station_tfl_id: result.station_tfl_id,
-            name: result.station_name,
-            distance_m: 0, // Server-side matched
-            confidence: result.confidence
+      // Use centralized station resolver
+      const stationTextRaw = result.station_text_raw || result.text_seen || '';
+      const stationName = result.station_name;
+      
+      console.log('🧭 Checkin: Resolving station:', { stationTextRaw, stationName });
+      
+      const resolverResult = resolveStation(
+        stationTextRaw,
+        stationName,
+        stations,
+        location ? { lat: location.lat, lng: location.lng } : undefined
+      );
+
+      // Handle resolver error (no match found)
+      if ('error' in resolverResult) {
+        console.log('🧭 Checkin: Station resolver failed:', resolverResult.error);
+        
+        // Show error with suggestions if available
+        if (resolverResult.suggestions && resolverResult.suggestions.length > 0) {
+          const suggestionNames = resolverResult.suggestions.map(s => s.name).join(', ');
+          toast({
+            title: "Station not recognized",
+            description: `${resolverResult.error}. Did you mean: ${suggestionNames}?`,
+            variant: "destructive"
           });
-
-          // Create verified check-in
-          checkinMutation.mutate({
-            stationTflId: result.station_tfl_id,
-            checkinType: 'image',
-            imageData: capturedImage!,
-            verificationResult: {
-              success: true,
-              pending: false,
-              station_name: result.station_name!,
-              confidence: result.confidence,
-              distance_m: 0,
-              verification_method: 'roundel_ai',
-              ai_station_text: result.station_text_raw,
-              ai_confidence: result.confidence
-            }
+          setSuggestions(resolverResult.suggestions.map(s => ({ tfl_id: s.id, name: s.name })));
+        } else {
+          toast({
+            title: "Station not recognized", 
+            description: result.message || resolverResult.error,
+            variant: "destructive"
           });
-          return;
         }
-      }
-
-      // Fallback: Station matching logic for cases where edge function didn't match
-      let matchedStation = null;
-      let matchDistance = Infinity;
-
-      if (result.station_name) {
-        // GPS-based matching within 750m if location available
-        if (location && stations.length) {
-          const nearbyMatches = stations.filter(station => {
-            const distance = calculateDistance(
-              location.lat, location.lng,
-              station.coordinates[1], station.coordinates[0]
-            );
-            return distance <= 750 && fuzzyMatch(result.station_name!, station.name) >= 0.85;
-          });
-
-          if (nearbyMatches.length > 0) {
-            // Find closest GPS match
-            matchedStation = nearbyMatches.reduce((closest, station) => {
-              const distance = calculateDistance(
-                location.lat, location.lng,
-                station.coordinates[1], station.coordinates[0]
-              );
-              if (distance < matchDistance) {
-                matchDistance = distance;
-                return station;
-              }
-              return closest;
-            });
-          }
-        }
-
-        // Global fuzzy match if no GPS match found
-        if (!matchedStation && stations.length) {
-          const globalMatches = stations
-            .map(station => ({
-              station,
-              similarity: fuzzyMatch(result.station_name!, station.name)
-            }))
-            .filter(match => match.similarity >= 0.85)
-            .sort((a, b) => b.similarity - a.similarity);
-
-          if (globalMatches.length > 0) {
-            matchedStation = globalMatches[0].station;
-            matchDistance = location ? calculateDistance(
-              location.lat, location.lng,
-              matchedStation.coordinates[1], matchedStation.coordinates[0]
-            ) : 999999;
-          }
-        }
-      }
-
-      if (!matchedStation) {
-        toast({
-          title: "Station not recognized",
-          description: result.message || `We read '${result.station_text_raw}' but couldn't match a station. Retake or try GPS check-in.`,
-          variant: "destructive"
-        });
-        setVerificationError(`Could not match station: ${result.station_text_raw}`);
+        
+        setVerificationError(resolverResult.error);
         return;
       }
 
-      console.log('🧭 Checkin: chosen_match =', {
-        station_tfl_id: matchedStation.id,
-        name: matchedStation.name,
-        distance_m: Math.round(matchDistance),
+      // Success - we have a resolved station
+      const resolvedStation = resolverResult as ResolvedStation;
+      
+      console.log('🧭 Checkin: Station resolved:', {
+        station_tfl_id: resolvedStation.station_id,
+        display_name: resolvedStation.display_name,
+        matching_rule: resolvedStation.matching_rule,
         confidence: result.confidence
       });
 
-      // Determine verification status based on confidence and GPS proximity
-      const isHighConfidence = result.confidence >= 0.8;
-      const isNearGPS = location && matchDistance <= 750;
-      const isVerified = isHighConfidence && (isNearGPS || matchDistance === 999999);
-
-      // Create check-in
+      // Create verified check-in
       checkinMutation.mutate({
-        stationTflId: matchedStation.id,
+        stationTflId: resolvedStation.station_id,
         checkinType: 'image',
         imageData: capturedImage!,
         verificationResult: {
-          success: isVerified,
-          pending: !isVerified,
-          station_name: matchedStation.name,
+          success: true,
+          pending: false,
+          station_name: resolvedStation.display_name,
           confidence: result.confidence,
-          distance_m: matchDistance,
-          verification_method: 'roundel_ai',
-          ai_station_text: result.station_text_raw,
-          ai_confidence: result.confidence
+          distance_m: 0, // Resolver handles distance internally
+          verification_method: 'ai_image',
+          ai_station_text: stationTextRaw,
+          ai_confidence: result.confidence,
+          matching_rule: resolvedStation.matching_rule
         }
       });
 
@@ -392,7 +338,7 @@ const ActivityCheckin = () => {
       let verificationMethod = 'gps';
       
       if (checkinType === 'image') {
-        verificationMethod = 'roundel_ai';
+        verificationMethod = 'ai_image';
         status = verificationResult?.success ? 'verified' : 'pending';
       } else if (checkinType === 'manual') {
         verificationMethod = 'manual';
@@ -459,8 +405,8 @@ const ActivityCheckin = () => {
         const isVerified = variables.verificationResult?.success;
         if (isVerified) {
           toast({
-            title: "✅ Roundel verified!",
-            description: `Verified: ${variables.verificationResult?.station_name}`,
+            title: "✅ Checked in at " + variables.verificationResult?.station_name,
+            description: `Verification: ${variables.verificationResult?.matching_rule || 'AI match'}`,
           });
         } else {
           toast({
