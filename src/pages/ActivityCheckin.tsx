@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
 import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 import { DevPanel, useSimulationMode } from "@/components/DevPanel";
@@ -87,7 +87,6 @@ const ActivityCheckin = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string}> | null>(null);
-  const [showCheckinFlow, setShowCheckinFlow] = useState(false);
   const [geofenceError, setGeofenceError] = useState<{ 
     message: string; 
     code: string; 
@@ -201,8 +200,15 @@ const ActivityCheckin = () => {
   const canUploadImage = (): boolean => {
     const totalVisits = activity?.station_visits?.filter((visit: any) => visit.status === 'visited').length || 0;
     const isActivityComplete = activity?.status === 'completed';
+    const hasPendingUpload = isVerifying || isUploading;
     
-    return !isActivityComplete && !isVerifying && !isUploading;
+    // If there's already a verified visit at the current sequence, prevent upload
+    const currentSequence = (activity?.station_visits?.length || 0) + 1;
+    const hasVisitedAtCurrentSequence = activity?.station_visits?.some((visit: any) => 
+      visit.sequence_number === currentSequence && visit.status === 'visited'
+    );
+    
+    return !isActivityComplete && !hasPendingUpload && !hasVisitedAtCurrentSequence;
   };
 
   // 3-Step Validation Pipeline
@@ -446,7 +452,6 @@ const ActivityCheckin = () => {
       setIsVerifying(false);
       setCapturedImage(null);
       setIsCamera(false);
-      setShowCheckinFlow(false);
     },
     onError: () => {
       setIsVerifying(false);
@@ -573,7 +578,6 @@ const ActivityCheckin = () => {
       setVerificationError(null);
       setSuggestions(null);
       setGeofenceError(null);
-      setShowCheckinFlow(false);
     },
     onError: (error: any) => {
       console.error('🧭 Checkin: mutation error =', error);
@@ -736,7 +740,25 @@ const ActivityCheckin = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-4">
       <div className="max-w-md mx-auto space-y-6">
-        {/* Simulation Banner */}
+        {/* Header with Back Navigation */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/activities/${activityId}`)}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Activity
+          </Button>
+          {simulationModeEffective && (
+            <Badge variant="outline" className="border-yellow-400 text-yellow-700 bg-yellow-50">
+              ⚡ SIMULATION
+            </Badge>
+          )}
+        </div>
+
+        {/* Simulation Banner - Dismissible */}
         <SimulationBanner 
           visible={simulationModeEffective} 
           className="mb-4"
@@ -760,21 +782,14 @@ const ActivityCheckin = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Activity Check-in</CardTitle>
+                <CardTitle className="text-lg">Station Check-in</CardTitle>
                 <CardDescription>
                   {activity.route?.name || `Activity ${activity.id.slice(0, 8)}`}
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="capitalize">
-                  {activity.status}
-                </Badge>
-                {simulationModeEffective && (
-                  <Badge variant="outline" className="border-yellow-400 text-yellow-700 bg-yellow-50">
-                    SIM
-                  </Badge>
-                )}
-              </div>
+              <Badge variant="outline" className="capitalize">
+                {activity.status}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -804,7 +819,7 @@ const ActivityCheckin = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              Station Check-in
+              Check-in Options
               {!canUploadImage() && (
                 <Badge variant="outline" className="text-xs">
                   {activity?.status === 'completed' ? 'COMPLETED' : 'UPLOADING...'}
@@ -821,7 +836,7 @@ const ActivityCheckin = () => {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!showCheckinFlow && canUploadImage() && (
+            {canUploadImage() && !capturedImage && (
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   onClick={startCamera}
@@ -838,7 +853,10 @@ const ActivityCheckin = () => {
                   variant="outline"
                   disabled={!canUploadImage()}
                 >
-                  <Loader2 className="h-6 w-6" />
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+                    <circle cx="12" cy="13" r="3"/>
+                  </svg>
                   <span className="text-sm">Upload Image</span>
                 </Button>
               </div>
@@ -1009,6 +1027,38 @@ const ActivityCheckin = () => {
                     </Button>
                   )}
                 </div>
+                
+                {/* Success Actions - Show after successful check-in */}
+                {lastConfirmation && showConfirmation && (
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-green-800">
+                        ✅ Check-in successful! What's next?
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCapturedImage(null);
+                          setShowConfirmation(false);
+                          setLastConfirmation(null);
+                        }}
+                        className="flex-1 bg-white hover:bg-green-50"
+                      >
+                        Continue Check-in
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/activities/${activityId}`)}
+                        className="flex-1"
+                      >
+                        Back to Activity
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
