@@ -12,6 +12,9 @@ import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
+import { CheckinConfirmation } from "@/components/CheckinConfirmation";
+import { RecentVisitsList } from "@/components/RecentVisitsList";
+import { useImageUpload } from "@/hooks/useImageUpload";
 
 // Configuration
 const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
@@ -92,6 +95,16 @@ const ActivityCheckin = () => {
     distance?: number;
     ocrResult?: OCRResult;
   } | null>(null);
+  
+  // New state for enhanced features
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [lastConfirmation, setLastConfirmation] = useState<{
+    stationName: string;
+    timestamp: Date;
+    sequenceNumber: number;
+    imageUrl?: string;
+  } | null>(null);
+  const { uploadImage, isUploading } = useImageUpload();
 
   // Log simulation mode config on component mount
   useEffect(() => {
@@ -176,6 +189,22 @@ const ActivityCheckin = () => {
     enabled: !!location,
   });
 
+  // Helper function to check if station is already checked in
+  const isStationAlreadyCheckedIn = (stationTflId: string): boolean => {
+    if (!activity?.station_visits) return false;
+    return activity.station_visits.some((visit: any) => 
+      visit.station_tfl_id === stationTflId && visit.status === 'visited'
+    );
+  };
+
+  // Check if we can upload (no duplicate stations, activity not complete)
+  const canUploadImage = (): boolean => {
+    const totalVisits = activity?.station_visits?.filter((visit: any) => visit.status === 'visited').length || 0;
+    const isActivityComplete = activity?.status === 'completed';
+    
+    return !isActivityComplete && !isVerifying && !isUploading;
+  };
+
   // 3-Step Validation Pipeline
   const runValidationPipeline = async (imageData: string) => {
     const logEntry: ValidationLogEntry = {
@@ -259,6 +288,14 @@ const ActivityCheckin = () => {
       const resolvedStation = resolverResult as ResolvedStation;
       logEntry.resolved_display_name = resolvedStation.display_name;
       logEntry.station_id = resolvedStation.station_id;
+      
+      // Check if station is already checked in
+      if (isStationAlreadyCheckedIn(resolvedStation.station_id)) {
+        logEntry.error_code = 'already_checked_in';
+        logEntry.error_message = `Already checked in at ${resolvedStation.display_name}. This station is locked for this activity.`;
+        throw new Error(logEntry.error_message);
+      }
+      
       logEntry.result = 'success';
       console.log('🧭 Checkin: Step 2 SUCCESS -', logEntry);
 
@@ -325,16 +362,26 @@ const ActivityCheckin = () => {
         console.log('🧭 Checkin: Step 3 SUCCESS -', logEntry);
       }
 
-      // STEP 4: Persist Visit
+      // STEP 4: Upload Image and Persist Visit
       logEntry.step = 'persist';
       logEntry.result = 'error';
 
-      console.log('🧭 Checkin: Step 4 - Persist visit');
+      console.log('🧭 Checkin: Step 4 - Upload image and persist visit');
+      
+      // Upload image to storage
+      const fileName = `${user?.id}/${activityId}/${Date.now()}-roundel.jpg`;
+      const imageUrl = await uploadImage(imageData, fileName);
+      
+      if (!imageUrl) {
+        logEntry.error_code = 'image_upload_failed';
+        logEntry.error_message = 'Failed to upload verification image';
+        throw new Error(logEntry.error_message);
+      }
       
       await checkinMutation.mutateAsync({
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
-        imageData: capturedImage!,
+        imageData: imageUrl, // Now using the uploaded URL instead of base64
         verificationResult: {
           success: true,
           pending: false,
@@ -352,18 +399,22 @@ const ActivityCheckin = () => {
           geofence_radius_m: GEOFENCE_RADIUS_METERS,
           geofence_passed: logEntry.geofence_passed || false,
           geofence_bypassed: logEntry.geofence_bypassed || false
-        }
+        },
+        imageUrl
       });
 
       logEntry.result = 'success';
       console.log('🧭 Checkin: Step 4 SUCCESS -', logEntry);
 
-      // Success toast
-      const simulationSuffix = simulationModeEffective ? ' (simulation)' : '';
-      toast({
-        title: `✅ Checked in at ${resolvedStation.display_name}${simulationSuffix}`,
-        description: `Verification: ${resolvedStation.matching_rule}`,
+      // Show confirmation instead of toast
+      const sequenceNumber = (activity?.station_visits?.length || 0) + 1;
+      setLastConfirmation({
+        stationName: resolvedStation.display_name,
+        timestamp: new Date(),
+        sequenceNumber,
+        imageUrl
       });
+      setShowConfirmation(true);
 
       setVerificationError(null);
       setSuggestions(null);
@@ -408,12 +459,14 @@ const ActivityCheckin = () => {
       stationTflId, 
       checkinType, 
       imageData,
-      verificationResult
+      verificationResult,
+      imageUrl
     }: { 
       stationTflId: string; 
       checkinType: 'gps' | 'image' | 'manual';
       imageData?: string;
       verificationResult?: any;
+      imageUrl?: string;
     }) => {
       if (!user || !activity) throw new Error("Missing data");
 
@@ -440,7 +493,7 @@ const ActivityCheckin = () => {
         latitude: location?.lat || null,
         longitude: location?.lng || null,
         checkin_type: checkinType,
-        verification_image_url: imageData || null,
+        verification_image_url: imageUrl || imageData || null,
         status,
         verification_method: verificationMethod,
         ai_verification_result: verificationResult || null,
@@ -603,16 +656,23 @@ const ActivityCheckin = () => {
 
   const handleImageCheckin = () => {
     if (capturedImage) {
+      // Check if this is the final station and disable if activity complete
+      const totalVisits = activity?.station_visits?.filter((visit: any) => visit.status === 'visited').length || 0;
+      const isActivityComplete = activity?.status === 'completed';
+      
+      if (isActivityComplete) {
+        toast({
+          title: "Activity completed",
+          description: "All stations have been visited. No more check-ins allowed.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       setIsVerifying(true);
       setVerificationError(null);
       setSuggestions(null);
       verifyRoundelMutation.mutate({ imageData: capturedImage });
-    } else {
-      toast({
-        title: "No image captured",
-        description: "Please take a photo first.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -657,399 +717,357 @@ const ActivityCheckin = () => {
     setSuggestions(null);
   };
 
-  const getStationName = (tflId: string) => {
-    // Try to find station name from nearby stations first
-    const nearbyStation = nearbyStations.find((s: any) => s.tfl_id === tflId);
-    if (nearbyStation) return nearbyStation.name;
-    
-    // Fallback to tfl_id if name not found
-    return tflId;
-  };
-
-  if (loading || activityLoading || !user || !activity) {
+  if (loading || activityLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
-        <p className="text-lg">Loading...</p>
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user || !activity) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p className="text-lg">Activity not found</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
-      <div className="container mx-auto px-4 py-8">
-        <header className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Activity Checkin</h1>
-            <p className="text-muted-foreground">{activity.title}</p>
-            {activity.route && (
-              <Badge variant="outline" className="mt-1">
-                Route: {activity.route.name}
-              </Badge>
-            )}
-          </div>
-          <Button variant="outline" onClick={() => navigate(`/activities/${activityId}`)}>
-            Back to Activity
-          </Button>
-        </header>
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-4">
+      <div className="max-w-md mx-auto space-y-6">
+        {/* Simulation Banner */}
+        <SimulationBanner 
+          visible={simulationModeEffective} 
+          className="mb-4"
+        />
 
-        {/* Simulation Mode Banner */}
-        <SimulationBanner visible={simulationModeEffective} className="mb-6" />
+        {/* Check-in Confirmation */}
+        {lastConfirmation && (
+          <CheckinConfirmation
+            stationName={lastConfirmation.stationName}
+            timestamp={lastConfirmation.timestamp}
+            isSimulation={simulationModeEffective}
+            sequenceNumber={lastConfirmation.sequenceNumber}
+            imageUrl={lastConfirmation.imageUrl}
+            onDismiss={() => setShowConfirmation(false)}
+            visible={showConfirmation}
+          />
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Dev Panel - Always visible in development */}
-          {SIMULATION_MODE_ENV && (
-            <div className="lg:col-span-3 mb-4">
-              <DevPanel />
+        {/* Activity Header */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Activity Check-in</CardTitle>
+                <CardDescription>
+                  {activity.route?.name || `Activity ${activity.id.slice(0, 8)}`}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="capitalize">
+                  {activity.status}
+                </Badge>
+                {simulationModeEffective && (
+                  <Badge variant="outline" className="border-yellow-400 text-yellow-700 bg-yellow-50">
+                    SIM
+                  </Badge>
+                )}
+              </div>
             </div>
-          )}
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                <span>Stations: {activity.station_visits?.filter((v: any) => v.status === 'visited').length || 0} visited</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                <span>{new Date(activity.started_at).toLocaleTimeString()}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Camera Section */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Camera className="w-5 h-5" />
-                Check-in with Roundel Photo
-              </CardTitle>
-            <CardDescription>
-              Take or upload a photo of the station roundel to verify your check-in
-            </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!location && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-                  <MapPin className="w-4 h-4" />
-                  GPS not available; we'll rely on image only.
-                </div>
+        {/* Recent Visits */}
+        {activity.station_visits && activity.station_visits.length > 0 && (
+          <RecentVisitsList 
+            visits={activity.station_visits}
+            stations={stations}
+            isSimulation={simulationModeEffective}
+          />
+        )}
+
+        {/* Camera/Upload Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              Station Check-in
+              {!canUploadImage() && (
+                <Badge variant="outline" className="text-xs">
+                  {activity?.status === 'completed' ? 'COMPLETED' : 'UPLOADING...'}
+                </Badge>
               )}
-              
-              {!showCheckinFlow && !isCamera && !capturedImage && (
-                <div className="space-y-4">
-                  <Button onClick={() => setShowCheckinFlow(true)} className="w-full">
-                    Check-in with Roundel Photo
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {canUploadImage() 
+                ? "Take a photo of the station roundel or upload an image"
+                : activity?.status === 'completed' 
+                  ? "Activity completed - all stations visited"
+                  : "Processing your check-in..."
+              }
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!showCheckinFlow && canUploadImage() && (
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={startCamera}
+                  className="h-24 flex flex-col items-center justify-center gap-2"
+                  variant="outline"
+                  disabled={!canUploadImage()}
+                >
+                  <Camera className="h-6 w-6" />
+                  <span className="text-sm">Take Photo</span>
+                </Button>
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-24 flex flex-col items-center justify-center gap-2"
+                  variant="outline"
+                  disabled={!canUploadImage()}
+                >
+                  <Loader2 className="h-6 w-6" />
+                  <span className="text-sm">Upload Image</span>
+                </Button>
+              </div>
+            )}
+
+            {!canUploadImage() && (
+              <div className="text-center py-8">
+                <div className="text-muted-foreground">
+                  {activity?.status === 'completed' 
+                    ? "🎉 Activity completed! All stations have been visited."
+                    : "⏳ Processing your check-in..."
+                  }
+                </div>
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            {isCamera && (
+              <div className="space-y-4">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full rounded-lg border aspect-video object-cover"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={capturePhoto} className="flex-1">
+                    <Camera className="mr-2 h-4 w-4" />
+                    Capture
                   </Button>
-                  <p className="text-sm text-muted-foreground text-center">
-                    Take or upload a photo of the station roundel to verify your location
-                  </p>
-                </div>
-              )}
-
-              {showCheckinFlow && !isCamera && !capturedImage && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button onClick={startCamera} className="flex-1">
-                      <Camera className="w-4 h-4 mr-2" />
-                      Take Photo
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex-1"
-                    >
-                      Upload Image
-                    </Button>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     onClick={() => {
-                      setShowCheckinFlow(false);
+                      const stream = videoRef.current?.srcObject as MediaStream;
+                      stream?.getTracks().forEach(track => track.stop());
+                      setIsCamera(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {capturedImage && (
+              <div className="space-y-4">
+                <img
+                  src={capturedImage}
+                  alt="Captured roundel"
+                  className="w-full rounded-lg border"
+                />
+
+                {isVerifying && (
+                  <div className="flex items-center justify-center p-4 bg-muted/50 rounded-lg">
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <span>Analyzing photo...</span>
+                  </div>
+                )}
+
+                {verificationError && !geofenceError && (
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <XCircle className="w-4 h-4 text-destructive mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm text-destructive font-medium">Verification Failed</p>
+                        <p className="text-sm text-destructive/80 mt-1">{verificationError}</p>
+                        
+                        {suggestions && suggestions.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-sm font-medium mb-2">Did you mean one of these?</p>
+                            <div className="space-y-1">
+                              {suggestions.map((suggestion) => (
+                                <Button
+                                  key={suggestion.tfl_id}
+                                  variant="outline"
+                                  size="sm"
+                                  className="mr-2 mb-1"
+                                  onClick={() => handleSuggestionSelect(suggestion.tfl_id)}
+                                  disabled={checkinMutation.isPending}
+                                >
+                                  {suggestion.name}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {geofenceError && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm text-yellow-800 font-medium">
+                          {geofenceError.code === 'gps_unavailable' ? 'Location Unavailable' : 'Outside Geofence'}
+                        </p>
+                        <p className="text-sm text-yellow-700 mt-1">{geofenceError.message}</p>
+                        
+                        {geofenceError.code === 'out_of_range' && geofenceError.resolvedStation && (
+                          <div className="mt-2 text-sm text-yellow-700">
+                            <p><strong>Station:</strong> {geofenceError.resolvedStation.display_name}</p>
+                            <p><strong>Distance:</strong> {geofenceError.distance}m (limit {GEOFENCE_RADIUS_METERS}m)</p>
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleSaveAsPending}
+                            disabled={checkinMutation.isPending}
+                            className="bg-white hover:bg-yellow-50"
+                          >
+                            Save as Pending
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleCancelGeofence}
+                            disabled={checkinMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
                       setCapturedImage(null);
                       setVerificationError(null);
                       setSuggestions(null);
                       setGeofenceError(null);
                     }}
-                    className="w-full"
+                    className="flex-1"
+                    disabled={isVerifying}
                   >
-                    Cancel
+                    Retake
                   </Button>
-                </div>
-              )}
-
-              {isCamera && (
-                <div className="space-y-4">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full rounded-lg border"
-                  />
-                  <Button onClick={capturePhoto} className="w-full">
-                    Capture Photo
-                  </Button>
-                </div>
-              )}
-
-              {capturedImage && (
-                <div className="space-y-4">
-                  <img
-                    src={capturedImage}
-                    alt="Captured roundel"
-                    className="w-full rounded-lg border"
-                  />
-                  
-                  {isVerifying && (
-                    <div className="flex items-center justify-center p-4 bg-muted/50 rounded-lg">
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      <span>Analyzing photo...</span>
-                    </div>
+                  {!verificationError && !geofenceError && (
+                    <Button
+                      onClick={handleImageCheckin}
+                      disabled={isVerifying || isUploading || !canUploadImage()}
+                      className="flex-1"
+                    >
+                      {isVerifying || isUploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {isUploading ? "Uploading..." : "Verifying..."}
+                        </>
+                      ) : (
+                        "Verify & Check In"
+                      )}
+                    </Button>
                   )}
-
-                  {verificationError && !geofenceError && (
-                    <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <XCircle className="w-4 h-4 text-destructive mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm text-destructive font-medium">Verification Failed</p>
-                          <p className="text-sm text-destructive/80 mt-1">{verificationError}</p>
-                          
-                          {suggestions && suggestions.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-sm font-medium mb-2">Did you mean one of these?</p>
-                              <div className="space-y-1">
-                                {suggestions.map((suggestion) => (
-                                  <Button
-                                    key={suggestion.tfl_id}
-                                    variant="outline"
-                                    size="sm"
-                                    className="mr-2 mb-1"
-                                    onClick={() => handleSuggestionSelect(suggestion.tfl_id)}
-                                    disabled={checkinMutation.isPending}
-                                  >
-                                    {suggestion.name}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {geofenceError && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm text-yellow-800 font-medium">
-                            {geofenceError.code === 'gps_unavailable' ? 'Location Unavailable' : 'Outside Geofence'}
-                          </p>
-                          <p className="text-sm text-yellow-700 mt-1">{geofenceError.message}</p>
-                          
-                          {geofenceError.code === 'out_of_range' && geofenceError.resolvedStation && (
-                            <div className="mt-2 text-sm text-yellow-700">
-                              <p><strong>Station:</strong> {geofenceError.resolvedStation.display_name}</p>
-                              <p><strong>Distance:</strong> {geofenceError.distance}m (limit {GEOFENCE_RADIUS_METERS}m)</p>
-                            </div>
-                          )}
-
-                          <div className="mt-4 flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleSaveAsPending}
-                              disabled={checkinMutation.isPending}
-                              className="bg-white hover:bg-yellow-50"
-                            >
-                              Save as Pending
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={handleCancelGeofence}
-                              disabled={checkinMutation.isPending}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                   <div className="flex gap-2">
-                     <Button
-                       variant="outline"
-                       onClick={() => {
-                          setCapturedImage(null);
-                          setVerificationError(null);
-                          setSuggestions(null);
-                          setGeofenceError(null);
-                       }}
-                       className="flex-1"
-                       disabled={isVerifying}
-                     >
-                       Retake
-                     </Button>
-                     {!verificationError && !geofenceError && (
-                       <Button 
-                         onClick={handleImageCheckin} 
-                         className="flex-1"
-                         disabled={isVerifying || checkinMutation.isPending}
-                       >
-                         {isVerifying ? (
-                           <>
-                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                             Verifying...
-                           </>
-                         ) : (
-                           'Continue'
-                         )}
-                       </Button>
-                     )}
-                   </div>
-                   
-                   {/* GPS Fallback Button */}
-                   {nearbyStations.length > 0 && (
-                     <Button
-                       variant="ghost"
-                       onClick={() => handleGpsCheckin(nearbyStations[0].tfl_id)}
-                       className="w-full mt-2"
-                       disabled={checkinMutation.isPending}
-                     >
-                       <MapPin className="w-4 h-4 mr-2" />
-                       Use GPS only
-                     </Button>
-                   )}
-                </div>
-              )}
-
-              <canvas ref={canvasRef} className="hidden" />
-            </CardContent>
-          </Card>
-
-          {/* Nearby Stations */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Nearby Stations
-              </CardTitle>
-              <CardDescription>
-                Stations within 500m of your location
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!location ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Getting your location...
-                </div>
-              ) : nearbyStations.length === 0 ? (
-                <p className="text-muted-foreground">No stations found nearby</p>
-              ) : (
-                <div className="space-y-3">
-                  {nearbyStations.map((station: any) => {
-                    const isVisited = activity.station_visits?.some(
-                      (visit: any) => visit.station_tfl_id === station.tfl_id
-                    );
-                    
-                    return (
-                      <div
-                        key={station.tfl_id}
-                        className="flex items-center justify-between p-3 rounded-lg border"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium">{station.name}</h3>
-                            {isVisited && (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Zone {station.zone} · {Math.round(station.distance * 1000)}m away
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleGpsCheckin(station.tfl_id)}
-                            disabled={checkinMutation.isPending || isVisited}
-                          >
-                            <MapPin className="w-4 h-4 mr-1" />
-                            GPS
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Current Activity Status */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Activity Progress
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">
-                    {activity.station_visits?.length || 0}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Stations Visited</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">
-                    {activity.estimated_duration_minutes || 'N/A'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Est. Duration (min)</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">
-                    {activity.started_at ? Math.round((Date.now() - new Date(activity.started_at).getTime()) / 60000) : 0}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Elapsed (min)</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary capitalize">
-                    {activity.timing_mode?.replace('_', ' ') || 'Open'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Mode</p>
                 </div>
               </div>
+            )}
 
-              {activity.station_visits && activity.station_visits.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-medium">Recent Visits</h4>
-                  <div className="space-y-1">
-                    {activity.station_visits
-                      .sort((a: any, b: any) => b.sequence_number - a.sequence_number)
-                      .slice(0, 5)
-                      .map((visit: any) => (
-                        <div key={visit.id} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
-                          <span>#{visit.sequence_number} - {visit.station_tfl_id}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              variant={visit.status === 'verified' ? 'default' : visit.status === 'pending' ? 'secondary' : 'destructive'}
-                              className="text-xs"
-                            >
-                              {visit.status}
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              {new Date(visit.visited_at).toLocaleTimeString()}
-                            </span>
-                          </div>
+            <canvas ref={canvasRef} className="hidden" />
+          </CardContent>
+        </Card>
+
+        {/* Dev Panel - Always visible when simulation mode is available */}
+        {SIMULATION_MODE_ENV && (
+          <DevPanel />
+        )}
+
+        {/* Nearby Stations */}
+        {nearbyStations.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Nearby Stations</CardTitle>
+              <CardDescription>GPS-based check-ins available</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {nearbyStations.slice(0, 3).map((station: any) => {
+                  const isVisited = activity.station_visits?.some(
+                    (visit: any) => visit.station_tfl_id === station.tfl_id && visit.status === 'visited'
+                  );
+                  
+                  return (
+                    <div
+                      key={station.tfl_id}
+                      className="flex items-center justify-between p-3 rounded-lg border"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-sm">{station.name}</h3>
+                          {isVisited && (
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                          )}
                         </div>
-                      ))}
-                  </div>
-                </div>
-              )}
+                        <p className="text-xs text-muted-foreground">
+                          Zone {station.zone} · {Math.round(station.distance * 1000)}m away
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleGpsCheckin(station.tfl_id)}
+                        disabled={checkinMutation.isPending || isVisited}
+                        className="text-xs"
+                      >
+                        <MapPin className="w-3 h-3 mr-1" />
+                        GPS
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
-        </div>
+        )}
       </div>
     </div>
   );
