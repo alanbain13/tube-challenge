@@ -5,6 +5,7 @@ import { useStations } from '@/hooks/useStations';
 import { supabase } from '@/integrations/supabase/client';
 import RouteMap from '@/components/RouteMap';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -24,10 +25,17 @@ interface Activity {
   created_at: string;
 }
 
+interface StationVisit {
+  station_tfl_id: string;
+  status: 'pending' | 'visited' | 'failed';
+  sequence_number: number;
+}
+
 const ActivityMap = () => {
   const navigate = useNavigate();
   const { id: activityId } = useParams<{ id: string }>();
   const [activity, setActivity] = useState<Activity | null>(null);
+  const [visits, setVisits] = useState<StationVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
   const { stations } = useStations();
@@ -49,7 +57,14 @@ const ActivityMap = () => {
       
       const { data, error } = await supabase
         .from('activities')
-        .select('*')
+        .select(`
+          *,
+          station_visits(
+            station_tfl_id,
+            status,
+            sequence_number
+          )
+        `)
         .eq('id', activityId)
         .single();
 
@@ -59,14 +74,16 @@ const ActivityMap = () => {
         return;
       }
 
-      const activityData = data as Activity;
+      const activityData = data as Activity & { station_visits: StationVisit[] };
       console.log('📦 DATA: Activity map data loaded:', { 
         title: activityData.title, 
         stationCount: activityData.station_tfl_ids?.length || 0,
         startStation: activityData.start_station_tfl_id,
-        endStation: activityData.end_station_tfl_id
+        endStation: activityData.end_station_tfl_id,
+        visitsCount: activityData.station_visits?.length || 0
       });
       setActivity(activityData);
+      setVisits(activityData.station_visits || []);
       
       // Set selected stations for map display
       if (activityData.station_tfl_ids) {
@@ -170,9 +187,38 @@ const ActivityMap = () => {
               onStationRemove={() => {}}
               onSequenceChange={() => {}}
               readOnly={true}
+              activityStations={activity.station_tfl_ids}
+              visits={visits}
             />
 
-            {/* Station Sequence Display */}
+            {/* Map Legend */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Map Legend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
+                    <span>Not Visited</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                    <span>Pending</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-red-600 rounded-full"></div>
+                    <span>Verified</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center font-bold">1</div>
+                    <span>Sequence #</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Station Sequence Display with visit status */}
             {selectedStations.length > 0 && (
               <Card>
                 <CardHeader>
@@ -180,14 +226,26 @@ const ActivityMap = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {selectedStations.map((stationId, index) => (
-                      <div key={stationId} className="flex items-center gap-3 p-2 bg-secondary rounded">
-                        <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
-                          {index + 1}
-                        </span>
-                        <span className="font-medium">{getStationName(stationId)}</span>
-                      </div>
-                    ))}
+                    {selectedStations.map((stationId, index) => {
+                      const visit = visits.find(v => v.station_tfl_id === stationId);
+                      const visitStatus = visit ? visit.status : 'not_visited';
+                      const statusColor = visitStatus === 'visited' ? 'bg-red-500' : 
+                                         visitStatus === 'pending' ? 'bg-orange-500' : 'bg-white border-blue-500';
+                      const statusText = visitStatus === 'visited' ? 'VERIFIED' : 
+                                        visitStatus === 'pending' ? 'PENDING' : 'NOT VISITED';
+                      
+                      return (
+                        <div key={stationId} className="flex items-center gap-3 p-2 bg-secondary rounded">
+                          <span className={`w-6 h-6 ${statusColor} text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold border-2`}>
+                            {index + 1}
+                          </span>
+                          <span className="font-medium flex-1">{getStationName(stationId)}</span>
+                          <Badge variant={visitStatus === 'visited' ? 'default' : visitStatus === 'pending' ? 'outline' : 'secondary'} className="text-xs">
+                            {statusText}
+                          </Badge>
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>

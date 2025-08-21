@@ -192,8 +192,62 @@ const ActivityCheckin = () => {
   const isStationAlreadyCheckedIn = (stationTflId: string): boolean => {
     if (!activity?.station_visits) return false;
     return activity.station_visits.some((visit: any) => 
-      visit.station_tfl_id === stationTflId && visit.status === 'visited'
+      visit.station_tfl_id === stationTflId && (visit.status === 'visited' || visit.status === 'pending')
     );
+  };
+
+  // Get the next expected station in sequence
+  const getNextExpectedStation = (): string | null => {
+    if (!activity?.station_tfl_ids || activity.station_tfl_ids.length === 0) return null;
+    
+    // Get current sequence number (number of successful visits + 1)
+    const successfulVisits = activity.station_visits?.filter((visit: any) => 
+      visit.status === 'visited'
+    ).length || 0;
+    
+    // Return the station at the current sequence index
+    return activity.station_tfl_ids[successfulVisits] || null;
+  };
+
+  // Check if a station check-in is allowed (sequential enforcement)
+  const isStationCheckinAllowed = (stationTflId: string): { allowed: boolean; reason?: string; expectedStation?: string } => {
+    // If no station sequence is defined, allow any station
+    if (!activity?.station_tfl_ids || activity.station_tfl_ids.length === 0) {
+      return { allowed: true };
+    }
+    
+    // Check if station is already checked in
+    if (isStationAlreadyCheckedIn(stationTflId)) {
+      return { 
+        allowed: false, 
+        reason: 'Station already checked in',
+        expectedStation: getNextExpectedStation() || undefined
+      };
+    }
+
+    // Get the next expected station
+    const nextExpected = getNextExpectedStation();
+    if (!nextExpected) {
+      return { 
+        allowed: false, 
+        reason: 'All stations completed',
+        expectedStation: undefined
+      };
+    }
+
+    // Check if this is the expected station
+    if (stationTflId !== nextExpected) {
+      const expectedStationName = stations.find(s => s.id === nextExpected)?.name || nextExpected;
+      const attemptedStationName = stations.find(s => s.id === stationTflId)?.name || stationTflId;
+      
+      return { 
+        allowed: false, 
+        reason: `You must check in at the next required station: ${expectedStationName}. Your attempt at ${attemptedStationName} is out of sequence.`,
+        expectedStation: nextExpected
+      };
+    }
+
+    return { allowed: true };
   };
 
   // Check if we can upload (no duplicate stations, activity not complete)
@@ -295,10 +349,11 @@ const ActivityCheckin = () => {
       logEntry.resolved_display_name = resolvedStation.display_name;
       logEntry.station_id = resolvedStation.station_id;
       
-      // Check if station is already checked in
-      if (isStationAlreadyCheckedIn(resolvedStation.station_id)) {
-        logEntry.error_code = 'already_checked_in';
-        logEntry.error_message = `Already checked in at ${resolvedStation.display_name}. This station is locked for this activity.`;
+      // Check if station check-in is allowed (sequential enforcement)
+      const checkinAllowed = isStationCheckinAllowed(resolvedStation.station_id);
+      if (!checkinAllowed.allowed) {
+        logEntry.error_code = checkinAllowed.expectedStation ? 'out_of_sequence' : 'already_checked_in';
+        logEntry.error_message = checkinAllowed.reason || `Check-in not allowed at ${resolvedStation.display_name}`;
         throw new Error(logEntry.error_message);
       }
       
@@ -828,7 +883,7 @@ const ActivityCheckin = () => {
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               {canUploadImage() 
-                ? "Take a photo of the station roundel or upload an image"
+                ? "Take a photo of the station roundel or upload an image. You must visit stations in sequence."
                 : activity?.status === 'completed' 
                   ? "Activity completed - all stations visited"
                   : "Processing your check-in..."

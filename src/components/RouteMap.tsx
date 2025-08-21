@@ -6,12 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
+interface StationVisit {
+  station_tfl_id: string;
+  status: 'pending' | 'visited' | 'failed';
+  sequence_number: number;
+}
+
 interface RouteMapProps {
   selectedStations: string[];
   onStationSelect: (stationId: string) => void;
   onStationRemove: (stationId: string) => void;
   onSequenceChange: (fromIndex: number, toIndex: number) => void;
   readOnly?: boolean;
+  visits?: StationVisit[];
+  activityStations?: string[]; // Complete list of stations in activity sequence
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -19,7 +27,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
   onStationSelect,
   onStationRemove,
   onSequenceChange,
-  readOnly = false
+  readOnly = false,
+  visits = [],
+  activityStations = []
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -107,7 +117,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     if (map.current && stations.length > 0) {
       updateStationStyles();
     }
-  }, [selectedStations, stations]);
+  }, [selectedStations, stations, visits, activityStations]);
 
   // TfL official tube line colors
   const tubeLineColors: { [key: string]: string } = {
@@ -195,6 +205,30 @@ const RouteMap: React.FC<RouteMapProps> = ({
     });
   };
 
+  const getStationVisitStatus = (stationId: string) => {
+    const visit = visits.find(v => v.station_tfl_id === stationId);
+    if (visit) {
+      return visit.status === 'visited' ? 'verified' : 
+             visit.status === 'pending' ? 'pending' : 'failed';
+    }
+    
+    // Check if station is in activity sequence but not visited
+    const isInActivitySequence = activityStations.includes(stationId);
+    return isInActivitySequence ? 'not_visited' : 'not_in_sequence';
+  };
+
+  const getStationSequenceNumber = (stationId: string) => {
+    // First check if it's in selectedStations (for route creation)
+    const selectedIndex = selectedStations.indexOf(stationId);
+    if (selectedIndex >= 0) return selectedIndex + 1;
+    
+    // Then check activity sequence
+    const activityIndex = activityStations.indexOf(stationId);
+    if (activityIndex >= 0) return activityIndex + 1;
+    
+    return 0;
+  };
+
   const addStationsToMap = () => {
     if (!map.current) return;
 
@@ -204,16 +238,19 @@ const RouteMap: React.FC<RouteMapProps> = ({
       data: {
         type: 'FeatureCollection',
         features: stations.map(station => {
-          const sequenceIndex = selectedStations.indexOf(station.id);
-          const sequence = sequenceIndex >= 0 ? sequenceIndex + 1 : 0;
+          const sequenceNumber = getStationSequenceNumber(station.id);
+          const visitStatus = getStationVisitStatus(station.id);
+          const isSelected = selectedStations.includes(station.id) || activityStations.includes(station.id);
+          
           return {
             type: 'Feature',
             properties: {
               id: station.id,
               name: station.name,
               zone: station.zone,
-              sequence: sequence,
-              isSelected: sequenceIndex >= 0
+              sequence: sequenceNumber,
+              isSelected: isSelected,
+              visitStatus: visitStatus
             },
             geometry: {
               type: 'Point',
@@ -224,7 +261,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station circles
+    // Add station circles with visit status colors
     map.current.addLayer({
       id: 'stations',
       type: 'circle',
@@ -233,26 +270,32 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          8,
-          5
+          10,
+          6
         ],
         'circle-color': [
           'case',
-          ['get', 'isSelected'],
-          '#dc2626',
-          '#3b82f6'
+          ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
+          ['==', ['get', 'visitStatus'], 'pending'], '#f59e0b', // Pink/Orange - pending verification
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White - not yet visited
+          ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
+          '#9ca3af' // Gray - default
         ],
         'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff'
+        'circle-stroke-color': [
+          'case',
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#3b82f6', // Blue border for white circles
+          '#ffffff'
+        ]
       }
     });
 
-    // Add station labels for selected stations
+    // Add station labels for selected stations and activity stations
     map.current.addLayer({
       id: 'station-numbers',
       type: 'symbol',
       source: 'stations',
-      filter: ['get', 'isSelected'],
+      filter: ['>', ['get', 'sequence'], 0],
       layout: {
         'text-field': ['get', 'sequence'],
         'text-font': ['Open Sans Bold'],
@@ -329,21 +372,24 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const updateStationStyles = () => {
     if (!map.current || !map.current.getSource('stations')) return;
 
-    // Update the source data with new sequence numbers
+    // Update the source data with new sequence numbers and visit status
     const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
     source.setData({
       type: 'FeatureCollection',
       features: stations.map(station => {
-        const sequenceIndex = selectedStations.indexOf(station.id);
-        const sequence = sequenceIndex >= 0 ? sequenceIndex + 1 : 0;
+        const sequenceNumber = getStationSequenceNumber(station.id);
+        const visitStatus = getStationVisitStatus(station.id);
+        const isSelected = selectedStations.includes(station.id) || activityStations.includes(station.id);
+        
         return {
           type: 'Feature',
           properties: {
             id: station.id,
             name: station.name,
             zone: station.zone,
-            sequence: sequence,
-            isSelected: sequenceIndex >= 0
+            sequence: sequenceNumber,
+            isSelected: isSelected,
+            visitStatus: visitStatus
           },
           geometry: {
             type: 'Point',
@@ -353,22 +399,23 @@ const RouteMap: React.FC<RouteMapProps> = ({
       })
     });
 
-    // Update layer filters and styles
+    // Update layer styles with visit status colors
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
-      ['get', 'isSelected'],
-      '#dc2626',
-      '#3b82f6'
+      ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
+      ['==', ['get', 'visitStatus'], 'pending'], '#f59e0b', // Orange - pending verification
+      ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White - not yet visited
+      ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
+      '#9ca3af' // Gray - default
     ]);
 
-    map.current.setPaintProperty('stations', 'circle-radius', [
+    map.current.setPaintProperty('stations', 'circle-stroke-color', [
       'case',
-      ['get', 'isSelected'],
-      8,
-      5
+      ['==', ['get', 'visitStatus'], 'not_visited'], '#3b82f6', // Blue border for white circles
+      '#ffffff'
     ]);
 
-    map.current.setFilter('station-numbers', ['get', 'isSelected']);
+    map.current.setFilter('station-numbers', ['>', ['get', 'sequence'], 0]);
   };
 
   const getStationName = (stationId: string) => {
