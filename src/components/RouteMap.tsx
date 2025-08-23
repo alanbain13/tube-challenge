@@ -17,6 +17,7 @@ interface RouteMapProps {
   onStationSelect: (stationId: string) => void;
   onStationRemove: (stationId: string) => void;
   onSequenceChange: (fromIndex: number, toIndex: number) => void;
+  onStationSetRole?: (stationId: string, role: 'start' | 'finish') => void;
   readOnly?: boolean;
   visits?: StationVisit[];
   activityStations?: string[]; // Complete list of stations in activity sequence
@@ -27,6 +28,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   onStationSelect,
   onStationRemove,
   onSequenceChange,
+  onStationSetRole,
   readOnly = false,
   visits = [],
   activityStations = []
@@ -351,6 +353,57 @@ const RouteMap: React.FC<RouteMapProps> = ({
           }
         }
       });
+
+      // Add context menu for start/finish selection (only if onStationSetRole is provided)
+      if (onStationSetRole) {
+        map.current.on('contextmenu', 'stations', (e) => {
+          e.preventDefault();
+          if (e.features && e.features[0]) {
+            const stationId = e.features[0].properties?.id;
+            const stationName = e.features[0].properties?.name;
+            if (stationId && onStationSetRole) {
+              // Create context menu
+              const contextMenu = document.createElement('div');
+              contextMenu.className = 'fixed bg-white border border-gray-300 rounded shadow-lg z-50 p-2 space-y-1';
+              contextMenu.style.left = `${e.point.x}px`;
+              contextMenu.style.top = `${e.point.y}px`;
+              
+              const setStartBtn = document.createElement('button');
+              setStartBtn.className = 'block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded';
+              setStartBtn.textContent = 'Set as Start';
+              setStartBtn.onclick = () => {
+                console.log('🏁 UI Bind: Setting start station:', { tfl_id: stationId, name: stationName });
+                onStationSetRole!(stationId, 'start');
+                document.body.removeChild(contextMenu);
+              };
+              
+              const setFinishBtn = document.createElement('button');
+              setFinishBtn.className = 'block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded';
+              setFinishBtn.textContent = 'Set as Finish';
+              setFinishBtn.onclick = () => {
+                console.log('🏁 UI Bind: Setting finish station:', { tfl_id: stationId, name: stationName });
+                onStationSetRole!(stationId, 'finish');
+                document.body.removeChild(contextMenu);
+              };
+              
+              contextMenu.appendChild(setStartBtn);
+              contextMenu.appendChild(setFinishBtn);
+              document.body.appendChild(contextMenu);
+              
+              // Remove context menu when clicking elsewhere
+              const removeMenu = (evt: MouseEvent) => {
+                if (!contextMenu.contains(evt.target as Node)) {
+                  if (document.body.contains(contextMenu)) {
+                    document.body.removeChild(contextMenu);
+                  }
+                  document.removeEventListener('click', removeMenu);
+                }
+              };
+              setTimeout(() => document.addEventListener('click', removeMenu), 10);
+            }
+          }
+        });
+      }
     }
 
     // Change cursor on hover (only if not read-only)
@@ -468,7 +521,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
           <p className="text-sm text-muted-foreground">
             {readOnly 
               ? 'Interactive map showing the selected route stations.'
-              : 'Click stations to add them to your route. Selected stations show sequence numbers.'
+              : onStationSetRole 
+                ? 'Click stations to add/remove from route. Right-click to set as start or finish station.' 
+                : 'Click stations to add them to your route. Selected stations show sequence numbers.'
             }
           </p>
         </CardHeader>

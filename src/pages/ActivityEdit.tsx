@@ -69,6 +69,11 @@ const ActivityEdit = () => {
 
   console.log('🧭 NAV: ActivityEdit mounted for activity:', activityId);
 
+  const getStationName = (stationId: string) => {
+    const station = stations.find((s) => s.id === stationId);
+    return station ? station.name : stationId;
+  };
+
   const form = useForm<z.infer<typeof activitySchema>>({
     resolver: zodResolver(activitySchema),
     defaultValues: {
@@ -177,13 +182,64 @@ const ActivityEdit = () => {
   };
 
   const handleStationAdd = (stationId: string) => {
-    setSelectedStations((prev) => [...prev, stationId]);
-    form.setValue('startStation', form.getValues('startStation') || stationId);
+    setSelectedStations((prev) => {
+      if (!prev.includes(stationId)) {
+        const newStations = [...prev, stationId];
+        recomputeSequenceAndStatus(newStations);
+        return newStations;
+      }
+      return prev;
+    });
+    
+    // Auto-set start if not set, or update end station
+    if (!form.getValues('startStation')) {
+      form.setValue('startStation', stationId);
+      console.log('🏁 UI Bind: Auto-setting start station:', { tfl_id: stationId, name: getStationName(stationId) });
+    }
     form.setValue('endStation', stationId);
+    console.log('🏁 UI Bind: Auto-setting end station:', { tfl_id: stationId, name: getStationName(stationId) });
   };
 
   const handleStationRemove = (stationId: string) => {
-    setSelectedStations((prev) => prev.filter((id) => id !== stationId));
+    setSelectedStations((prev) => {
+      const newStations = prev.filter((id) => id !== stationId);
+      recomputeSequenceAndStatus(newStations);
+      
+      // Clear start/end if they were the removed station
+      if (form.getValues('startStation') === stationId) {
+        form.setValue('startStation', newStations[0] || '');
+      }
+      if (form.getValues('endStation') === stationId) {
+        form.setValue('endStation', newStations[newStations.length - 1] || '');
+      }
+      
+      return newStations;
+    });
+  };
+
+  const handleStationSetRole = (stationId: string, role: 'start' | 'finish') => {
+    const stationName = getStationName(stationId);
+    console.log(`🏁 UI Bind: ${role}=${stationId}/${stationName}`);
+    
+    if (role === 'start') {
+      form.setValue('startStation', stationId);
+      // Ensure the station is in the selected list and at the beginning
+      setSelectedStations((prev) => {
+        const filtered = prev.filter(id => id !== stationId);
+        const newStations = [stationId, ...filtered];
+        recomputeSequenceAndStatus(newStations);
+        return newStations;
+      });
+    } else if (role === 'finish') {
+      form.setValue('endStation', stationId);
+      // Ensure the station is in the selected list and at the end
+      setSelectedStations((prev) => {
+        const filtered = prev.filter(id => id !== stationId);
+        const newStations = [...filtered, stationId];
+        recomputeSequenceAndStatus(newStations);
+        return newStations;
+      });
+    }
   };
 
   const handleSequenceChange = (fromIndex: number, toIndex: number) => {
@@ -191,12 +247,58 @@ const ActivityEdit = () => {
     const [movedStation] = newStations.splice(fromIndex, 1);
     newStations.splice(toIndex, 0, movedStation);
     setSelectedStations(newStations);
+    recomputeSequenceAndStatus(newStations);
   };
 
-  const getStationName = (stationId: string) => {
-    const station = stations.find((s) => s.id === stationId);
-    return station ? station.name : stationId;
+  const recomputeSequenceAndStatus = (stations: string[]) => {
+    // Log the recompute operation
+    const totalStations = stations.length;
+    const nextExpected = stations.find(stationId => {
+      // Check if this station has been visited
+      // For now, we'll assume no visits in edit mode - this would be enhanced with actual visit data
+      return true; // First unvisited station
+    });
+    
+    console.log('🔄 Sequence recompute:', { 
+      total: totalStations, 
+      visited: 0, 
+      pending: 0, 
+      next_expected: nextExpected ? getStationName(nextExpected) : 'none'
+    });
+    
+    // Log the ordered list
+    const orderedList = stations.map((stationId, index) => ({
+      seq: index + 1,
+      tfl_id: stationId,
+      status: 'not_visited' as const
+    }));
+    
+    console.log('📋 Station sequence:', orderedList);
   };
+
+  // Handle form field changes to update map
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'startStation' && value.startStation) {
+        console.log('🏁 UI Bind: Form start changed:', { tfl_id: value.startStation, name: getStationName(value.startStation) });
+        // Move start station to beginning of sequence
+        setSelectedStations((prev) => {
+          const filtered = prev.filter(id => id !== value.startStation);
+          return [value.startStation, ...filtered];
+        });
+      }
+      if (name === 'endStation' && value.endStation) {
+        console.log('🏁 UI Bind: Form end changed:', { tfl_id: value.endStation, name: getStationName(value.endStation) });
+        // Move end station to end of sequence
+        setSelectedStations((prev) => {
+          const filtered = prev.filter(id => id !== value.endStation);
+          return [...filtered, value.endStation];
+        });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, getStationName]);
+
 
   // SEO
   useEffect(() => {
@@ -348,6 +450,7 @@ const ActivityEdit = () => {
                 onStationSelect={handleStationAdd}
                 onStationRemove={handleStationRemove}
                 onSequenceChange={handleSequenceChange}
+                onStationSetRole={handleStationSetRole}
               />
 
               {/* Activity Summary */}

@@ -233,6 +233,11 @@ const RouteCreate = () => {
     }
   };
 
+  const getStationName = (stationId: string) => {
+    const station = stations.find((s) => s.id === stationId);
+    return station ? station.name : stationId;
+  };
+
   const handleStationAdd = (stationId: string) => {
     setSelectedStations((prev) => [...prev, stationId]);
     form.setValue('startStation', form.getValues('startStation') || stationId);
@@ -243,6 +248,27 @@ const RouteCreate = () => {
     setSelectedStations((prev) => prev.filter((id) => id !== stationId));
   };
 
+  const handleStationSetRole = (stationId: string, role: 'start' | 'finish') => {
+    const stationName = getStationName(stationId);
+    console.log(`🏁 UI Bind: ${role}=${stationId}/${stationName}`);
+    
+    if (role === 'start') {
+      form.setValue('startStation', stationId);
+      // Ensure the station is in the selected list and at the beginning
+      setSelectedStations((prev) => {
+        const filtered = prev.filter(id => id !== stationId);
+        return [stationId, ...filtered];
+      });
+    } else if (role === 'finish') {
+      form.setValue('endStation', stationId);
+      // Ensure the station is in the selected list and at the end
+      setSelectedStations((prev) => {
+        const filtered = prev.filter(id => id !== stationId);
+        return [...filtered, stationId];
+      });
+    }
+  };
+
   const handleSequenceChange = (fromIndex: number, toIndex: number) => {
     const newStations = [...selectedStations];
     const [movedStation] = newStations.splice(fromIndex, 1);
@@ -250,10 +276,29 @@ const RouteCreate = () => {
     setSelectedStations(newStations);
   };
 
-  const getStationName = (stationId: string) => {
-    const station = stations.find((s) => s.id === stationId);
-    return station ? station.name : stationId;
-  };
+  // Handle form field changes to update map
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'startStation' && value.startStation) {
+        console.log('🏁 UI Bind: Form start changed:', { tfl_id: value.startStation, name: getStationName(value.startStation) });
+        // Move start station to beginning of sequence
+        setSelectedStations((prev) => {
+          const filtered = prev.filter(id => id !== value.startStation);
+          return [value.startStation, ...filtered];
+        });
+      }
+      if (name === 'endStation' && value.endStation) {
+        console.log('🏁 UI Bind: Form end changed:', { tfl_id: value.endStation, name: getStationName(value.endStation) });
+        // Move end station to end of sequence
+        setSelectedStations((prev) => {
+          const filtered = prev.filter(id => id !== value.endStation);
+          return [...filtered, value.endStation];
+        });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -422,6 +467,7 @@ const RouteCreate = () => {
                 onStationSelect={handleStationAdd}
                 onStationRemove={handleStationRemove}
                 onSequenceChange={handleSequenceChange}
+                onStationSetRole={handleStationSetRole}
               />
 
               {/* Route Summary */}
