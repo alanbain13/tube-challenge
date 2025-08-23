@@ -689,12 +689,16 @@ const ActivityCheckin = () => {
 
       return data;
     },
-    onSuccess: (data, variables) => {
-      // Invalidate all related queries to ensure UI consistency
-      queryClient.invalidateQueries({ queryKey: ["activity", activityId] });
-      queryClient.invalidateQueries({ queryKey: ["activity_visits", activityId] });
-      
+    onSuccess: async (data, variables) => {
       console.log(`VisitCommit ok: activity=${activityId} station=${variables.stationTflId} seq=#{${data.sequence_number}} plan_status=${data.status} visits_row_id=${data.id}`);
+      
+      // Force immediate cache invalidation and refetch to ensure state sync
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["activity", activityId] }),
+        queryClient.invalidateQueries({ queryKey: ["activity_visits", activityId] }),
+        queryClient.refetchQueries({ queryKey: ["activity", activityId] }),
+        queryClient.refetchQueries({ queryKey: ["activity_visits", activityId] })
+      ]);
       
       // Only show toast for GPS checkins since image checkins handle their own success toasts
       if (variables.checkinType === 'gps') {

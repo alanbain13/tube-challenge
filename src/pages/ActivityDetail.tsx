@@ -50,15 +50,16 @@ const ActivityDetail = () => {
     enabled: !!user && !!id,
   });
 
-  // Fetch station visits for this activity
+  // Fetch station visits for this activity (with proper real-time updates)
   const { data: visits = [], refetch: refetchVisits } = useQuery({
     queryKey: ["activity_visits", id],
     queryFn: async () => {
+      // Force a fresh query by adding timestamp to avoid stale cache
       const { data, error } = await supabase
         .from("station_visits")
         .select("*")
         .eq("activity_id", id)
-        .order("visited_at", { ascending: true });
+        .order("created_at", { ascending: false }); // Latest first for proper state resolution
       if (error) throw error;
       
       const visitedCount = data?.filter(v => v.status === 'verified').length || 0;
@@ -67,6 +68,8 @@ const ActivityDetail = () => {
       return data;
     },
     enabled: !!user && !!id,
+    refetchOnWindowFocus: true,
+    staleTime: 0, // Always refetch to get latest state
   });
 
   const handleStartJourney = async () => {
@@ -225,10 +228,29 @@ const ActivityDetail = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Create merged station data with proper visit status
+  // Create merged station data with proper visit status using latest visit per station
   const stationList = activity.station_tfl_ids || [];
-  const visitedStations = new Set(visits.filter(v => v.status === 'verified').map(v => v.station_tfl_id));
-  const pendingStations = new Set(visits.filter(v => v.status === 'pending').map(v => v.station_tfl_id));
+  
+  // Group visits by station and get the latest status for each
+  const latestVisitsByStation = new Map();
+  visits.forEach(visit => {
+    const existing = latestVisitsByStation.get(visit.station_tfl_id);
+    if (!existing || new Date(visit.created_at) > new Date(existing.created_at)) {
+      latestVisitsByStation.set(visit.station_tfl_id, visit);
+    }
+  });
+  
+  // Determine status sets based on latest visits only
+  const visitedStations = new Set();
+  const pendingStations = new Set();
+  
+  latestVisitsByStation.forEach((visit, stationId) => {
+    if (visit.status === 'verified') {
+      visitedStations.add(stationId);
+    } else if (visit.status === 'pending') {
+      pendingStations.add(stationId);
+    }
+  });
   
   // Compute next expected station (first unvisited and not pending)
   const nextExpectedIndex = stationList.findIndex(stationId => 
@@ -309,10 +331,8 @@ const ActivityDetail = () => {
               ) : (
                  <div className="space-y-3 max-h-96 overflow-y-auto">
                    {stationList.map((stationId: string, index: number) => {
-                     // Get the most recent visit for this station in this activity
-                     const visit = visits
-                       .filter(v => v.station_tfl_id === stationId)
-                       .sort((a, b) => new Date(b.visited_at).getTime() - new Date(a.visited_at).getTime())[0];
+                     // Get the latest visit for this station from our processed map
+                     const visit = latestVisitsByStation.get(stationId);
                      
                      // Determine visit status based on actual station_visits data
                      let visitStatus = 'not_visited';
