@@ -58,10 +58,12 @@ const ActivityDetail = () => {
         .from("station_visits")
         .select("*")
         .eq("activity_id", id)
-        .order("sequence_number", { ascending: true });
+        .order("visited_at", { ascending: true });
       if (error) throw error;
       
-      console.log(`PlanRefetched: total=${data?.length || 0} visited=${data?.filter(v => v.status === 'verified').length || 0} pending=${data?.filter(v => v.status === 'pending').length || 0}`);
+      const visitedCount = data?.filter(v => v.status === 'verified').length || 0;
+      const pendingCount = data?.filter(v => v.status === 'pending').length || 0;
+      console.log(`PlanRefetched: total=${data?.length || 0} visited=${visitedCount} pending=${pendingCount}`);
       return data;
     },
     enabled: !!user && !!id,
@@ -223,8 +225,22 @@ const ActivityDetail = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Create merged station data with proper visit status
   const stationList = activity.station_tfl_ids || [];
-  const visitedStations = new Set(visits.map(v => v.station_tfl_id));
+  const visitedStations = new Set(visits.filter(v => v.status === 'verified').map(v => v.station_tfl_id));
+  const pendingStations = new Set(visits.filter(v => v.status === 'pending').map(v => v.station_tfl_id));
+  
+  // Compute next expected station (first unvisited and not pending)
+  const nextExpectedIndex = stationList.findIndex(stationId => 
+    !visitedStations.has(stationId) && !pendingStations.has(stationId)
+  );
+  const nextExpectedStation = nextExpectedIndex >= 0 ? stationList[nextExpectedIndex] : null;
+  
+  console.log(`Recompute: total=${stationList.length} visited=${visitedStations.size} pending=${pendingStations.size} next=${nextExpectedIndex >= 0 ? `#${nextExpectedIndex + 1}:${getStationName(nextExpectedStation)}` : 'none'}`);
+  
+  if (nextExpectedStation) {
+    console.log(`HUD next expected: #${nextExpectedIndex + 1} ${getStationName(nextExpectedStation)} | status=ready`);
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -275,7 +291,7 @@ const ActivityDetail = () => {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Visited Count</div>
-                  <div className="font-medium">{visits.filter(v => v.status === 'verified').length}/{stationList.length} stations</div>
+                  <div className="font-medium">{visitedStations.size}/{stationList.length} stations</div>
                 </div>
               </div>
             </CardContent>
@@ -293,13 +309,17 @@ const ActivityDetail = () => {
               ) : (
                  <div className="space-y-3 max-h-96 overflow-y-auto">
                    {stationList.map((stationId: string, index: number) => {
-                     const visit = visits.find(v => v.station_tfl_id === stationId);
-                      // Use consistent status mapping - visits table uses 'verified', UI uses 'visited'
-                      const visitStatus = visit?.status === 'verified' ? 'visited' : 
-                                        visit?.status === 'pending' ? 'pending' : 'not_visited';
-                      
-                      console.log(`Station ${getStationName(stationId)} status: ${visitStatus} (raw: ${visit?.status})`);
-                      
+                     // Get the most recent visit for this station in this activity
+                     const visit = visits
+                       .filter(v => v.station_tfl_id === stationId)
+                       .sort((a, b) => new Date(b.visited_at).getTime() - new Date(a.visited_at).getTime())[0];
+                     
+                     // Determine visit status based on actual station_visits data
+                     let visitStatus = 'not_visited';
+                     if (visit) {
+                       visitStatus = visit.status === 'verified' ? 'visited' : 
+                                   visit.status === 'pending' ? 'pending' : 'not_visited';
+                     }
                      
                      const statusColor = visitStatus === 'visited' ? 'bg-red-500' : 
                                        visitStatus === 'pending' ? 'bg-pink-500' : 'bg-white border-2 border-gray-300';
@@ -312,9 +332,12 @@ const ActivityDetail = () => {
                            </div>
                            <div>
                              <div className="font-medium">{getStationName(stationId)}</div>
-                             {visit && visit.visited_at && (
+                             {visit && visit.visited_at && visitStatus === 'visited' && (
                                <div className="text-xs text-muted-foreground">
                                  Visited {new Date(visit.visited_at).toLocaleTimeString()}
+                                 {visit.verification_method === 'ai_image' && visit.checkin_type === 'simulation' && (
+                                   <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">SIM</span>
+                                 )}
                                </div>
                              )}
                            </div>
