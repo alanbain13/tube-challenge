@@ -200,34 +200,60 @@ const ActivityCheckin = () => {
   const getNextExpectedStation = (): string | null => {
     if (!activity?.station_tfl_ids || activity.station_tfl_ids.length === 0) return null;
     
-    // Find the first planned station that hasn't been visited yet
+    // Check if there's a pending verification - blocks new check-ins
+    const pendingVisit = activity.station_visits?.find((visit: any) => visit.status === 'pending');
+    if (pendingVisit) return null;
+    
+    // Find the first planned station that hasn't been visited yet (strict sequence)
     for (const plannedStationId of activity.station_tfl_ids) {
-      const hasVisit = activity.station_visits?.some((visit: any) => 
-        visit.station_tfl_id === plannedStationId && 
-        (visit.status === 'visited' || visit.status === 'pending')
+      const hasVerifiedVisit = activity.station_visits?.some((visit: any) => 
+        visit.station_tfl_id === plannedStationId && visit.status === 'verified'
       );
       
-      if (!hasVisit) {
+      if (!hasVerifiedVisit) {
+        const station = stations.find(s => s.id === plannedStationId);
+        const sequence = activity.station_tfl_ids.indexOf(plannedStationId) + 1;
+        console.log('Next expected station:', { 
+          sequence, 
+          tfl_id: plannedStationId, 
+          name: station?.name || 'Unknown'
+        });
         return plannedStationId;
       }
     }
     
     // All planned stations have been visited
+    console.log('All planned stations completed');
     return null;
   };
 
   // Check if a station check-in is allowed (sequential enforcement)
   const isStationCheckinAllowed = (stationTflId: string): { allowed: boolean; reason?: string; expectedStation?: string } => {
+    // Check if there's already a pending verification
+    const pendingVisit = activity?.station_visits?.find((visit: any) => visit.status === 'pending');
+    if (pendingVisit) {
+      const pendingStation = stations.find(s => s.id === pendingVisit.station_tfl_id);
+      return { 
+        allowed: false, 
+        reason: `Finish or cancel the current verification at ${pendingStation?.name || 'previous station'} before checking into another station.`,
+        expectedStation: undefined
+      };
+    }
+    
     // If no station sequence is defined, allow any station
     if (!activity?.station_tfl_ids || activity.station_tfl_ids.length === 0) {
       return { allowed: true };
     }
     
-    // Check if station is already checked in
-    if (isStationAlreadyCheckedIn(stationTflId)) {
+    // Check if station is already successfully checked in
+    const isAlreadyVisited = activity.station_visits?.some((visit: any) => 
+      visit.station_tfl_id === stationTflId && visit.status === 'verified'
+    );
+    
+    if (isAlreadyVisited) {
       return { 
         allowed: false, 
-        reason: 'Station already checked in',
+        reason: 'Station already successfully checked in',
         expectedStation: getNextExpectedStation() || undefined
       };
     }
@@ -247,24 +273,42 @@ const ActivityCheckin = () => {
       };
     }
 
-    // Get the next expected station
+    // Get the next expected station (strict sequence)
     const nextExpected = getNextExpectedStation();
     if (!nextExpected) {
       return { 
         allowed: false, 
-        reason: 'All planned stations have been completed',
+        reason: 'All planned stations completed! You can finish the activity.',
         expectedStation: undefined
       };
     }
 
-    // Allow check-in at any unvisited planned station (more flexible than strict sequence)
+    // Only allow check-in at the next expected station (strict sequence)
+    const isAllowed = nextExpected === stationTflId;
+    if (!isAllowed) {
+      const attemptedStation = stations.find(s => s.id === stationTflId);
+      const expectedStation = stations.find(s => s.id === nextExpected);
+      const sequence = activity.station_tfl_ids.indexOf(nextExpected) + 1;
+      console.log(`🚫 Out of sequence: expected #${sequence} ${expectedStation?.name}, attempted ${attemptedStation?.name || stationTflId}`);
+      
+      return { 
+        allowed: false, 
+        reason: `Out of sequence. Please check in at #${sequence} ${expectedStation?.name || nextExpected} next.`,
+        expectedStation: nextExpected
+      };
+    }
+
     return { allowed: true };
   };
 
-  // Check if we can upload (no duplicate stations, activity not complete)
+  // Check if we can upload (no duplicate stations, activity not complete, no pending verifications)
   const canUploadImage = (): boolean => {
     const isActivityComplete = activity?.status === 'completed';
     const hasPendingUpload = isVerifying || isUploading;
+    
+    // Check if there's a pending verification
+    const pendingVisit = activity?.station_visits?.find((visit: any) => visit.status === 'pending');
+    if (pendingVisit) return false;
     
     // Check if all planned stations have been visited
     const nextExpected = getNextExpectedStation();
@@ -894,12 +938,28 @@ const ActivityCheckin = () => {
               )}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {canUploadImage() 
-                ? "Take a photo of the station roundel or upload an image. You must visit stations in sequence."
-                : activity?.status === 'completed' 
-                  ? "Activity completed - all stations visited"
-                  : "Processing your check-in..."
-              }
+              {(() => {
+                if (!canUploadImage()) {
+                  const pendingVisit = activity?.station_visits?.find((visit: any) => visit.status === 'pending');
+                  if (pendingVisit) {
+                    const pendingStation = stations.find(s => s.id === pendingVisit.station_tfl_id);
+                    return `Finish or cancel the current verification at ${pendingStation?.name || 'previous station'} before checking into another station.`;
+                  }
+                  
+                  if (activity?.status === 'completed') {
+                    return "Activity completed - all stations visited";
+                  }
+                  
+                  const nextExpected = getNextExpectedStation();
+                  if (!nextExpected) {
+                    return "All planned stations completed! You can finish the activity.";
+                  }
+                  
+                  return "Processing your check-in...";
+                }
+                
+                return "Take a photo of the station roundel or upload an image. You must visit stations in sequence.";
+              })()}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -932,10 +992,24 @@ const ActivityCheckin = () => {
             {!canUploadImage() && (
               <div className="text-center py-8">
                 <div className="text-muted-foreground">
-                  {activity?.status === 'completed' 
-                    ? "🎉 Activity completed! All stations have been visited."
-                    : "⏳ Processing your check-in..."
-                  }
+                  {(() => {
+                    const pendingVisit = activity?.station_visits?.find((visit: any) => visit.status === 'pending');
+                    if (pendingVisit) {
+                      const pendingStation = stations.find(s => s.id === pendingVisit.station_tfl_id);
+                      return `⏳ Verification pending at ${pendingStation?.name || 'previous station'}`;
+                    }
+                    
+                    if (activity?.status === 'completed') {
+                      return "🎉 Activity completed! All stations have been visited.";
+                    }
+                    
+                    const nextExpected = getNextExpectedStation();
+                    if (!nextExpected) {
+                      return "🎉 All planned stations completed! You can finish the activity.";
+                    }
+                    
+                    return "⏳ Processing your check-in...";
+                  })()}
                 </div>
               </div>
             )}
@@ -1172,7 +1246,10 @@ const ActivityCheckin = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => handleGpsCheckin(station.tfl_id)}
-                        disabled={checkinMutation.isPending || isVisited}
+                        disabled={(() => {
+                          const checkinCheck = isStationCheckinAllowed(station.tfl_id);
+                          return checkinMutation.isPending || !checkinCheck.allowed;
+                        })()}
                         className="text-xs"
                       >
                         <MapPin className="w-3 h-3 mr-1" />

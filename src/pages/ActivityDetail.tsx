@@ -95,11 +95,24 @@ const ActivityDetail = () => {
     if (!activity) return;
     
     try {
+      // Get the last visited station to set as finish
+      const lastVisit = [...visits]
+        .filter(v => v.status === 'verified')
+        .sort((a, b) => new Date(a.visited_at).getTime() - new Date(b.visited_at).getTime())
+        .pop();
+
+      // Remove unvisited stations from the plan
+      const visitedStationIds = visits
+        .filter(v => v.status === 'verified')
+        .map(v => v.station_tfl_id);
+
       const { error } = await supabase
         .from("activities")
         .update({ 
           status: "completed",
-          ended_at: new Date().toISOString()
+          ended_at: new Date().toISOString(),
+          end_station_tfl_id: lastVisit?.station_tfl_id || activity.end_station_tfl_id,
+          station_tfl_ids: visitedStationIds.length > 0 ? visitedStationIds : activity.station_tfl_ids
         })
         .eq("id", activity.id);
 
@@ -107,11 +120,12 @@ const ActivityDetail = () => {
 
       toast({
         title: "Journey completed",
-        description: "Your activity has been marked as complete"
+        description: "Activity finished at " + (lastVisit ? getStationName(lastVisit.station_tfl_id) : "current position")
       });
 
       refetchActivity();
     } catch (error) {
+      console.error('Error finishing journey:', error);
       toast({
         title: "Error finishing journey",
         description: "Please try again",
@@ -275,33 +289,37 @@ const ActivityDetail = () => {
               {stationList.length === 0 ? (
                 <p className="text-muted-foreground">No stations defined for this activity</p>
               ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {stationList.map((stationId: string, index: number) => {
-                    const isVisited = visitedStations.has(stationId);
-                    const visit = visits.find(v => v.station_tfl_id === stationId);
-                    
-                    return (
-                      <div key={`${stationId}-${index}`} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <div className="font-medium">{getStationName(stationId)}</div>
-                            {visit && visit.visited_at && (
-                              <div className="text-xs text-muted-foreground">
-                                Visited {new Date(visit.visited_at).toLocaleTimeString()}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <Badge variant={isVisited ? 'default' : 'outline'}>
-                          {isVisited ? 'Visited' : 'Pending'}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
+                 <div className="space-y-3 max-h-96 overflow-y-auto">
+                   {stationList.map((stationId: string, index: number) => {
+                     const visit = visits.find(v => v.station_tfl_id === stationId);
+                     const visitStatus = visit?.status === 'verified' ? 'visited' : 
+                                       visit?.status === 'pending' ? 'pending' : 'not_visited';
+                     
+                     const statusColor = visitStatus === 'visited' ? 'bg-red-500' : 
+                                       visitStatus === 'pending' ? 'bg-pink-500' : 'bg-white border-2 border-gray-300';
+                     
+                     return (
+                       <div key={`${stationId}-${index}`} className="flex items-center justify-between p-3 border rounded-lg">
+                         <div className="flex items-center gap-3">
+                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${visitStatus === 'not_visited' ? 'text-gray-600' : 'text-white'}`}>
+                             {index + 1}
+                           </div>
+                           <div>
+                             <div className="font-medium">{getStationName(stationId)}</div>
+                             {visit && visit.visited_at && (
+                               <div className="text-xs text-muted-foreground">
+                                 Visited {new Date(visit.visited_at).toLocaleTimeString()}
+                               </div>
+                             )}
+                           </div>
+                         </div>
+                         <Badge variant={visitStatus === 'visited' ? 'default' : visitStatus === 'pending' ? 'secondary' : 'outline'}>
+                           {visitStatus === 'visited' ? 'Visited' : visitStatus === 'pending' ? 'Pending' : 'Not visited'}
+                         </Badge>
+                       </div>
+                     );
+                   })}
+                 </div>
               )}
             </CardContent>
           </Card>
@@ -315,12 +333,18 @@ const ActivityDetail = () => {
                   Start Journey
                 </Button>
               )}
-              {activity.status === 'active' && (
-                <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
-                  <Square className="w-4 h-4" />
-                  Finish Journey
-                </Button>
-              )}
+               {activity.status === 'active' && (
+                 <>
+                   <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
+                     <Play className="w-4 h-4" />
+                     Continue Check-in
+                   </Button>
+                   <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
+                     <Square className="w-4 h-4" />
+                     Finish Activity
+                   </Button>
+                 </>
+               )}
               <Button 
                 variant="outline" 
                 onClick={() => navigate(`/activities/${activity.id}/map`)}

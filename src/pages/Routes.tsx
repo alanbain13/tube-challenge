@@ -110,6 +110,20 @@ const Routes = () => {
     if (!user) return;
 
     try {
+      // Get full route stations in sequence order
+      const { data: routeStations, error: routeError } = await supabase
+        .from('route_stations')
+        .select('station_tfl_id, sequence_number')
+        .eq('route_id', route.id)
+        .order('sequence_number', { ascending: true });
+
+      if (routeError) throw routeError;
+
+      // Build ordered station list from route
+      const orderedStations = routeStations?.map(rs => rs.station_tfl_id) || [route.start_station_tfl_id, route.end_station_tfl_id];
+      
+      console.log('CloneRoute: activity_id=pending stations_copied=' + orderedStations.length + ' order_preserved=true');
+
       const { data: activity, error } = await supabase
         .from('activities')
         .insert({
@@ -117,23 +131,26 @@ const Routes = () => {
           title: `${route.name} Challenge`,
           notes: route.description,
           route_id: route.id,
-          start_station_tfl_id: route.start_station_tfl_id,
-          end_station_tfl_id: route.end_station_tfl_id,
+          start_station_tfl_id: orderedStations[0] || route.start_station_tfl_id,
+          end_station_tfl_id: orderedStations[orderedStations.length - 1] || route.end_station_tfl_id,
           status: 'draft',
-          station_tfl_ids: [route.start_station_tfl_id, route.end_station_tfl_id]
+          station_tfl_ids: orderedStations
         })
         .select()
         .single();
 
       if (error) throw error;
 
+      console.log('CloneRoute: activity_id=' + activity.id + ' stations_copied=' + orderedStations.length + ' order_preserved=true');
+
       toast({
         title: "Route activity created",
-        description: "Check in at the start station to begin"
+        description: `${orderedStations.length} stations added in sequence`
       });
 
       navigate(`/activities/${activity.id}/checkin`);
     } catch (error) {
+      console.error('Error creating route activity:', error);
       toast({
         title: "Error creating activity",
         description: "Please try again",

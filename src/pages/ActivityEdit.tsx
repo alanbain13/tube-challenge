@@ -251,22 +251,20 @@ const ActivityEdit = () => {
   };
 
   const recomputeSequenceAndStatus = (stations: string[]) => {
-    // Log the recompute operation
+    // Calculate stats for logging
     const totalStations = stations.length;
-    const nextExpected = stations.find(stationId => {
-      // Check if this station has been visited
-      // For now, we'll assume no visits in edit mode - this would be enhanced with actual visit data
-      return true; // First unvisited station
-    });
+    const visitedCount = 0; // In edit mode, no visits yet
+    const pendingCount = 0; // In edit mode, no pending visits
+    const nextExpected = totalStations > 0 ? stations[0] : null;
     
     console.log('🔄 Sequence recompute:', { 
       total: totalStations, 
-      visited: 0, 
-      pending: 0, 
+      visited: visitedCount, 
+      pending: pendingCount, 
       next_expected: nextExpected ? getStationName(nextExpected) : 'none'
     });
     
-    // Log the ordered list
+    // Log the ordered list with sequence numbers and status
     const orderedList = stations.map((stationId, index) => ({
       seq: index + 1,
       tfl_id: stationId,

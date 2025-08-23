@@ -278,7 +278,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-color': [
           'case',
           ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
-          ['==', ['get', 'visitStatus'], 'pending'], '#f59e0b', // Pink/Orange - pending verification
+          ['==', ['get', 'visitStatus'], 'pending'], '#ec4899', // Pink - pending verification
           ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White - not yet visited
           ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
           '#9ca3af' // Gray - default
@@ -456,7 +456,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
       ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
-      ['==', ['get', 'visitStatus'], 'pending'], '#f59e0b', // Orange - pending verification
+      ['==', ['get', 'visitStatus'], 'pending'], '#ec4899', // Pink - pending verification
       ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White - not yet visited
       ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
       '#9ca3af' // Gray - default
