@@ -51,7 +51,7 @@ const ActivityDetail = () => {
   });
 
   // Fetch station visits for this activity
-  const { data: visits = [] } = useQuery({
+  const { data: visits = [], refetch: refetchVisits } = useQuery({
     queryKey: ["activity_visits", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -60,6 +60,8 @@ const ActivityDetail = () => {
         .eq("activity_id", id)
         .order("sequence_number", { ascending: true });
       if (error) throw error;
+      
+      console.log(`PlanRefetched: total=${data?.length || 0} visited=${data?.filter(v => v.status === 'verified').length || 0} pending=${data?.filter(v => v.status === 'pending').length || 0}`);
       return data;
     },
     enabled: !!user && !!id,
@@ -292,8 +294,12 @@ const ActivityDetail = () => {
                  <div className="space-y-3 max-h-96 overflow-y-auto">
                    {stationList.map((stationId: string, index: number) => {
                      const visit = visits.find(v => v.station_tfl_id === stationId);
-                     const visitStatus = visit?.status === 'verified' ? 'visited' : 
-                                       visit?.status === 'pending' ? 'pending' : 'not_visited';
+                      // Use consistent status mapping - visits table uses 'verified', UI uses 'visited'
+                      const visitStatus = visit?.status === 'verified' ? 'visited' : 
+                                        visit?.status === 'pending' ? 'pending' : 'not_visited';
+                      
+                      console.log(`Station ${getStationName(stationId)} status: ${visitStatus} (raw: ${visit?.status})`);
+                      
                      
                      const statusColor = visitStatus === 'visited' ? 'bg-red-500' : 
                                        visitStatus === 'pending' ? 'bg-pink-500' : 'bg-white border-2 border-gray-300';
