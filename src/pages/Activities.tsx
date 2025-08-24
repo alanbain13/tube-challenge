@@ -63,7 +63,7 @@ const Activities = () => {
     meta.setAttribute('content', desc);
   }, []);
 
-  // Fetch user's activities with derived state
+  // Fetch user's activities with derived state, listen for updates
   const { data: activities = [], isLoading, refetch } = useQuery({
     queryKey: ["activities"],
     queryFn: async () => {
@@ -87,7 +87,20 @@ const Activities = () => {
       return activitiesWithState;
     },
     enabled: !!user,
+    refetchOnWindowFocus: true,
+    staleTime: 30000, // 30 seconds - allow some staleness for better UX
   });
+
+  // Listen for activity state changes from check-ins
+  useEffect(() => {
+    const handleActivityChange = () => {
+      console.log('🔄 Activity state changed, refetching activities...');
+      refetch();
+    };
+    
+    window.addEventListener('activity-state-changed', handleActivityChange);
+    return () => window.removeEventListener('activity-state-changed', handleActivityChange);
+  }, [refetch]);
 
   const handleStartOrResumeActivity = async (activityId: string, currentStatus: string) => {
     try {
@@ -102,8 +115,10 @@ const Activities = () => {
         if (pauseError) throw pauseError;
       }
 
+      console.log(`🧭 NAV: Navigating to activity checkin: ${activityId}`);
       navigate(`/activities/${activityId}/checkin`);
     } catch (error) {
+      console.error('Error starting activity:', error);
       toast({
         title: "Error starting activity",
         description: "Please try again",

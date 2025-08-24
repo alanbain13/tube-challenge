@@ -625,17 +625,14 @@ const ActivityCheckin = () => {
 
       const sequenceNumber = activityState ? activityState.counts.visited + 1 : 1;
       
-      // Determine status and verification method based on CHECK constraints
-      // status must be 'pending' or 'visited' per station_visits_status_check
-      // verification_method must be 'gps', 'roundel_ai', or 'manual' per station_visits_verification_method_check
-      let status = 'visited';
-      let verificationMethod = 'gps';
       
-      if (checkinType === 'image') {
+      // Determine status and verification method based on simulation mode
+      let status = simulationModeEffective ? 'verified' : 'pending';
+      let verificationMethod = simulationModeEffective ? 'simulation' : 'manual';
+      
+      if (checkinType === 'image' && !simulationModeEffective) {
         verificationMethod = 'roundel_ai';
-        status = verificationResult?.success ? 'visited' : 'pending';
-      } else if (checkinType === 'manual') {
-        verificationMethod = 'manual';
+        status = verificationResult?.success ? 'verified' : 'pending';
       }
       
       const visitData = {
@@ -643,8 +640,8 @@ const ActivityCheckin = () => {
         activity_id: activity.id,
         station_tfl_id: stationTflId,
         sequence_number: sequenceNumber,
-        latitude: location?.lat || null,
-        longitude: location?.lng || null,
+        latitude: simulationModeEffective ? null : (location?.lat || null),
+        longitude: simulationModeEffective ? null : (location?.lng || null),
         checkin_type: checkinType,
         verification_image_url: imageUrl || imageData || null,
         status,
@@ -652,8 +649,8 @@ const ActivityCheckin = () => {
         ai_verification_result: verificationResult || null,
         ai_station_text: verificationResult?.ai_station_text || null,
         ai_confidence: verificationResult?.confidence || null,
-        visit_lat: location?.lat || null,
-        visit_lon: location?.lng || null,
+        visit_lat: simulationModeEffective ? null : (location?.lat || null),
+        visit_lon: simulationModeEffective ? null : (location?.lng || null),
         visited_at: new Date().toISOString(),
       };
 
@@ -704,15 +701,20 @@ const ActivityCheckin = () => {
       return data;
     },
     onSuccess: async (data, variables) => {
-      console.log(`VisitCommit ok: activity=${activityId} station=${variables.stationTflId} seq=#{${data.sequence_number}} plan_status=${data.status} visits_row_id=${data.id}`);
+      console.log(`VisitCommit ok (activity=${activityId}, station=${variables.stationTflId}, plan_status=visited)`);
       
-      // Force immediate cache invalidation and refetch to ensure state sync
+      // CRITICAL: Force immediate cache invalidation and refetch to ensure state sync
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activities"] }), // For tile updates
         queryClient.invalidateQueries({ queryKey: ["activity", activityId] }), // For activity details
         queryClient.refetchQueries({ queryKey: ["activity_state", activityId] })
       ]);
+      
+      // Also trigger global activity state change event for other components
+      window.dispatchEvent(new CustomEvent('activity-state-changed', { 
+        detail: { activityId: activityId, stationTflId: variables.stationTflId } 
+      }));
       
       console.log(`🔄 Recompute: Queries invalidated after successful visit commit`);
       

@@ -127,14 +127,17 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
   }) => {
     if (!user) return null;
 
-    // If creating from route, we need to clone the route stations
+    // If creating from route, we need to clone the route stations with names
     let station_tfl_ids: string[] = [];
     
     if (data.route_id) {
-      // Fetch route stations in sequence order
+      // Fetch route stations in sequence order with names
       const { data: routeStations, error: routeError } = await supabase
         .from('route_stations')
-        .select('station_tfl_id')
+        .select(`
+          station_tfl_id,
+          sequence_number
+        `)
         .eq('route_id', data.route_id)
         .order('sequence_number');
       
@@ -148,7 +151,7 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       // Manual activity with start/end stations
       station_tfl_ids = [data.start_station_tfl_id, data.end_station_tfl_id].filter(Boolean);
     } else {
-      // Quick check-in activity with no predefined stations
+      // Quick check-in activity - will have at least one station for proper plan
       station_tfl_ids = [];
     }
 
