@@ -31,14 +31,18 @@ const Activities = () => {
     return station ? station.name : tflId;
   };
 
-  // Helper function to count visited stations
-  const getVisitedCount = (activity: any) => {
-    if (!activity.station_tfl_ids || !Array.isArray(activity.station_tfl_ids)) return { visited: 0, total: 0 };
-    
-    // For now, we'll assume all stations are visited if the activity has ended
-    const total = activity.station_tfl_ids.length;
-    const visited = activity.status === 'completed' ? total : Math.floor(total * 0.6); // Mock progress
-    return { visited, total };
+  // Helper function to get activity state using derive RPC
+  const getActivityState = async (activityId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('derive_activity_state', { 
+        activity_id_param: activityId 
+      });
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error deriving activity state:', error);
+      return { counts: { visited: 0, total: 0 } };
+    }
   };
 
   // Auth guard
@@ -59,7 +63,7 @@ const Activities = () => {
     meta.setAttribute('content', desc);
   }, []);
 
-  // Fetch user's activities
+  // Fetch user's activities with derived state
   const { data: activities = [], isLoading, refetch } = useQuery({
     queryKey: ["activities"],
     queryFn: async () => {
@@ -68,7 +72,19 @@ const Activities = () => {
         .select("*")
         .order("started_at", { ascending: false });
       if (error) throw error;
-      return data;
+      
+      // Get derived state for each activity
+      const activitiesWithState = await Promise.all(
+        data.map(async (activity) => {
+          const derivedState = await getActivityState(activity.id);
+          return {
+            ...activity,
+            _derivedState: derivedState
+          };
+        })
+      );
+      
+      return activitiesWithState;
     },
     enabled: !!user,
   });
@@ -183,7 +199,8 @@ const Activities = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activities.map((activity: any) => {
-                const { visited, total } = getVisitedCount(activity);
+                const derivedState = activity._derivedState || { counts: { visited: 0, total: activity.station_tfl_ids?.length || 0 } };
+                const { visited, total } = derivedState.counts;
                 const statusText = activity.status === 'draft' ? 'Not started' : 
                                  activity.status === 'active' ? 'Active' : 
                                  activity.status === 'paused' ? 'Paused' : 'Completed';

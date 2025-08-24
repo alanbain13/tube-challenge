@@ -11,6 +11,30 @@ import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2 } from "lucide-reac
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
+// Interface for derived activity state
+interface DerivedActivityState {
+  activity_id: string;
+  version: number;
+  plan: Array<{
+    sequence: number;
+    station_tfl_id: string;
+    display_name: string;
+    status: 'not_visited' | 'pending' | 'verified';
+    visited_at?: string;
+    image_url?: string;
+  }>;
+  counts: {
+    total: number;
+    visited: number;
+    pending: number;
+  };
+  next_expected?: {
+    sequence: number;
+    station_tfl_id: string;
+    display_name: string;
+  } | null;
+}
+
 const ActivityDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
@@ -35,8 +59,26 @@ const ActivityDetail = () => {
     if (!loading && !user) navigate("/auth");
   }, [loading, user, navigate]);
 
-  // Fetch activity details
-  const { data: activity, isLoading, refetch: refetchActivity } = useQuery({
+  // Fetch activity with derived state (single source of truth)
+  const { data: activityState, isLoading, refetch: refetchActivityState } = useQuery({
+    queryKey: ["activity_state", id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('derive_activity_state', { 
+        activity_id_param: id 
+      });
+      if (error) throw error;
+      
+      const derivedState = data as unknown as DerivedActivityState;
+      console.log(`DerivedState(activity=${id}, version=${derivedState.version}, visited=${derivedState.counts.visited}, next=${derivedState.next_expected?.sequence || 'none'})`);
+      return derivedState;
+    },
+    enabled: !!user && !!id,
+    refetchOnWindowFocus: true,
+    staleTime: 0, // Always refetch to get latest state
+  });
+
+  // Get basic activity info for other operations
+  const { data: activity } = useQuery({
     queryKey: ["activity", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -48,28 +90,6 @@ const ActivityDetail = () => {
       return data;
     },
     enabled: !!user && !!id,
-  });
-
-  // Fetch station visits for this activity (with proper real-time updates)
-  const { data: visits = [], refetch: refetchVisits } = useQuery({
-    queryKey: ["activity_visits", id],
-    queryFn: async () => {
-      // Force a fresh query by adding timestamp to avoid stale cache
-      const { data, error } = await supabase
-        .from("station_visits")
-        .select("*")
-        .eq("activity_id", id)
-        .order("created_at", { ascending: false }); // Latest first for proper state resolution
-      if (error) throw error;
-      
-      const visitedCount = data?.filter(v => v.status === 'verified').length || 0;
-      const pendingCount = data?.filter(v => v.status === 'pending').length || 0;
-      console.log(`PlanRefetched: total=${data?.length || 0} visited=${visitedCount} pending=${pendingCount}`);
-      return data;
-    },
-    enabled: !!user && !!id,
-    refetchOnWindowFocus: true,
-    staleTime: 0, // Always refetch to get latest state
   });
 
   const handleStartJourney = async () => {
@@ -88,6 +108,7 @@ const ActivityDetail = () => {
         description: "Your activity is now active"
       });
 
+      refetchActivityState(); // Refresh state after status change
       navigate(`/activities/${activity.id}/checkin`);
     } catch (error) {
       toast({
@@ -99,27 +120,19 @@ const ActivityDetail = () => {
   };
 
   const handleFinishJourney = async () => {
-    if (!activity) return;
+    if (!activity || !activityState) return;
     
     try {
-      // Get the last visited station to set as finish
-      const lastVisit = [...visits]
-        .filter(v => v.status === 'verified')
-        .sort((a, b) => new Date(a.visited_at).getTime() - new Date(b.visited_at).getTime())
-        .pop();
-
-      // Remove unvisited stations from the plan
-      const visitedStationIds = visits
-        .filter(v => v.status === 'verified')
-        .map(v => v.station_tfl_id);
+      // Get the last visited station from derived state
+      const visitedStations = activityState.plan.filter(station => station.status === 'verified');
+      const lastVisited = visitedStations[visitedStations.length - 1];
 
       const { error } = await supabase
         .from("activities")
         .update({ 
           status: "completed",
           ended_at: new Date().toISOString(),
-          end_station_tfl_id: lastVisit?.station_tfl_id || activity.end_station_tfl_id,
-          station_tfl_ids: visitedStationIds.length > 0 ? visitedStationIds : activity.station_tfl_ids
+          end_station_tfl_id: lastVisited?.station_tfl_id || activity.end_station_tfl_id
         })
         .eq("id", activity.id);
 
@@ -127,10 +140,10 @@ const ActivityDetail = () => {
 
       toast({
         title: "Journey completed",
-        description: "Activity finished at " + (lastVisit ? getStationName(lastVisit.station_tfl_id) : "current position")
+        description: "Activity finished at " + (lastVisited ? lastVisited.display_name : "current position")
       });
 
-      refetchActivity();
+      refetchActivityState();
     } catch (error) {
       console.error('Error finishing journey:', error);
       toast({
@@ -200,7 +213,7 @@ const ActivityDetail = () => {
     );
   }
 
-  if (!activity) {
+  if (!activity || !activityState) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
         <div className="text-center">
@@ -228,40 +241,12 @@ const ActivityDetail = () => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Create merged station data with proper visit status using latest visit per station
-  const stationList = activity.station_tfl_ids || [];
+  // Use derived state for all UI rendering
+  const { plan, counts, next_expected } = activityState;
   
-  // Group visits by station and get the latest status for each
-  const latestVisitsByStation = new Map();
-  visits.forEach(visit => {
-    const existing = latestVisitsByStation.get(visit.station_tfl_id);
-    if (!existing || new Date(visit.created_at) > new Date(existing.created_at)) {
-      latestVisitsByStation.set(visit.station_tfl_id, visit);
-    }
-  });
-  
-  // Determine status sets based on latest visits only
-  const visitedStations = new Set();
-  const pendingStations = new Set();
-  
-  latestVisitsByStation.forEach((visit, stationId) => {
-    if (visit.status === 'verified') {
-      visitedStations.add(stationId);
-    } else if (visit.status === 'pending') {
-      pendingStations.add(stationId);
-    }
-  });
-  
-  // Compute next expected station (first unvisited and not pending)
-  const nextExpectedIndex = stationList.findIndex(stationId => 
-    !visitedStations.has(stationId) && !pendingStations.has(stationId)
-  );
-  const nextExpectedStation = nextExpectedIndex >= 0 ? stationList[nextExpectedIndex] : null;
-  
-  console.log(`Recompute: total=${stationList.length} visited=${visitedStations.size} pending=${pendingStations.size} next=${nextExpectedIndex >= 0 ? `#${nextExpectedIndex + 1}:${getStationName(nextExpectedStation)}` : 'none'}`);
-  
-  if (nextExpectedStation) {
-    console.log(`HUD next expected: #${nextExpectedIndex + 1} ${getStationName(nextExpectedStation)} | status=ready`);
+  // Log HUD state
+  if (next_expected) {
+    console.log(`HUD(next=${next_expected.sequence}:${next_expected.display_name}, source=derive, version=${activityState.version})`);
   }
 
   return (
@@ -313,7 +298,7 @@ const ActivityDetail = () => {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Visited Count</div>
-                  <div className="font-medium">{visitedStations.size}/{stationList.length} stations</div>
+                  <div className="font-medium">{counts.visited}/{counts.total} stations</div>
                 </div>
               </div>
             </CardContent>
@@ -326,44 +311,32 @@ const ActivityDetail = () => {
               <CardDescription>Journey progress through stations</CardDescription>
             </CardHeader>
             <CardContent>
-              {stationList.length === 0 ? (
+              {plan.length === 0 ? (
                 <p className="text-muted-foreground">No stations defined for this activity</p>
               ) : (
                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                   {stationList.map((stationId: string, index: number) => {
-                     // Get the latest visit for this station from our processed map
-                     const visit = latestVisitsByStation.get(stationId);
-                     
-                     // Determine visit status based on actual station_visits data
-                     let visitStatus = 'not_visited';
-                     if (visit) {
-                       visitStatus = visit.status === 'verified' ? 'visited' : 
-                                   visit.status === 'pending' ? 'pending' : 'not_visited';
-                     }
-                     
-                     const statusColor = visitStatus === 'visited' ? 'bg-red-500' : 
-                                       visitStatus === 'pending' ? 'bg-pink-500' : 'bg-white border-2 border-gray-300';
+                   {plan.map((station) => {
+                     const statusColor = station.status === 'verified' ? 'bg-red-500' : 
+                                       station.status === 'pending' ? 'bg-pink-500' : 'bg-white border-2 border-gray-300';
                      
                      return (
-                       <div key={`${stationId}-${index}`} className="flex items-center justify-between p-3 border rounded-lg">
+                       <div key={`${station.station_tfl_id}-${station.sequence}`} className="flex items-center justify-between p-3 border rounded-lg">
                          <div className="flex items-center gap-3">
-                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${visitStatus === 'not_visited' ? 'text-gray-600' : 'text-white'}`}>
-                             {index + 1}
+                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${station.status === 'not_visited' ? 'text-gray-600' : 'text-white'}`}>
+                             {station.sequence}
                            </div>
                            <div>
-                             <div className="font-medium">{getStationName(stationId)}</div>
-                             {visit && visit.visited_at && visitStatus === 'visited' && (
+                             <div className="font-medium">{station.display_name}</div>
+                             {station.visited_at && station.status === 'verified' && (
                                <div className="text-xs text-muted-foreground">
-                                 Visited {new Date(visit.visited_at).toLocaleTimeString()}
-                                 {visit.verification_method === 'ai_image' && visit.checkin_type === 'simulation' && (
-                                   <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">SIM</span>
-                                 )}
+                                 Visited {new Date(station.visited_at).toLocaleTimeString()}
+                                 <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">SIM</span>
                                </div>
                              )}
                            </div>
                          </div>
-                         <Badge variant={visitStatus === 'visited' ? 'default' : visitStatus === 'pending' ? 'secondary' : 'outline'}>
-                           {visitStatus === 'visited' ? 'Visited' : visitStatus === 'pending' ? 'Pending' : 'Not visited'}
+                         <Badge variant={station.status === 'verified' ? 'default' : station.status === 'pending' ? 'secondary' : 'outline'}>
+                           {station.status === 'verified' ? 'Visited' : station.status === 'pending' ? 'Pending' : 'Not visited'}
                          </Badge>
                        </div>
                      );

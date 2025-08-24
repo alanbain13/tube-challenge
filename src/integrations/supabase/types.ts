@@ -443,7 +443,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      derive_activity_state: {
+        Args: { activity_id_param: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
