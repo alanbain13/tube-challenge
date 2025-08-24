@@ -54,10 +54,11 @@ const ActivityDetail = () => {
     return station ? station.name : tflId;
   };
 
-  // Auth guard
+  // Auth guard and logging
   useEffect(() => {
+    console.log(`ActivityPage: id=${id}, user=${user?.id || 'none'}`);
     if (!loading && !user) navigate("/auth");
-  }, [loading, user, navigate]);
+  }, [loading, user, navigate, id]);
 
   // Fetch activity with derived state (single source of truth)
   const { data: activityState, isLoading, refetch: refetchActivityState } = useQuery({
@@ -81,11 +82,11 @@ const ActivityDetail = () => {
   const { data: activity } = useQuery({
     queryKey: ["activity", id],
     queryFn: async () => {
-      const { data, error } = await supabase
+    const { data, error } = await supabase
         .from("activities")
         .select("*")
         .eq("id", id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -214,13 +215,34 @@ const ActivityDetail = () => {
   }
 
   if (!activity || !activityState) {
+    // Better error handling with ownership check
+    const isOwnershipIssue = activity && activity.user_id !== user?.id;
+    const hasEmptyPlan = activityState && activityState.counts.total === 0;
+    const errorMessage = isOwnershipIssue 
+      ? "Not your activity" 
+      : hasEmptyPlan
+      ? "Activity exists but has no planned stations"
+      : "Activity not found";
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold mb-4">Activity not found</h2>
-          <Button onClick={() => navigate("/activities")}>
-            Back to Activities
-          </Button>
+          <h2 className="text-xl font-semibold mb-4">{errorMessage}</h2>
+          <p className="text-muted-foreground mb-4">
+            {isOwnershipIssue 
+              ? "This activity belongs to another user" 
+              : activity?.id 
+              ? `Activity ID: ${activity.id}` 
+              : "The requested activity could not be found"}
+          </p>
+          <div className="space-x-2">
+            <Button onClick={() => navigate("/activities")}>
+              Back to Activities
+            </Button>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Reload Page
+            </Button>
+          </div>
         </div>
       </div>
     );

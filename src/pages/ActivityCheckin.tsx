@@ -710,8 +710,11 @@ const ActivityCheckin = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activities"] }), // For tile updates
+        queryClient.invalidateQueries({ queryKey: ["activity", activityId] }), // For activity details
         queryClient.refetchQueries({ queryKey: ["activity_state", activityId] })
       ]);
+      
+      console.log(`🔄 Recompute: Queries invalidated after successful visit commit`);
       
       // Only show toast for GPS checkins since image checkins handle their own success toasts
       if (variables.checkinType === 'gps') {

@@ -99,7 +99,7 @@ const ActivityEdit = () => {
         .from('activities')
         .select('*')
         .eq('id', activityId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching activity:', error);

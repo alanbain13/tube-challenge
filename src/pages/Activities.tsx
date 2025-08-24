@@ -253,7 +253,10 @@ const Activities = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigate(`/activities/${activity.id}`)}
+                         onClick={() => {
+                            console.log(`🧭 NAV: View activity clicked: ${activity.id}`);
+                            navigate(`/activities/${activity.id}`);
+                          }}
                           className="flex items-center gap-1"
                         >
                           <Eye className="w-4 h-4" />
@@ -262,7 +265,10 @@ const Activities = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigate(`/activities/${activity.id}/edit`)}
+                          onClick={() => {
+                            console.log(`🧭 NAV: Edit activity clicked: ${activity.id}`);
+                            navigate(`/activities/${activity.id}/edit`);
+                          }}
                           className="flex items-center gap-1"
                         >
                           <Edit className="w-4 h-4" />
@@ -270,7 +276,10 @@ const Activities = () => {
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => handleStartOrResumeActivity(activity.id, activity.status)}
+                          onClick={() => {
+                            console.log(`🧭 NAV: Start/Resume activity clicked: ${activity.id}, status: ${activity.status}`);
+                            handleStartOrResumeActivity(activity.id, activity.status);
+                          }}
                           className="flex items-center gap-1"
                           disabled={activity.status !== 'active' && activities.some((a: any) => a.status === 'active' && a.id !== activity.id)}
                         >

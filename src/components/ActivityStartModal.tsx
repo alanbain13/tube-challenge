@@ -127,6 +127,31 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
   }) => {
     if (!user) return null;
 
+    // If creating from route, we need to clone the route stations
+    let station_tfl_ids: string[] = [];
+    
+    if (data.route_id) {
+      // Fetch route stations in sequence order
+      const { data: routeStations, error: routeError } = await supabase
+        .from('route_stations')
+        .select('station_tfl_id')
+        .eq('route_id', data.route_id)
+        .order('sequence_number');
+      
+      if (routeError) throw routeError;
+      
+      if (routeStations && routeStations.length > 0) {
+        station_tfl_ids = routeStations.map(rs => rs.station_tfl_id);
+        console.log(`CloneRoute: activity_id=pending stations_copied=${station_tfl_ids.length} order_preserved=true`);
+      }
+    } else if (data.start_station_tfl_id) {
+      // Manual activity with start/end stations
+      station_tfl_ids = [data.start_station_tfl_id, data.end_station_tfl_id].filter(Boolean);
+    } else {
+      // Quick check-in activity with no predefined stations
+      station_tfl_ids = [];
+    }
+
     const { data: activity, error } = await supabase
       .from('activities')
       .insert({
@@ -139,12 +164,17 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         status: data.status,
         start_latitude: data.start_latitude,
         start_longitude: data.start_longitude,
-        station_tfl_ids: data.route_id ? [] : [data.start_station_tfl_id, data.end_station_tfl_id].filter(Boolean)
+        station_tfl_ids: station_tfl_ids
       })
       .select()
       .single();
 
     if (error) throw error;
+    
+    if (data.route_id && station_tfl_ids.length > 0) {
+      console.log(`CloneRoute: activity_id=${activity.id} stations_copied=${station_tfl_ids.length} order_preserved=true`);
+    }
+    
     return activity;
   };
 
@@ -172,8 +202,9 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         description: "Check in at your start station to begin"
       });
 
+      console.log(`🧭 NAV: Navigating to activity detail: ${activity.id}`);
       onOpenChange(false);
-      navigate(`/activities/${activity.id}/checkin`);
+      navigate(`/activities/${activity.id}`);
     } catch (error) {
       toast({
         title: "Error creating activity",
@@ -207,6 +238,7 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         description: "You're checked in and ready to go!"
       });
 
+      console.log(`🧭 NAV: Navigating to activity checkin: ${activity.id}`);
       onOpenChange(false);
       navigate(`/activities/${activity.id}/checkin`);
     } catch (error) {
@@ -243,8 +275,9 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         description: "Check in at the start station to begin"
       });
 
+      console.log(`🧭 NAV: Navigating to activity detail: ${activity.id}`);
       onOpenChange(false);
-      navigate(`/activities/${activity.id}/checkin`);
+      navigate(`/activities/${activity.id}`);
     } catch (error) {
       toast({
         title: "Error creating route activity",
