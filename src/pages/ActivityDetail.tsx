@@ -54,9 +54,9 @@ const ActivityDetail = () => {
     return station ? station.name : tflId;
   };
 
-  // Auth guard and logging
+  // Auth guard and navigation logging
   useEffect(() => {
-    console.log(`ActivityPage: id=${id}, user=${user?.id || 'none'}`);
+    console.log(`🧭 NAV: ActivityDetail page entry - id=${id}, user=${user?.id || 'none'}`);
     if (!loading && !user) navigate("/auth");
   }, [loading, user, navigate, id]);
 
@@ -215,30 +215,42 @@ const ActivityDetail = () => {
   }
 
   if (!activity || !activityState) {
-    // Better error handling with ownership check
+    // Enhanced error handling with specific diagnostics
     const isOwnershipIssue = activity && activity.user_id !== user?.id;
     const hasEmptyPlan = activityState && activityState.counts.total === 0;
-    const errorMessage = isOwnershipIssue 
-      ? "Not your activity" 
-      : hasEmptyPlan
-      ? "Activity exists but has no planned stations"
-      : "Activity not found";
+    const activityExists = !!activity;
+    const stateExists = !!activityState;
+    
+    console.log(`🚨 ActivityDetail Error - activity=${activityExists} state=${stateExists} ownership=${!isOwnershipIssue} plan=${activityState?.counts.total || 0}`);
+    
+    let errorTitle = "Activity not found";
+    let errorDescription = "The requested activity could not be found";
+    
+    if (activityExists && isOwnershipIssue) {
+      errorTitle = "Access denied";
+      errorDescription = "This activity belongs to another user";
+    } else if (activityExists && stateExists && hasEmptyPlan) {
+      errorTitle = "Empty activity plan";
+      errorDescription = "This activity has no planned stations. You can edit it to add stations.";
+    } else if (activityExists && !stateExists) {
+      errorTitle = "Activity state error";
+      errorDescription = `Activity exists but state derivation failed. ID: ${activity.id}`;
+    }
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-4">{errorMessage}</h2>
-          <p className="text-muted-foreground mb-4">
-            {isOwnershipIssue 
-              ? "This activity belongs to another user" 
-              : activity?.id 
-              ? `Activity ID: ${activity.id}` 
-              : "The requested activity could not be found"}
-          </p>
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-semibold mb-4">{errorTitle}</h2>
+          <p className="text-muted-foreground mb-6">{errorDescription}</p>
           <div className="space-x-2">
             <Button onClick={() => navigate("/activities")}>
               Back to Activities
             </Button>
+            {activityExists && hasEmptyPlan && (
+              <Button variant="outline" onClick={() => navigate(`/activities/${activity.id}/edit`)}>
+                Edit Activity
+              </Button>
+            )}
             <Button variant="outline" onClick={() => window.location.reload()}>
               Reload Page
             </Button>

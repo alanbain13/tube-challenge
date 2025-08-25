@@ -131,7 +131,7 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
     let station_tfl_ids: string[] = [];
     
     if (data.route_id) {
-      // Fetch route stations in sequence order with names
+      // Fetch route stations in sequence order
       const { data: routeStations, error: routeError } = await supabase
         .from('route_stations')
         .select(`
@@ -145,14 +145,38 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       
       if (routeStations && routeStations.length > 0) {
         station_tfl_ids = routeStations.map(rs => rs.station_tfl_id);
-        console.log(`CloneRoute: activity_id=pending stations_copied=${station_tfl_ids.length} order_preserved=true`);
+        console.log(`Route clone: ${station_tfl_ids.length} stations from route ${data.route_id}`);
+      } else {
+        console.warn(`Route ${data.route_id} has no stations - creating empty activity`);
       }
     } else if (data.start_station_tfl_id) {
-      // Manual activity with start/end stations
-      station_tfl_ids = [data.start_station_tfl_id, data.end_station_tfl_id].filter(Boolean);
+      // Manual activity with start/end stations - ensure proper order
+      station_tfl_ids = data.end_station_tfl_id ? 
+        [data.start_station_tfl_id, data.end_station_tfl_id] : 
+        [data.start_station_tfl_id];
+      console.log(`Manual activity: ${station_tfl_ids.length} stations planned`);
     } else {
-      // Quick check-in activity - will have at least one station for proper plan
+      // Quick check-in activity - empty plan initially, will be populated on first check-in
       station_tfl_ids = [];
+      console.log(`Quick check-in activity: empty initial plan`);
+    }
+
+    // Ensure we have valid station IDs by checking against stations table
+    if (station_tfl_ids.length > 0) {
+      const { data: validStations, error: stationError } = await supabase
+        .from('stations')
+        .select('tfl_id, name')
+        .in('tfl_id', station_tfl_ids);
+      
+      if (stationError) throw stationError;
+      
+      const validTflIds = validStations?.map(s => s.tfl_id) || [];
+      const invalidIds = station_tfl_ids.filter(id => !validTflIds.includes(id));
+      
+      if (invalidIds.length > 0) {
+        console.warn(`Invalid station IDs removed: ${invalidIds.join(', ')}`);
+        station_tfl_ids = station_tfl_ids.filter(id => validTflIds.includes(id));
+      }
     }
 
     const { data: activity, error } = await supabase
@@ -174,10 +198,12 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
 
     if (error) throw error;
     
-    if (data.route_id && station_tfl_ids.length > 0) {
+    // Telemetry logging
+    if (data.route_id) {
       console.log(`CloneRoute: activity_id=${activity.id} stations_copied=${station_tfl_ids.length} order_preserved=true`);
     }
     
+    console.log(`ActivityCreated: id=${activity.id} user=${user.id} plan_size=${station_tfl_ids.length}`);
     return activity;
   };
 

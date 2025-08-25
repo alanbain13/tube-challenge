@@ -104,6 +104,8 @@ const Activities = () => {
 
   const handleStartOrResumeActivity = async (activityId: string, currentStatus: string) => {
     try {
+      console.log(`🧭 NAV: Starting/resuming activity - id=${activityId} status=${currentStatus}`);
+      
       // If starting a new activity, pause any currently active activities
       if (currentStatus === 'draft') {
         const { error: pauseError } = await supabase
@@ -113,6 +115,16 @@ const Activities = () => {
           .eq('status', 'active');
 
         if (pauseError) throw pauseError;
+        
+        // Update the current activity to active
+        const { error: activateError } = await supabase
+          .from("activities")
+          .update({ status: 'active' })
+          .eq('id', activityId);
+          
+        if (activateError) throw activateError;
+        
+        console.log(`Activity ${activityId} activated`);
       }
 
       console.log(`🧭 NAV: Navigating to activity checkin: ${activityId}`);

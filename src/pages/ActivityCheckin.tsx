@@ -999,39 +999,56 @@ const ActivityCheckin = () => {
               )}
             </CardTitle>
              <p className="text-sm text-muted-foreground">
-               {(() => {
-                  if (!canUploadImage()) {
-                    const pendingStation = activityState?.plan.find(station => station.status === 'pending');
-                    if (pendingStation) {
-                      const pendingMessage = `Finish or cancel the current verification at ${pendingStation.display_name} before checking into another station.`;
-                      console.log('HUD next expected: pending verification blocks new checkins');
-                     return pendingMessage;
+                {(() => {
+                   if (!canUploadImage()) {
+                     const pendingStation = activityState?.plan.find(station => station.status === 'pending');
+                     if (pendingStation) {
+                      console.log('HUD: pending verification blocks new checkins');
+                      return `Finish or cancel the current verification at ${pendingStation.display_name} before checking into another station.`;
+                     }
+                     
+                     if (activity?.status === 'completed') {
+                       console.log('HUD: activity completed');
+                       return "Activity completed - all stations visited";
+                     }
+                     
+                     const nextExpected = getNextExpectedStation();
+                     if (!nextExpected && activityState?.counts.total > 0) {
+                       console.log('HUD: all planned stations completed');
+                       return "All planned stations completed! You can finish the activity.";
+                     }
+                     
+                     if (!nextExpected && activityState?.counts.total === 0) {
+                       console.log('HUD: empty activity plan - ready for any station');
+                       return "No planned route. Take a photo at any station to start.";
+                     }
+                     
+                     console.log('HUD: processing checkin state');
+                     return "Processing your check-in...";
                    }
                    
-                   if (activity?.status === 'completed') {
-                     console.log('HUD next expected: activity completed');
-                     return "Activity completed - all stations visited";
-                   }
-                   
+                   // Can upload - show next expected station
                    const nextExpected = getNextExpectedStation();
                    if (!nextExpected) {
-                     console.log('HUD next expected: all planned stations completed');
-                     return "All planned stations completed! You can finish the activity.";
+                     if (activityState?.counts.total === 0) {
+                       console.log('HUD: empty plan - any station allowed');  
+                       return "No planned route. Take a photo at any station to start your journey.";
+                     } else {
+                       console.log('HUD: all stations complete - ready to finish');
+                       return "All planned stations completed! Take a final photo or finish the activity.";
+                     }
                    }
                    
-                   console.log('HUD next expected: processing checkin');
-                   return "Processing your check-in...";
-                 }
-                 
-                 const nextExpected = getNextExpectedStation();
-                 const nextStation = nextExpected ? stations.find(s => s.id === nextExpected) : null;
-                 const sequence = nextExpected && activity?.station_tfl_ids ? 
-                   activity.station_tfl_ids.indexOf(nextExpected) + 1 : null;
-                 
-                 console.log(`HUD next expected: ${sequence ? `#${sequence} ${nextStation?.name || nextExpected}` : 'none'} | status=ready`);
-                 return "Take a photo of the station roundel or upload an image. You must visit stations in sequence.";
-               })()}
-             </p>
+                   const nextStation = stations.find(s => s.id === nextExpected);
+                   const nextStationName = nextStation?.name || 
+                     activityState?.next_expected?.display_name || 
+                     nextExpected;
+                   const sequence = activityState?.next_expected?.sequence || 1;
+                   
+                   console.log(`HUD: next expected #${sequence} ${nextStationName} | status=ready`);
+                   return `Next station: #${sequence} ${nextStationName}. Take a photo of the roundel.`;
+                })()}
+              </p>
           </CardHeader>
           <CardContent className="space-y-4">
             {canUploadImage() && !capturedImage && (
@@ -1060,29 +1077,33 @@ const ActivityCheckin = () => {
               </div>
             )}
 
-            {!canUploadImage() && (
-              <div className="text-center py-8">
-                <div className="text-muted-foreground">
-                  {(() => {
-                     const pendingStation = activityState?.plan.find(station => station.status === 'pending');
-                     if (pendingStation) {
-                       return `⏳ Verification pending at ${pendingStation.display_name}`;
-                    }
-                    
-                    if (activity?.status === 'completed') {
-                      return "🎉 Activity completed! All stations have been visited.";
-                    }
-                    
-                    const nextExpected = getNextExpectedStation();
-                    if (!nextExpected) {
-                      return "🎉 All planned stations completed! You can finish the activity.";
-                    }
-                    
-                    return "⏳ Processing your check-in...";
-                  })()}
-                </div>
-              </div>
-            )}
+             {!canUploadImage() && (
+               <div className="text-center py-8">
+                 <div className="text-muted-foreground">
+                   {(() => {
+                      const pendingStation = activityState?.plan.find(station => station.status === 'pending');
+                      if (pendingStation) {
+                        return `⏳ Verification pending at ${pendingStation.display_name}`;
+                     }
+                     
+                     if (activity?.status === 'completed') {
+                       return "🎉 Activity completed! All stations have been visited.";
+                     }
+                     
+                     const nextExpected = getNextExpectedStation();
+                     if (!nextExpected && activityState?.counts.total > 0) {
+                       return "🎉 All planned stations completed! You can finish the activity.";
+                     }
+                     
+                     if (!nextExpected && activityState?.counts.total === 0) {
+                       return "No planned route. Ready to check in at any station.";
+                     }
+                     
+                     return "Activity processing...";
+                   })()}
+                 </div>
+               </div>
+             )}
 
             <input
               ref={fileInputRef}
