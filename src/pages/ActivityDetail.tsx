@@ -56,7 +56,7 @@ const ActivityDetail = () => {
 
   // Auth guard and navigation logging
   useEffect(() => {
-    console.log(`🧭 NAV: ActivityDetail page entry - id=${id}, user=${user?.id || 'none'}`);
+    console.log(`🧭 ActivityPage enter id=${id} user=${user?.id || 'none'}`);
     if (!loading && !user) navigate("/auth");
   }, [loading, user, navigate, id]);
 
@@ -67,10 +67,14 @@ const ActivityDetail = () => {
       const { data, error } = await supabase.rpc('derive_activity_state', { 
         activity_id_param: id 
       });
-      if (error) throw error;
+      if (error) {
+        console.log(`DerivedState id=${id} total=0 visited=0 next=none:Unknown err=${error.message}`);
+        throw error;
+      }
       
       const derivedState = data as unknown as DerivedActivityState;
-      console.log(`DerivedState(activity=${id}, version=${derivedState.version}, visited=${derivedState.counts.visited}, next=${derivedState.next_expected?.sequence || 'none'})`);
+      const nextName = derivedState.next_expected?.display_name || 'none';
+      console.log(`DerivedState id=${id} total=${derivedState.counts.total} visited=${derivedState.counts.visited} next=#${derivedState.next_expected?.sequence || 'none'}:${nextName} err=null`);
       return derivedState;
     },
     enabled: !!user && !!id,
@@ -221,20 +225,18 @@ const ActivityDetail = () => {
     const activityExists = !!activity;
     const stateExists = !!activityState;
     
-    console.log(`🚨 ActivityDetail Error - activity=${activityExists} state=${stateExists} ownership=${!isOwnershipIssue} plan=${activityState?.counts.total || 0}`);
-    
     let errorTitle = "Activity not found";
     let errorDescription = "The requested activity could not be found";
     
     if (activityExists && isOwnershipIssue) {
-      errorTitle = "Access denied";
+      errorTitle = "Not your activity";
       errorDescription = "This activity belongs to another user";
     } else if (activityExists && stateExists && hasEmptyPlan) {
       errorTitle = "Empty activity plan";
       errorDescription = "This activity has no planned stations. You can edit it to add stations.";
     } else if (activityExists && !stateExists) {
       errorTitle = "Activity state error";
-      errorDescription = `Activity exists but state derivation failed. ID: ${activity.id}`;
+      errorDescription = `Activity exists but state derivation failed. Please reload.`;
     }
     
     return (
@@ -244,7 +246,7 @@ const ActivityDetail = () => {
           <p className="text-muted-foreground mb-6">{errorDescription}</p>
           <div className="space-x-2">
             <Button onClick={() => navigate("/activities")}>
-              Back to Activities
+              Reload Activities
             </Button>
             {activityExists && hasEmptyPlan && (
               <Button variant="outline" onClick={() => navigate(`/activities/${activity.id}/edit`)}>

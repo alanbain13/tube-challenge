@@ -127,8 +127,9 @@ const ActivityCheckin = () => {
   } | null>(null);
   const { uploadImage, isUploading } = useImageUpload();
 
-  // Log simulation mode config on component mount
+  // Page entry logging and simulation mode config
   useEffect(() => {
+    console.log(`🧭 ActivityPage enter id=${activityId} user=${user?.id || 'none'}`);
     console.log('🧭 Checkin: Config loaded -', { 
       GEOFENCE_RADIUS_METERS, 
       simulationModeEnv,
@@ -136,7 +137,7 @@ const ActivityCheckin = () => {
       simulationModeEffective,
       isDev: import.meta.env.DEV 
     });
-  }, [simulationModeEnv, simulationModeUser, simulationModeEffective]);
+  }, [activityId, user?.id, simulationModeEnv, simulationModeUser, simulationModeEffective]);
 
   // Auth guard
   useEffect(() => {
@@ -172,10 +173,14 @@ const ActivityCheckin = () => {
       const { data, error } = await supabase.rpc('derive_activity_state', { 
         activity_id_param: activityId 
       });
-      if (error) throw error;
+      if (error) {
+        console.log(`DerivedState id=${activityId} total=0 visited=0 next=none:Unknown err=${error.message}`);
+        throw error;
+      }
       
       const derivedState = data as unknown as DerivedActivityState;
-      console.log(`DerivedState(activity=${activityId}, version=${derivedState.version}, visited=${derivedState.counts.visited}, next=${derivedState.next_expected?.sequence || 'none'})`);
+      const nextName = derivedState.next_expected?.display_name || 'none';
+      console.log(`DerivedState id=${activityId} total=${derivedState.counts.total} visited=${derivedState.counts.visited} next=#${derivedState.next_expected?.sequence || 'none'}:${nextName} err=null`);
       return derivedState;
     },
     enabled: !!user && !!activityId,
@@ -701,22 +706,21 @@ const ActivityCheckin = () => {
       return data;
     },
     onSuccess: async (data, variables) => {
-      console.log(`VisitCommit ok (activity=${activityId}, station=${variables.stationTflId}, plan_status=visited)`);
+      // Get sequence number from the derived state for logging
+      const sequence = activityState?.next_expected?.sequence || 1;
+      console.log(`VisitCommit ok: activity=${activityId} station=${variables.stationTflId} seq=#${sequence} status=verified`);
       
-      // CRITICAL: Force immediate cache invalidation and refetch to ensure state sync
+      // Atomic cache invalidation for immediate UI updates
+      console.log(`Query invalidations executed: activity_state, activities`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
-        queryClient.invalidateQueries({ queryKey: ["activities"] }), // For tile updates
-        queryClient.invalidateQueries({ queryKey: ["activity", activityId] }), // For activity details
-        queryClient.refetchQueries({ queryKey: ["activity_state", activityId] })
+        queryClient.invalidateQueries({ queryKey: ["activities"] })
       ]);
       
       // Also trigger global activity state change event for other components
       window.dispatchEvent(new CustomEvent('activity-state-changed', { 
         detail: { activityId: activityId, stationTflId: variables.stationTflId } 
       }));
-      
-      console.log(`🔄 Recompute: Queries invalidated after successful visit commit`);
       
       // Only show toast for GPS checkins since image checkins handle their own success toasts
       if (variables.checkinType === 'gps') {

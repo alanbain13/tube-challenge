@@ -45,8 +45,9 @@ const Activities = () => {
     }
   };
 
-  // Auth guard
+  // Page entry logging and auth guard
   useEffect(() => {
+    console.log(`🧭 ActivityPage enter id=dashboard user=${user?.id || 'none'}`);
     if (!loading && !user) navigate("/auth");
   }, [loading, user, navigate]);
 
