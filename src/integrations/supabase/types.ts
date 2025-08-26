@@ -317,6 +317,7 @@ export type Database = {
           id: string
           is_bypassed: boolean | null
           is_end_station: boolean | null
+          is_simulation: boolean | null
           is_start_station: boolean | null
           latitude: number | null
           longitude: number | null
@@ -343,6 +344,7 @@ export type Database = {
           id?: string
           is_bypassed?: boolean | null
           is_end_station?: boolean | null
+          is_simulation?: boolean | null
           is_start_station?: boolean | null
           latitude?: number | null
           longitude?: number | null
@@ -369,6 +371,7 @@ export type Database = {
           id?: string
           is_bypassed?: boolean | null
           is_end_station?: boolean | null
+          is_simulation?: boolean | null
           is_start_station?: boolean | null
           latitude?: number | null
           longitude?: number | null

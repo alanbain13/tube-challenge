@@ -144,6 +144,9 @@ export function resolveStation(
     score: winner.score
   });
 
+  // Log the resolution for debugging
+  console.log(`🎯 Resolved ${winner.station.name} -> ${winner.station.id}`);
+
   // Check for ties (multiple high-scoring candidates)
   const topCandidates = candidates.filter(c => c.score === winner.score);
   if (topCandidates.length > 1) {

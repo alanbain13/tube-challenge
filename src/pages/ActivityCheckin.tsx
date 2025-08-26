@@ -633,7 +633,7 @@ const ActivityCheckin = () => {
       
       // Determine status and verification method based on simulation mode
       let status = simulationModeEffective ? 'verified' : 'pending';
-      let verificationMethod = simulationModeEffective ? 'simulation' : 'manual';
+      let verificationMethod = simulationModeEffective ? 'ai_image' : 'manual';  // Use valid enum value
       
       if (checkinType === 'image' && !simulationModeEffective) {
         verificationMethod = 'roundel_ai';
@@ -657,10 +657,11 @@ const ActivityCheckin = () => {
         visit_lat: simulationModeEffective ? null : (location?.lat || null),
         visit_lon: simulationModeEffective ? null : (location?.lng || null),
         visited_at: new Date().toISOString(),
+        is_simulation: simulationModeEffective,
       };
 
       console.log('🧭 Checkin: insert payload =', visitData);
-      console.log('🧭 Checkin: status=', visitData.status, 'verification_method=', visitData.verification_method);
+      console.log(`🧭 VisitCommit payload verification_method=${visitData.verification_method} is_simulation=${visitData.is_simulation}`);
 
       const { data, error } = await supabase
         .from("station_visits")
