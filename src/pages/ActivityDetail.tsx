@@ -33,6 +33,9 @@ interface DerivedActivityState {
     station_tfl_id: string;
     display_name: string;
   } | null;
+  warnings?: {
+    empty_plan?: boolean;
+  };
 }
 
 const ActivityDetail = () => {
@@ -74,7 +77,8 @@ const ActivityDetail = () => {
       
       const derivedState = data as unknown as DerivedActivityState;
       const nextName = derivedState.next_expected?.display_name || 'none';
-      console.log(`DerivedState id=${id} total=${derivedState.counts.total} visited=${derivedState.counts.visited} next=#${derivedState.next_expected?.sequence || 'none'}:${nextName} err=null`);
+      const warnings = derivedState.warnings || {};
+      console.info("DerivedState", {id, total: derivedState.counts.total, visited: derivedState.counts.visited, next: derivedState.next_expected?.sequence || 'none', warnings});
       return derivedState;
     },
     enabled: !!user && !!id,
@@ -340,6 +344,34 @@ const ActivityDetail = () => {
             </CardContent>
           </Card>
 
+          {/* Empty Plan Warning */}
+          {activityState.warnings?.empty_plan && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader>
+                <CardTitle className="text-orange-800">This activity has no planned stations</CardTitle>
+                <CardDescription className="text-orange-700">
+                  You can edit the activity to add stations or delete it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex gap-2">
+                <Button onClick={() => navigate(`/activities/${activity.id}/edit`)} variant="outline">
+                  Edit Plan
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteModal({ 
+                    open: true, 
+                    activityId: activity.id, 
+                    title: activity.title || "Untitled Activity" 
+                  })}
+                  className="text-destructive hover:text-destructive"
+                >
+                  Delete Activity
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Stations List */}
           <Card>
             <CardHeader>
@@ -385,13 +417,13 @@ const ActivityDetail = () => {
           {/* Actions */}
           <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4">
             <div className="flex gap-2 justify-center">
-              {activity.status === 'draft' && (
+              {activity.status === 'draft' && !activityState.warnings?.empty_plan && (
                 <Button onClick={handleStartJourney} className="flex items-center gap-2">
                   <Play className="w-4 h-4" />
                   Start Journey
                 </Button>
               )}
-               {activity.status === 'active' && (
+               {activity.status === 'active' && !activityState.warnings?.empty_plan && (
                  <>
                    <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
                      <Play className="w-4 h-4" />

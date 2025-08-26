@@ -177,6 +177,20 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         console.warn(`Invalid station IDs removed: ${invalidIds.join(', ')}`);
         station_tfl_ids = station_tfl_ids.filter(id => validTflIds.includes(id));
       }
+      
+      // Block creation if no valid stations remain
+      if (station_tfl_ids.length === 0) {
+        throw new Error("No valid stations selected. Please pick at least one valid station.");
+      }
+    }
+    
+    // For manual/route activities, ensure we have at least one station
+    if (!data.start_latitude && station_tfl_ids.length === 0) {
+      if (data.route_id) {
+        throw new Error("This route has no valid stations. Please edit the route and try again.");
+      } else {
+        throw new Error("No valid stations selected. Please pick at least one valid station.");
+      }
     }
 
     const { data: activity, error } = await supabase
@@ -203,7 +217,7 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       console.log(`CloneRoute: activity_id=${activity.id} stations_copied=${station_tfl_ids.length} order_preserved=true`);
     }
     
-    console.log(`ActivityCreated: id=${activity.id} user=${user.id} plan_size=${station_tfl_ids.length}`);
+    console.info("ActivityCreated", {id: activity.id, plan_size: station_tfl_ids.length});
     return activity;
   };
 
@@ -235,9 +249,10 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       onOpenChange(false);
       navigate(`/activities/${activity.id}`);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Please try again";
       toast({
         title: "Error creating activity",
-        description: "Please try again",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -271,9 +286,10 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       onOpenChange(false);
       navigate(`/activities/${activity.id}/checkin`);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Please try again";
       toast({
         title: "Error starting activity",
-        description: "Please try again",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -308,9 +324,10 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       onOpenChange(false);
       navigate(`/activities/${activity.id}`);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Please try again";
       toast({
         title: "Error creating route activity",
-        description: "Please try again",
+        description: errorMessage,
         variant: "destructive"
       });
     }
