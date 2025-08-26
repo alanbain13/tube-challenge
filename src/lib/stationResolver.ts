@@ -144,8 +144,23 @@ export function resolveStation(
     score: winner.score
   });
 
-  // Log the resolution for debugging
-  console.log(`🎯 Resolved ${winner.station.name} -> ${winner.station.id}`);
+  const result = {
+    station_id: winner.station.id,
+    tfl_id: winner.station.id, // In our data structure, id IS the TfL ID
+    display_name: winner.station.name,
+    coords: {
+      lat: winner.station.coordinates[1],
+      lon: winner.station.coordinates[0]
+    },
+    source: "ocr" as const,
+    matching_rule: winner.rule
+  };
+
+  // Log the resolved result with special logging for Nine Elms
+  if (result.display_name.toLowerCase().includes('nine elms')) {
+    console.log(`Resolved Nine Elms -> ${result.tfl_id}`);
+  }
+  console.log(`Station resolved from "${stationTextRaw}" -> ID: ${result.station_id}, TfL ID: ${result.tfl_id}, Name: ${result.display_name}`);
 
   // Check for ties (multiple high-scoring candidates)
   const topCandidates = candidates.filter(c => c.score === winner.score);
@@ -157,17 +172,7 @@ export function resolveStation(
     };
   }
 
-  return {
-    station_id: winner.station.id,
-    tfl_id: winner.station.id, // In our data structure, id IS the TfL ID
-    display_name: winner.station.name,
-    coords: {
-      lat: winner.station.coordinates[1],
-      lon: winner.station.coordinates[0]
-    },
-    source: "ocr",
-    matching_rule: winner.rule
-  };
+  return result;
 }
 
 /**

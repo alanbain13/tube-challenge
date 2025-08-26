@@ -7,20 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, MapPin, Clock, CheckCircle, XCircle, Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Camera, MapPin, Clock, CheckCircle, ArrowLeft, Loader2, AlertTriangle, XCircle } from "lucide-react";
 import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
 import { CheckinConfirmation } from "@/components/CheckinConfirmation";
-import { RecentVisitsList } from "@/components/RecentVisitsList";
 import { useImageUpload } from "@/hooks/useImageUpload";
 
 // Configuration
 const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
 const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
 
-// Interface for derived activity state (same as ActivityDetail)
+// Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
   activity_id: string;
   version: number;
@@ -32,43 +31,27 @@ interface DerivedActivityState {
     visited_at?: string;
     image_url?: string;
   }>;
-  counts: {
-    total: number;
-    visited: number;
-    pending: number;
-  };
-  next_expected?: {
+  actual_visits: Array<{
     sequence: number;
     station_tfl_id: string;
     display_name: string;
-  } | null;
+    visited_at: string;
+    image_url?: string;
+  }>;
+  counts: {
+    planned_total: number;
+    visited_actual: number;
+    pending: number;
+  };
+  started_at?: string;
+  finished_at?: string;
 }
+
 interface OCRResult {
   is_roundel: boolean;
   station_text_raw: string;
   station_name?: string;
   confidence: number;
-}
-
-interface ValidationLogEntry {
-  step: 'ocr' | 'resolve' | 'geofence' | 'persist';
-  station_text_raw?: string;
-  resolved_display_name?: string;
-  station_id?: string;
-  user_lat?: number;
-  user_lng?: number;
-  station_lat?: number;
-  station_lng?: number;
-  distance_m?: number;
-  geofence_radius_m?: number;
-  geofence_passed?: boolean;
-  geofence_bypassed?: boolean;
-  simulation_mode_env?: boolean;
-  simulation_mode_user?: boolean;
-  simulation_mode_effective?: boolean;
-  result: 'success' | 'error' | 'bypassed';
-  error_code?: string;
-  error_message?: string;
 }
 
 // Helper functions
@@ -80,16 +63,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon/2) * Math.sin(dLon/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  const distance = R * c;
-  
-  console.log('🧭 Geofence: Distance calculation -', {
-    user_coords: { lat: lat1, lng: lon1 },
-    station_coords: { lat: lat2, lng: lon2 },
-    distance_m: Math.round(distance),
-    formula: 'haversine'
-  });
-  
-  return distance;
+  return R * c;
 };
 
 const ActivityCheckin = () => {
@@ -117,7 +91,7 @@ const ActivityCheckin = () => {
     ocrResult?: OCRResult;
   } | null>(null);
   
-  // New state for enhanced features
+  // Enhanced features
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [lastConfirmation, setLastConfirmation] = useState<{
     stationName: string;
@@ -127,15 +101,14 @@ const ActivityCheckin = () => {
   } | null>(null);
   const { uploadImage, isUploading } = useImageUpload();
 
-  // Page entry logging and simulation mode config
+  // Page entry logging
   useEffect(() => {
-    console.log(`🧭 ActivityPage enter id=${activityId} user=${user?.id || 'none'}`);
-    console.log('🧭 Checkin: Config loaded -', { 
+    console.log(`🧭 ActivityCheckin: Free-order mode | id=${activityId} user=${user?.id || 'none'}`);
+    console.log('🧭 Config:', { 
       GEOFENCE_RADIUS_METERS, 
       simulationModeEnv,
       simulationModeUser,
-      simulationModeEffective,
-      isDev: import.meta.env.DEV 
+      simulationModeEffective
     });
   }, [activityId, user?.id, simulationModeEnv, simulationModeUser, simulationModeEffective]);
 
@@ -166,7 +139,7 @@ const ActivityCheckin = () => {
     }
   }, [toast]);
 
-  // Fetch activity with derived state (authoritative source)
+  // Fetch activity with derived state
   const { data: activityState, refetch: refetchActivityState } = useQuery({
     queryKey: ["activity_state", activityId],
     queryFn: async () => {
@@ -174,13 +147,13 @@ const ActivityCheckin = () => {
         activity_id_param: activityId 
       });
       if (error) {
-        console.log(`DerivedState id=${activityId} total=0 visited=0 next=none:Unknown err=${error.message}`);
+        console.log(`DerivedState error: ${error.message}`);
         throw error;
       }
       
       const derivedState = data as unknown as DerivedActivityState;
-      const nextName = derivedState.next_expected?.display_name || 'none';
-      console.log(`DerivedState id=${activityId} total=${derivedState.counts.total} visited=${derivedState.counts.visited} next=#${derivedState.next_expected?.sequence || 'none'}:${nextName} err=null`);
+      const visitedCount = derivedState.counts.visited_actual || 0;
+      console.log(`DerivedState: planned=${derivedState.counts.planned_total} visited=${visitedCount} actual_visits=${derivedState.actual_visits?.length || 0}`);
       return derivedState;
     },
     enabled: !!user && !!activityId,
@@ -194,10 +167,7 @@ const ActivityCheckin = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("activities")
-        .select(`
-          *,
-          route:routes(name, description)
-        `)
+        .select(`*`)
         .eq("id", activityId)
         .single();
       if (error) throw error;
@@ -206,77 +176,8 @@ const ActivityCheckin = () => {
     enabled: !!user && !!activityId,
   });
 
-  // Fetch nearby stations
-  const { data: nearbyStations = [] } = useQuery({
-    queryKey: ["nearby-stations", location?.lat, location?.lng],
-    queryFn: async () => {
-      if (!location) return [];
-      
-      // Simple distance calculation (should be replaced with proper geospatial query)
-      const { data, error } = await supabase
-        .from("stations")
-        .select("*");
-      if (error) throw error;
-      
-      return data
-        .map((station: any) => ({
-          ...station,
-          distance: Math.sqrt(
-            Math.pow(station.latitude - location.lat, 2) + 
-            Math.pow(station.longitude - location.lng, 2)
-          ) * 111 // Rough km conversion
-        }))
-        .filter((station: any) => station.distance < 0.5) // Within 500m
-        .sort((a: any, b: any) => a.distance - b.distance);
-    },
-    enabled: !!location,
-  });
-
-  // Helper function to check if station is already checked in (using derive state)
-  const isStationAlreadyCheckedIn = (stationTflId: string): boolean => {
-    if (!activityState?.plan) return false;
-    const station = activityState.plan.find(s => s.station_tfl_id === stationTflId);
-    return station ? (station.status === 'verified' || station.status === 'pending') : false;
-  };
-
-  // Get the next expected station from derive (authoritative source)
-  const getNextExpectedStation = (): string | null => {
-    if (!activityState?.next_expected) return null;
-    
-    const station = stations.find(s => s.id === activityState.next_expected?.station_tfl_id);
-    console.log(`HUD(next=${activityState.next_expected.sequence}:${station?.name || activityState.next_expected.display_name}, source=derive, version=${activityState.version})`);
-    return activityState.next_expected.station_tfl_id;
-  };
-
-  // Compute current activity progress (using derive state)
-  const getActivityProgress = () => {
-    if (!activityState) return { totalPlanned: 0, visited: 0, pending: 0, nextExpected: null, nextStation: null, nextSequence: null };
-    
-    const nextExpected = activityState.next_expected?.station_tfl_id || null;
-    const nextStation = nextExpected ? stations.find(s => s.id === nextExpected) : null;
-    const nextSequence = activityState.next_expected?.sequence || null;
-    
-    console.log(`Recompute: total=${activityState.counts.total} visited=${activityState.counts.visited} pending=${activityState.counts.pending} next=${nextSequence ? `#${nextSequence}:${nextStation?.name || activityState.next_expected?.display_name || 'Unknown'}` : 'none'}`);
-    
-    return { 
-      totalPlanned: activityState.counts.total, 
-      visited: activityState.counts.visited, 
-      pending: activityState.counts.pending, 
-      nextExpected, 
-      nextStation, 
-      nextSequence 
-    };
-  };
-
-  // Log activity progress on data changes
-  useEffect(() => {
-    if (activityState && stations.length > 0) {
-      getActivityProgress();
-    }
-  }, [activityState, stations]);
-
-  // Check if a station check-in is allowed (using derive state)
-  const isStationCheckinAllowed = (stationTflId: string): { allowed: boolean; reason?: string; expectedStation?: string } => {
+  // Check if a station check-in is allowed (free-order mode)
+  const isStationCheckinAllowed = (stationTflId: string): { allowed: boolean; reason?: string } => {
     if (!activityState) return { allowed: false, reason: 'Activity state not loaded' };
     
     // Check if there's already a pending verification
@@ -284,67 +185,33 @@ const ActivityCheckin = () => {
     if (pendingStation) {
       return { 
         allowed: false, 
-        reason: `Finish or cancel the current verification at ${pendingStation.display_name} before checking into another station.`,
-        expectedStation: undefined
+        reason: `Finish or cancel the current verification at ${pendingStation.display_name} before checking into another station.`
       };
     }
     
-    // If no station sequence is defined, allow any station
-    if (activityState.plan.length === 0) {
-      return { allowed: true };
-    }
-    
-    // Check if station is already successfully checked in
-    const stationStatus = activityState.plan.find(station => station.station_tfl_id === stationTflId);
-    if (stationStatus?.status === 'verified') {
+    // Check if station is already successfully checked in (duplicate prevention)
+    const alreadyCheckedIn = activityState.actual_visits?.some(visit => visit.station_tfl_id === stationTflId);
+    if (alreadyCheckedIn) {
+      const stationName = stations.find(s => s.id === stationTflId)?.name || stationTflId;
       return { 
-        allowed: false, 
-        reason: 'Station already successfully checked in',
-        expectedStation: activityState.next_expected?.station_tfl_id
+        allowed: false,
+        reason: `Already checked in at ${stationName} for this activity.`
       };
     }
 
-    // Check if this station is in the planned route
-    if (!stationStatus) {
-      const attemptedStationName = stations.find(s => s.id === stationTflId)?.name || stationTflId;
-      const expectedStationName = activityState.next_expected ? 
-        activityState.next_expected.display_name : 
-        'None (route completed)';
-      
-      console.log(`🚫 Station ${attemptedStationName} not on planned route. Expected: ${expectedStationName}`);
-      return { 
-        allowed: false, 
-        reason: `${attemptedStationName} is not on your planned route. Next required station: ${expectedStationName}`,
-        expectedStation: activityState.next_expected?.station_tfl_id
-      };
-    }
-
-    // Get the next expected station (strict sequence)
-    if (!activityState.next_expected) {
-      return { 
-        allowed: false, 
-        reason: 'All planned stations completed! You can finish the activity.',
-        expectedStation: undefined
-      };
-    }
-
-    // Only allow check-in at the next expected station (strict sequence)
-    const isAllowed = activityState.next_expected.station_tfl_id === stationTflId;
-    if (!isAllowed) {
-      const attemptedStation = stations.find(s => s.id === stationTflId);
-      console.log(`🚫 Out of sequence: expected #${activityState.next_expected.sequence} ${activityState.next_expected.display_name}, attempted ${attemptedStation?.name || stationTflId}`);
-      
-      return { 
-        allowed: false, 
-        reason: `Out of sequence. Please check in at #${activityState.next_expected.sequence} ${activityState.next_expected.display_name} next.`,
-        expectedStation: activityState.next_expected.station_tfl_id
+    // Free-order mode: allow any station that exists in the stations database
+    const stationExists = stations.some(s => s.id === stationTflId);
+    if (!stationExists) {
+      return {
+        allowed: false,
+        reason: 'Station not found in database.'
       };
     }
 
     return { allowed: true };
   };
 
-  // Check if we can upload (using derive state)
+  // Check if we can upload (free-order mode)
   const canUploadImage = (): boolean => {
     const isActivityComplete = activity?.status === 'completed';
     const hasPendingUpload = isVerifying || isUploading;
@@ -353,26 +220,16 @@ const ActivityCheckin = () => {
     const pendingStation = activityState?.plan.find(station => station.status === 'pending');
     if (pendingStation) return false;
     
-    // Check if all planned stations have been visited
-    const allStationsCompleted = !activityState?.next_expected;
-    
-    return !isActivityComplete && !hasPendingUpload && !allStationsCompleted;
+    return !isActivityComplete && !hasPendingUpload;
   };
 
-  // 3-Step Validation Pipeline
+  // 3-Step Validation Pipeline for Free-Order Check-ins
   const runValidationPipeline = async (imageData: string) => {
-    const logEntry: ValidationLogEntry = {
-      step: 'ocr',
-      simulation_mode_env: simulationModeEnv,
-      simulation_mode_user: simulationModeUser,
-      simulation_mode_effective: simulationModeEffective,
-      result: 'error'
-    };
-
     try {
+      setIsVerifying(true);
+      
       // STEP 1: OCR Validation
-      logEntry.step = 'ocr';
-      console.log('🧭 Checkin: Step 1 - OCR validation, image bytes size=', imageData.length);
+      console.log('🧭 Free-Order Checkin: Step 1 - OCR validation');
       
       const { data: ocrResult, error: ocrError } = await supabase.functions.invoke('verify-roundel', {
         body: { imageData }
@@ -380,13 +237,8 @@ const ActivityCheckin = () => {
 
       if (ocrError) throw ocrError;
 
-      // Handle pending/setup scenarios
       if (ocrResult.pending) {
-        if (ocrResult.setup_required) {
-          throw new Error("AI verification not configured. Photo saved as pending.");
-        } else {
-          throw new Error(ocrResult.message || "AI verification temporarily unavailable.");
-        }
+        throw new Error(ocrResult.message || "AI verification temporarily unavailable.");
       }
 
       // Normalize OCR result
@@ -397,26 +249,15 @@ const ActivityCheckin = () => {
         confidence: ocrResult.confidence || 0
       };
 
-      logEntry.station_text_raw = normalizedOCR.station_text_raw;
-
       // Validate roundel detection
       if (!normalizedOCR.is_roundel) {
-        logEntry.error_code = 'no_roundel';
-        logEntry.error_message = 'Roundel not detected. Try again with the roundel centered and in focus.';
-        throw new Error(logEntry.error_message);
+        throw new Error('Roundel not detected. Try again with the roundel centered and in focus.');
       }
 
-      logEntry.result = 'success';
-      console.log('🧭 Checkin: Step 1 SUCCESS -', logEntry);
+      console.log('🧭 Free-Order Checkin: Step 1 SUCCESS');
 
       // STEP 2: Station Resolution
-      logEntry.step = 'resolve';
-      logEntry.result = 'error';
-      
-      console.log('🧭 Checkin: Step 2 - Station resolution:', {
-        stationTextRaw: normalizedOCR.station_text_raw,
-        stationName: normalizedOCR.station_name
-      });
+      console.log('🧭 Free-Order Checkin: Step 2 - Station resolution');
 
       const resolverResult = resolveStation(
         normalizedOCR.station_text_raw,
@@ -426,68 +267,47 @@ const ActivityCheckin = () => {
       );
 
       if ('error' in resolverResult) {
-        logEntry.error_code = 'station_not_found';
-        logEntry.error_message = `Station not found: ${normalizedOCR.station_text_raw}. (We looked for '${normalizedOCR.station_text_raw.toLowerCase().trim()}' and common variants.)`;
+        let errorMessage = `Station not found: ${normalizedOCR.station_text_raw}`;
         
         // Show suggestions if available
         if (resolverResult.suggestions && resolverResult.suggestions.length > 0) {
           const suggestionNames = resolverResult.suggestions.slice(0, 3).map(s => s.name).join(', ');
-          logEntry.error_message += ` Did you mean: ${suggestionNames}?`;
+          errorMessage += ` Did you mean: ${suggestionNames}?`;
           setSuggestions(resolverResult.suggestions.slice(0, 3).map(s => ({ tfl_id: s.id, name: s.name })));
         }
         
-        throw new Error(logEntry.error_message);
+        throw new Error(errorMessage);
       }
 
       const resolvedStation = resolverResult as ResolvedStation;
-      logEntry.resolved_display_name = resolvedStation.display_name;
-      logEntry.station_id = resolvedStation.station_id;
+      console.log(`🎯 Resolved ${resolvedStation.display_name} -> ${resolvedStation.station_id}`);
       
-      // Log successful station resolution
-      console.log(`🎯 Resolved ${resolvedStation.display_name} -> ${resolvedStation.station_id} (rule=${resolvedStation.matching_rule})`);
-      
-      // Check if station check-in is allowed (sequential enforcement)
+      // Check if station check-in is allowed (free-order mode)
       const checkinAllowed = isStationCheckinAllowed(resolvedStation.station_id);
       if (!checkinAllowed.allowed) {
-        logEntry.error_code = checkinAllowed.expectedStation ? 'out_of_sequence' : 'already_checked_in';
-        logEntry.error_message = checkinAllowed.reason || `Check-in not allowed at ${resolvedStation.display_name}`;
-        console.log(`🚫 Sequential check validation failed: ${logEntry.error_message}`);
-        throw new Error(logEntry.error_message);
+        console.log(`🚫 Check-in validation failed: ${checkinAllowed.reason}`);
+        throw new Error(checkinAllowed.reason || `Check-in not allowed at ${resolvedStation.display_name}`);
       }
       
-      logEntry.result = 'success';
-      console.log('🧭 Checkin: Step 2 SUCCESS -', logEntry);
+      console.log('🧭 Free-Order Checkin: Step 2 SUCCESS');
 
       // STEP 3: Geofencing (skip if simulation mode)
-      logEntry.step = 'geofence';
-      logEntry.result = 'error';
-      logEntry.geofence_radius_m = GEOFENCE_RADIUS_METERS;
-      logEntry.user_lat = location?.lat;
-      logEntry.user_lng = location?.lng;
-      logEntry.station_lat = resolvedStation.coords.lat;
-      logEntry.station_lng = resolvedStation.coords.lon;
-
       if (simulationModeEffective) {
-        console.log('🧭 Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
-        logEntry.result = 'bypassed';
-        logEntry.geofence_bypassed = true;
-        logEntry.error_message = 'Bypassed in simulation mode';
+        console.log('🧭 Free-Order Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
       } else {
-        console.log('🧭 Checkin: Step 3 - Geofencing validation');
+        console.log('🧭 Free-Order Checkin: Step 3 - Geofencing validation');
         
         if (!location) {
-          logEntry.error_code = 'gps_unavailable';
-          logEntry.error_message = 'Location unavailable — we can\'t verify proximity. You can save this check-in as Pending.';
+          const errorMessage = 'Location unavailable — we can\'t verify proximity. You can save this check-in as Pending.';
           
-          // Set geofence error for UI handling
           setGeofenceError({
-            message: logEntry.error_message,
-            code: logEntry.error_code,
+            message: errorMessage,
+            code: 'gps_unavailable',
             resolvedStation,
             ocrResult: normalizedOCR
           });
           
-          throw new Error(logEntry.error_message);
+          throw new Error(errorMessage);
         }
 
         // Calculate distance to resolved station
@@ -498,75 +318,53 @@ const ActivityCheckin = () => {
           resolvedStation.coords.lon
         );
 
-        logEntry.distance_m = Math.round(distance);
-        logEntry.geofence_passed = distance <= GEOFENCE_RADIUS_METERS;
-
         if (distance > GEOFENCE_RADIUS_METERS) {
-          logEntry.error_code = 'out_of_range';
-          logEntry.error_message = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Enable Simulation Mode for testing or try again near the station.`;
+          const errorMessage = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Enable Simulation Mode for testing or try again near the station.`;
           
-          // Set geofence error for UI handling
           setGeofenceError({
-            message: logEntry.error_message,
-            code: logEntry.error_code,
+            message: errorMessage,
+            code: 'out_of_range',
             resolvedStation,
             distance: Math.round(distance),
             ocrResult: normalizedOCR
           });
           
-          throw new Error(logEntry.error_message);
+          throw new Error(errorMessage);
         }
 
-        logEntry.result = 'success';
-        console.log('🧭 Checkin: Step 3 SUCCESS -', logEntry);
+        console.log('🧭 Free-Order Checkin: Step 3 SUCCESS');
       }
 
       // STEP 4: Upload Image and Persist Visit
-      logEntry.step = 'persist';
-      logEntry.result = 'error';
-
-      console.log('🧭 Checkin: Step 4 - Upload image and persist visit');
+      console.log('🧭 Free-Order Checkin: Step 4 - Upload image and persist visit');
       
       // Upload image to storage
       const fileName = `${user?.id}/${activityId}/${Date.now()}-roundel.jpg`;
       const imageUrl = await uploadImage(imageData, fileName);
       
       if (!imageUrl) {
-        logEntry.error_code = 'image_upload_failed';
-        logEntry.error_message = 'Failed to upload verification image';
-        throw new Error(logEntry.error_message);
+        throw new Error('Failed to upload verification image');
       }
       
       await checkinMutation.mutateAsync({
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
-        imageData: imageUrl, // Now using the uploaded URL instead of base64
+        imageUrl,
         verificationResult: {
           success: true,
           pending: false,
           station_name: resolvedStation.display_name,
           confidence: normalizedOCR.confidence,
-          distance_m: logEntry.distance_m || 0,
-          verification_method: 'roundel_ai',
+          verification_method: 'ai_image',
           ai_station_text: normalizedOCR.station_text_raw,
           ai_confidence: normalizedOCR.confidence,
-          matching_rule: resolvedStation.matching_rule,
-          simulation_mode_env: simulationModeEnv,
-          simulation_mode_user: simulationModeUser,
-          simulation_mode_effective: simulationModeEffective,
-          geofence_distance_m: logEntry.distance_m || 0,
-          geofence_radius_m: GEOFENCE_RADIUS_METERS,
-          geofence_passed: logEntry.geofence_passed || false,
-          geofence_bypassed: logEntry.geofence_bypassed || false
-        },
-        imageUrl
+        }
       });
 
-      logEntry.result = 'success';
-      console.log('🧭 Checkin: Step 4 SUCCESS -', logEntry);
+      console.log('🧭 Free-Order Checkin: Step 4 SUCCESS');
 
-      // Show confirmation instead of toast
-      const sequenceNumber = activityState ? activityState.counts.visited + 1 : 1;
+      // Show confirmation
+      const sequenceNumber = (activityState?.actual_visits?.length || 0) + 1;
       setLastConfirmation({
         stationName: resolvedStation.display_name,
         timestamp: new Date(),
@@ -580,77 +378,45 @@ const ActivityCheckin = () => {
       setGeofenceError(null);
 
     } catch (error: any) {
-      console.error('🧭 Checkin: Pipeline failed at step', logEntry.step, '-', logEntry);
+      console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
       
-      // Set appropriate error message and suggestions
-      setVerificationError(logEntry.error_message || error.message);
+      setVerificationError(error.message);
       
-      // Show specific error toast
       toast({
-        title: logEntry.step === 'ocr' ? "Roundel not detected" : 
-               logEntry.step === 'resolve' ? "Station not found" :
-               logEntry.step === 'geofence' ? "Location check failed" : "Check-in failed",
-        description: logEntry.error_message || error.message,
+        title: "Check-in failed",
+        description: error.message,
         variant: "destructive"
       });
+    } finally {
+      setIsVerifying(false);
     }
   };
-
-  // AI Roundel verification mutation
-  const verifyRoundelMutation = useMutation({
-    mutationFn: async ({ imageData }: { imageData: string }) => {
-      await runValidationPipeline(imageData);
-    },
-    onSuccess: () => {
-      setIsVerifying(false);
-      setCapturedImage(null);
-      setIsCamera(false);
-    },
-    onError: () => {
-      setIsVerifying(false);
-    }
-  });
 
   // Checkin mutation
   const checkinMutation = useMutation({
     mutationFn: async ({ 
       stationTflId, 
       checkinType, 
-      imageData,
-      verificationResult,
-      imageUrl
+      imageUrl,
+      verificationResult
     }: { 
       stationTflId: string; 
       checkinType: 'gps' | 'image' | 'manual';
-      imageData?: string;
-      verificationResult?: any;
       imageUrl?: string;
+      verificationResult?: any;
     }) => {
       if (!user || !activity) throw new Error("Missing data");
 
-      const sequenceNumber = activityState ? activityState.counts.visited + 1 : 1;
-      
-      
-      // Determine status and verification method based on simulation mode
-      let status = simulationModeEffective ? 'verified' : 'pending';
-      let verificationMethod = simulationModeEffective ? 'ai_image' : 'manual';  // Use valid enum value
-      
-      if (checkinType === 'image' && !simulationModeEffective) {
-        verificationMethod = 'roundel_ai';
-        status = verificationResult?.success ? 'verified' : 'pending';
-      }
-      
       const visitData = {
         user_id: user.id,
         activity_id: activity.id,
         station_tfl_id: stationTflId,
-        sequence_number: sequenceNumber,
         latitude: simulationModeEffective ? null : (location?.lat || null),
         longitude: simulationModeEffective ? null : (location?.lng || null),
         checkin_type: checkinType,
-        verification_image_url: imageUrl || imageData || null,
-        status,
-        verification_method: verificationMethod,
+        verification_image_url: imageUrl || null,
+        status: 'verified', // Free-order mode always creates verified check-ins
+        verification_method: 'ai_image',
         ai_verification_result: verificationResult || null,
         ai_station_text: verificationResult?.ai_station_text || null,
         ai_confidence: verificationResult?.confidence || null,
@@ -660,8 +426,7 @@ const ActivityCheckin = () => {
         is_simulation: simulationModeEffective,
       };
 
-      console.log('🧭 Checkin: insert payload =', visitData);
-      console.log(`🧭 VisitCommit payload verification_method=${visitData.verification_method} is_simulation=${visitData.is_simulation}`);
+      console.log('🧭 Free-Order Checkin: insert payload =', visitData);
 
       const { data, error } = await supabase
         .from("station_visits")
@@ -670,96 +435,45 @@ const ActivityCheckin = () => {
         .single();
 
       if (error) {
-        console.error('🧭 Checkin: insert error =', error);
-        
-        // Provide helpful error message for constraint violations
-        if (error.code === '23514') {
-          if (error.message?.includes('status_check')) {
-            throw new Error('Save failed: invalid status value. Please try again or contact support.');
-          } else if (error.message?.includes('verification_method')) {
-            throw new Error('Save failed: invalid verification method. Please try again or contact support.');
-          }
-        }
-        
+        console.error('🧭 Free-Order Checkin: insert error =', error);
         throw error;
-      }
-
-      // If activity is in draft status, activate it on first check-in
-      if (activity.status === 'draft') {
-        // First pause any other active activities
-        const { error: pauseError } = await supabase
-          .from('activities')
-          .update({ status: 'paused' })
-          .eq('user_id', user.id)
-          .eq('status', 'active');
-        
-        if (pauseError) console.warn('Error pausing other activities:', pauseError);
-
-        // Then activate this activity
-        const { error: updateError } = await supabase
-          .from('activities')
-          .update({ status: 'active' })
-          .eq('id', activity.id);
-        
-        if (updateError) throw updateError;
       }
 
       return data;
     },
     onSuccess: async (data, variables) => {
-      // Get sequence number from the derived state for logging
-      const sequence = activityState?.next_expected?.sequence || 1;
-      console.log(`VisitCommit ok: activity=${activityId} station=${variables.stationTflId} seq=#${sequence} status=verified`);
+      const sequence = (activityState?.actual_visits?.length || 0) + 1;
+      console.log(`✅ VisitCommit success: activity=${activityId} station=${variables.stationTflId} seq=#${sequence} status=verified (free-order)`);
       
-      // Atomic cache invalidation for immediate UI updates
-      console.log(`Query invalidations executed: activity_state, activities`);
+      // Auto-start activity on first successful check-in
+      if (activity?.status !== 'active' && (activityState?.actual_visits?.length || 0) === 0) {
+        console.log('🚀 Auto-starting activity on first check-in');
+        await supabase
+          .from('activities')
+          .update({ status: 'active', started_at: new Date().toISOString() })
+          .eq('id', activity.id);
+      }
+
+      // Invalidate queries for immediate UI updates
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
-        queryClient.invalidateQueries({ queryKey: ["activities"] })
+        queryClient.invalidateQueries({ queryKey: ["activity", activityId] }),
+        queryClient.invalidateQueries({ queryKey: ["activities"] }),
       ]);
-      
-      // Also trigger global activity state change event for other components
-      window.dispatchEvent(new CustomEvent('activity-state-changed', { 
-        detail: { activityId: activityId, stationTflId: variables.stationTflId } 
-      }));
-      
-      // Only show toast for GPS checkins since image checkins handle their own success toasts
-      if (variables.checkinType === 'gps') {
-        toast({
-          title: "✅ Station checked in",
-          description: "Your GPS visit has been recorded.",
-        });
-      } else if (variables.checkinType === 'image' && !variables.verificationResult?.success) {
-        // Only show pending toast for failed image verifications
-        toast({
-          title: "📋 Pending verification", 
-          description: "Photo saved for review. You can proceed.",
-          className: "border-yellow-200 bg-yellow-50",
-        });
-      }
-      
-      setCapturedImage(null);
-      setIsCamera(false);
-      setVerificationError(null);
-      setSuggestions(null);
-      setGeofenceError(null);
+
+      console.log('✅ Query invalidations complete');
     },
     onError: (error: any) => {
-      console.error('🧭 Checkin: mutation error =', error);
-      
-      let errorMessage = "Please try again.";
-      if (error?.message?.includes('verification_method')) {
-        errorMessage = "Check-in failed: invalid value for verification_method.";
-      }
-      
+      console.error('🧭 Free-Order Checkin: Mutation failed -', error.message);
       toast({
         title: "Check-in failed",
-        description: errorMessage,
-        variant: "destructive",
+        description: error.message,
+        variant: "destructive"
       });
-    },
+    }
   });
 
+  // Camera and upload handlers
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -772,77 +486,58 @@ const ActivityCheckin = () => {
     } catch (error) {
       toast({
         title: "Camera access denied",
-        description: "Image checkin will not be available.",
-        variant: "destructive",
+        description: "Please allow camera access to take photos.",
+        variant: "destructive"
       });
     }
   };
 
   const capturePhoto = () => {
     if (videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
       const video = videoRef.current;
+      const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      context?.drawImage(video, 0, 0);
       
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
-      setCapturedImage(imageData);
-      
-      // Stop camera
-      const stream = video.srcObject as MediaStream;
-      stream?.getTracks().forEach(track => track.stop());
-      setIsCamera(false);
+      if (context) {
+        context.drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        setCapturedImage(imageData);
+        setIsCamera(false);
+        
+        // Stop camera stream
+        const stream = video.srcObject as MediaStream;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
     }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
+    if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const imageData = e.target?.result as string;
-        setCapturedImage(imageData);
+        setCapturedImage(e.target?.result as string);
       };
       reader.readAsDataURL(file);
-    } else {
-      toast({
-        title: "Invalid file",
-        description: "Please select an image file.",
-        variant: "destructive",
-      });
     }
-  };
-
-  const handleGpsCheckin = (stationTflId: string) => {
-    checkinMutation.mutate({
-      stationTflId,
-      checkinType: 'gps',
-    });
   };
 
   const handleImageCheckin = () => {
     if (capturedImage) {
-      // Check if this is the final station and disable if activity complete
-      const totalVisits = activityState ? activityState.counts.visited : 0;
-      const isActivityComplete = activity?.status === 'completed';
-      
-      if (isActivityComplete) {
-        toast({
-          title: "Activity completed",
-          description: "All stations have been visited. No more check-ins allowed.",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      setIsVerifying(true);
-      setVerificationError(null);
-      setSuggestions(null);
-      verifyRoundelMutation.mutate({ imageData: capturedImage });
+      runValidationPipeline(capturedImage);
     }
+  };
+
+  const handleRetakePhoto = () => {
+    setCapturedImage(null);
+    setVerificationError(null);
+    setSuggestions(null);
+    setGeofenceError(null);
   };
 
   const handleSuggestionSelect = (suggestionTflId: string) => {
@@ -850,7 +545,7 @@ const ActivityCheckin = () => {
       checkinMutation.mutate({
         stationTflId: suggestionTflId,
         checkinType: 'image',
-        imageData: capturedImage,
+        imageUrl: capturedImage,
         verificationResult: { success: true, user_selected: true }
       });
     }
@@ -861,13 +556,13 @@ const ActivityCheckin = () => {
       checkinMutation.mutate({
         stationTflId: geofenceError.resolvedStation.station_id,
         checkinType: 'image',
-        imageData: capturedImage,
+        imageUrl: capturedImage,
         verificationResult: {
           success: false,
           pending: true,
           station_name: geofenceError.resolvedStation.display_name,
           confidence: geofenceError.ocrResult.confidence,
-          verification_method: 'roundel_ai',
+          verification_method: 'ai_image',
           ai_station_text: geofenceError.ocrResult.station_text_raw,
           ai_confidence: geofenceError.ocrResult.confidence,
           geofence_failed: true,
@@ -923,7 +618,7 @@ const ActivityCheckin = () => {
           )}
         </div>
 
-        {/* Simulation Banner - Dismissible */}
+        {/* Simulation Banner */}
         <SimulationBanner 
           visible={simulationModeEffective} 
           className="mb-4"
@@ -942,14 +637,14 @@ const ActivityCheckin = () => {
           />
         )}
 
-        {/* Activity Header */}
+        {/* Activity Header - Free Order Mode */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Station Check-in</CardTitle>
+                <CardTitle className="text-lg">Free-Order Check-in</CardTitle>
                 <CardDescription>
-                  {activity.route?.name || `Activity ${activity.id.slice(0, 8)}`}
+                  Check in at any station in any order
                 </CardDescription>
               </div>
               <Badge variant="outline" className="capitalize">
@@ -961,30 +656,44 @@ const ActivityCheckin = () => {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                <span>Stations: {activityState ? activityState.counts.visited : 0} visited</span>
+                <span>Stations: {activityState ? activityState.counts.visited_actual : 0} visited</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                <span>{new Date(activity.started_at).toLocaleTimeString()}</span>
+                <span>
+                  {activity.started_at ? 
+                    new Date(activity.started_at).toLocaleTimeString() : 
+                    'Not started'
+                  }
+                </span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Visits - disabled until component updated for derive state */}
-        {activityState && activityState.counts.visited > 0 && (
+        {/* Recent Visits */}
+        {activityState && activityState.actual_visits && activityState.actual_visits.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Recent Visits</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {activityState.plan
-                  .filter(station => station.status === 'verified')
-                  .map((station, index) => (
-                    <div key={station.station_tfl_id} className="flex items-center justify-between p-2 border rounded">
-                      <span>{station.display_name}</span>
-                      <Badge>Visited</Badge>
+                {activityState.actual_visits
+                  .slice(-3) // Show last 3 visits
+                  .reverse() // Most recent first
+                  .map((visit, index) => (
+                    <div key={visit.station_tfl_id} className="flex items-center justify-between p-2 border rounded">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">#{visit.sequence}</Badge>
+                        <span className="font-medium">{visit.display_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(visit.visited_at).toLocaleTimeString()}
+                        </span>
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      </div>
                     </div>
                   ))}
               </div>
@@ -1003,66 +712,54 @@ const ActivityCheckin = () => {
                 </Badge>
               )}
             </CardTitle>
-             <p className="text-sm text-muted-foreground">
-                {(() => {
-                   if (!canUploadImage()) {
-                     const pendingStation = activityState?.plan.find(station => station.status === 'pending');
-                     if (pendingStation) {
-                      console.log('HUD: pending verification blocks new checkins');
-                      return `Finish or cancel the current verification at ${pendingStation.display_name} before checking into another station.`;
-                     }
-                     
-                     if (activity?.status === 'completed') {
-                       console.log('HUD: activity completed');
-                       return "Activity completed - all stations visited";
-                     }
-                     
-                     const nextExpected = getNextExpectedStation();
-                     if (!nextExpected && activityState?.counts.total > 0) {
-                       console.log('HUD: all planned stations completed');
-                       return "All planned stations completed! You can finish the activity.";
-                     }
-                     
-                     if (!nextExpected && activityState?.counts.total === 0) {
-                       console.log('HUD: empty activity plan - ready for any station');
-                       return "No planned route. Take a photo at any station to start.";
-                     }
-                     
-                     console.log('HUD: processing checkin state');
-                     return "Processing your check-in...";
-                   }
-                   
-                   // Can upload - show next expected station
-                   const nextExpected = getNextExpectedStation();
-                   if (!nextExpected) {
-                     if (activityState?.counts.total === 0) {
-                       console.log('HUD: empty plan - any station allowed');  
-                       return "No planned route. Take a photo at any station to start your journey.";
-                     } else {
-                       console.log('HUD: all stations complete - ready to finish');
-                       return "All planned stations completed! Take a final photo or finish the activity.";
-                     }
-                   }
-                   
-                   const nextStation = stations.find(s => s.id === nextExpected);
-                   const nextStationName = nextStation?.name || 
-                     activityState?.next_expected?.display_name || 
-                     nextExpected;
-                   const sequence = activityState?.next_expected?.sequence || 1;
-                   
-                   console.log(`HUD: next expected #${sequence} ${nextStationName} | status=ready`);
-                   return `Next station: #${sequence} ${nextStationName}. Take a photo of the roundel.`;
-                })()}
-              </p>
+            <p className="text-sm text-muted-foreground">
+              {(() => {
+                if (!canUploadImage()) {
+                  const pendingStation = activityState?.plan.find(station => station.status === 'pending');
+                  if (pendingStation) {
+                    return `Finish or cancel the current verification at ${pendingStation.display_name} before checking into another station.`;
+                  }
+                  
+                  if (activity?.status === 'completed') {
+                    return "Activity completed - all stations visited";
+                  }
+                  
+                  return "Processing your check-in...";
+                }
+                
+                const actualVisits = activityState?.actual_visits?.length || 0;
+                if (actualVisits === 0) {
+                  return "Check in at any station to begin your journey.";
+                } else {
+                  return `Checked in at ${actualVisits} station${actualVisits === 1 ? '' : 's'} so far. Check in at any station to continue.`;
+                }
+              })()}
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {canUploadImage() && !capturedImage && (
+            {/* Camera Interface */}
+            {isCamera && (
+              <>
+                <video ref={videoRef} autoPlay playsInline className="w-full rounded-lg" />
+                <div className="flex gap-2">
+                  <Button onClick={capturePhoto} className="flex-1">
+                    <Camera className="h-4 w-4 mr-2" />
+                    Capture
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsCamera(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* Upload Options */}
+            {canUploadImage() && !capturedImage && !isCamera && (
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   onClick={startCamera}
                   className="h-24 flex flex-col items-center justify-center gap-2"
                   variant="outline"
-                  disabled={!canUploadImage()}
                 >
                   <Camera className="h-6 w-6" />
                   <span className="text-sm">Take Photo</span>
@@ -1071,7 +768,6 @@ const ActivityCheckin = () => {
                   onClick={() => fileInputRef.current?.click()}
                   className="h-24 flex flex-col items-center justify-center gap-2"
                   variant="outline"
-                  disabled={!canUploadImage()}
                 >
                   <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
@@ -1082,33 +778,111 @@ const ActivityCheckin = () => {
               </div>
             )}
 
-             {!canUploadImage() && (
-               <div className="text-center py-8">
-                 <div className="text-muted-foreground">
-                   {(() => {
-                      const pendingStation = activityState?.plan.find(station => station.status === 'pending');
-                      if (pendingStation) {
-                        return `⏳ Verification pending at ${pendingStation.display_name}`;
-                     }
-                     
-                     if (activity?.status === 'completed') {
-                       return "🎉 Activity completed! All stations have been visited.";
-                     }
-                     
-                     const nextExpected = getNextExpectedStation();
-                     if (!nextExpected && activityState?.counts.total > 0) {
-                       return "🎉 All planned stations completed! You can finish the activity.";
-                     }
-                     
-                     if (!nextExpected && activityState?.counts.total === 0) {
-                       return "No planned route. Ready to check in at any station.";
-                     }
-                     
-                     return "Activity processing...";
-                   })()}
-                 </div>
-               </div>
-             )}
+            {/* Captured Image Preview */}
+            {capturedImage && (
+              <div className="space-y-4">
+                <img 
+                  src={capturedImage} 
+                  alt="Captured roundel" 
+                  className="w-full rounded-lg"
+                />
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleImageCheckin}
+                    disabled={isVerifying || checkinMutation.isPending}
+                    className="flex-1"
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Check In
+                      </>
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={handleRetakePhoto}>
+                    Retake
+                  </Button>
+                </div>
+
+                {/* Error Display */}
+                {verificationError && (
+                  <div className="p-4 border border-red-200 rounded-lg bg-red-50">
+                    <div className="flex items-start gap-2">
+                      <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div className="space-y-2">
+                        <p className="text-sm text-red-700">{verificationError}</p>
+                        
+                        {/* Station Suggestions */}
+                        {suggestions && suggestions.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-red-600">Did you mean one of these?</p>
+                            <div className="flex flex-wrap gap-2">
+                              {suggestions.map((suggestion) => (
+                                <Button
+                                  key={suggestion.tfl_id}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSuggestionSelect(suggestion.tfl_id)}
+                                  className="text-xs"
+                                >
+                                  {suggestion.name}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Geofence Error Actions */}
+                        {geofenceError && (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleSaveAsPending}
+                              disabled={checkinMutation.isPending}
+                            >
+                              Save as Pending
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleCancelGeofence}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!canUploadImage() && (
+              <div className="text-center py-8">
+                <div className="text-muted-foreground">
+                  {(() => {
+                    const pendingStation = activityState?.plan.find(station => station.status === 'pending');
+                    if (pendingStation) {
+                      return `⏳ Verification pending at ${pendingStation.display_name}`;
+                    }
+                    
+                    if (activity?.status === 'completed') {
+                      return "🎉 Activity completed! All stations have been visited.";
+                    }
+                    
+                    return "⏳ Processing your check-in...";
+                  })()}
+                </div>
+              </div>
+            )}
 
             <input
               ref={fileInputRef}
@@ -1118,244 +892,13 @@ const ActivityCheckin = () => {
               className="hidden"
             />
 
-            {isCamera && (
-              <div className="space-y-4">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full rounded-lg border aspect-video object-cover"
-                />
-                <div className="flex gap-2">
-                  <Button onClick={capturePhoto} className="flex-1">
-                    <Camera className="mr-2 h-4 w-4" />
-                    Capture
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const stream = videoRef.current?.srcObject as MediaStream;
-                      stream?.getTracks().forEach(track => track.stop());
-                      setIsCamera(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {capturedImage && (
-              <div className="space-y-4">
-                <img
-                  src={capturedImage}
-                  alt="Captured roundel"
-                  className="w-full rounded-lg border"
-                />
-
-                {isVerifying && (
-                  <div className="flex items-center justify-center p-4 bg-muted/50 rounded-lg">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    <span>Analyzing photo...</span>
-                  </div>
-                )}
-
-                {verificationError && !geofenceError && (
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <XCircle className="w-4 h-4 text-destructive mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm text-destructive font-medium">Verification Failed</p>
-                        <p className="text-sm text-destructive/80 mt-1">{verificationError}</p>
-                        
-                        {suggestions && suggestions.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-sm font-medium mb-2">Did you mean one of these?</p>
-                            <div className="space-y-1">
-                              {suggestions.map((suggestion) => (
-                                <Button
-                                  key={suggestion.tfl_id}
-                                  variant="outline"
-                                  size="sm"
-                                  className="mr-2 mb-1"
-                                  onClick={() => handleSuggestionSelect(suggestion.tfl_id)}
-                                  disabled={checkinMutation.isPending}
-                                >
-                                  {suggestion.name}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {geofenceError && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm text-yellow-800 font-medium">
-                          {geofenceError.code === 'gps_unavailable' ? 'Location Unavailable' : 'Outside Geofence'}
-                        </p>
-                        <p className="text-sm text-yellow-700 mt-1">{geofenceError.message}</p>
-                        
-                        {geofenceError.code === 'out_of_range' && geofenceError.resolvedStation && (
-                          <div className="mt-2 text-sm text-yellow-700">
-                            <p><strong>Station:</strong> {geofenceError.resolvedStation.display_name}</p>
-                            <p><strong>Distance:</strong> {geofenceError.distance}m (limit {GEOFENCE_RADIUS_METERS}m)</p>
-                          </div>
-                        )}
-
-                        <div className="mt-4 flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleSaveAsPending}
-                            disabled={checkinMutation.isPending}
-                            className="bg-white hover:bg-yellow-50"
-                          >
-                            Save as Pending
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={handleCancelGeofence}
-                            disabled={checkinMutation.isPending}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCapturedImage(null);
-                      setVerificationError(null);
-                      setSuggestions(null);
-                      setGeofenceError(null);
-                    }}
-                    className="flex-1"
-                    disabled={isVerifying}
-                  >
-                    Retake
-                  </Button>
-                  {!verificationError && !geofenceError && (
-                    <Button
-                      onClick={handleImageCheckin}
-                      disabled={isVerifying || isUploading || !canUploadImage()}
-                      className="flex-1"
-                    >
-                      {isVerifying || isUploading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {isUploading ? "Uploading..." : "Verifying..."}
-                        </>
-                      ) : (
-                        "Verify & Check In"
-                      )}
-                    </Button>
-                  )}
-                </div>
-                
-                {/* Success Actions - Show after successful check-in */}
-                {lastConfirmation && showConfirmation && (
-                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-green-800">
-                        ✅ Check-in successful! What's next?
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setCapturedImage(null);
-                          setShowConfirmation(false);
-                          setLastConfirmation(null);
-                        }}
-                        className="flex-1 bg-white hover:bg-green-50"
-                      >
-                        Continue Check-in
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => navigate(`/activities/${activityId}`)}
-                        className="flex-1"
-                      >
-                        Back to Activity
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             <canvas ref={canvasRef} className="hidden" />
           </CardContent>
         </Card>
 
-        {/* Dev Panel - Always visible when simulation mode is available */}
+        {/* Dev Panel */}
         {SIMULATION_MODE_ENV && (
           <DevPanel />
-        )}
-
-        {/* Nearby Stations */}
-        {nearbyStations.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Nearby Stations</CardTitle>
-              <CardDescription>GPS-based check-ins available</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {nearbyStations.slice(0, 3).map((station: any) => {
-                  const stationStatus = activityState?.plan.find(s => s.station_tfl_id === station.tfl_id);
-                  const isVisited = stationStatus?.status === 'verified';
-                  
-                  return (
-                    <div
-                      key={station.tfl_id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-sm">{station.name}</h3>
-                          {isVisited && (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Zone {station.zone} · {Math.round(station.distance * 1000)}m away
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleGpsCheckin(station.tfl_id)}
-                        disabled={(() => {
-                          const checkinCheck = isStationCheckinAllowed(station.tfl_id);
-                          return checkinMutation.isPending || !checkinCheck.allowed;
-                        })()}
-                        className="text-xs"
-                      >
-                        <MapPin className="w-3 h-3 mr-1" />
-                        GPS
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
         )}
       </div>
     </div>
