@@ -71,17 +71,25 @@ const ActivityDetail = () => {
   const { data: activityState, isLoading, refetch: refetchActivityState } = useQuery({
     queryKey: ["activity_state", id],
     queryFn: async () => {
+      console.log(`🔍 ActivityDetail: Fetching state for activity ${id}`);
       const { data, error } = await supabase.rpc('derive_activity_state', { 
         activity_id_param: id 
       });
       if (error) {
-        console.log(`DerivedState id=${id} total=0 visited=0 next=none:Unknown err=${error.message}`);
+        console.error(`❌ DerivedState error for ${id}:`, error);
         throw error;
       }
       
       const derivedState = data as unknown as DerivedActivityState;
       const warnings = derivedState.warnings || {};
-      console.info("DerivedState", {id, planned: derivedState.counts.planned_total, visited: derivedState.counts.visited_actual, actual_visits: derivedState.actual_visits?.length || 0, warnings});
+      console.log("📊 DerivedState result:", {
+        id, 
+        planned: derivedState.counts.planned_total, 
+        visited: derivedState.counts.visited_actual, 
+        actual_visits: derivedState.actual_visits?.length || 0, 
+        warnings,
+        full_state: derivedState
+      });
       return derivedState;
     },
     enabled: !!user && !!id,

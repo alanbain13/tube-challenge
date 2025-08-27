@@ -522,6 +522,7 @@ const ActivityCheckin = () => {
     onSuccess: async (data, variables) => {
       const sequence = (activityState?.actual_visits?.length || 0) + 1;
       console.log(`✅ VisitCommit success: activity=${activityId} station=${variables.stationTflId} seq=#${sequence} status=verified (free-order)`);
+      console.log(`✅ Visit data inserted:`, data);
       
       // Auto-start activity on first successful check-in
       if (activity?.status !== 'active' && (activityState?.actual_visits?.length || 0) === 0) {
@@ -531,6 +532,33 @@ const ActivityCheckin = () => {
           .update({ status: 'active', started_at: new Date().toISOString() })
           .eq('id', activity.id);
       }
+
+      // Debug: Check what visits exist in DB after insert
+      const { data: dbVisits, error: dbError } = await supabase
+        .from('station_visits')
+        .select('*')
+        .eq('activity_id', activityId)
+        .order('visited_at', { ascending: true });
+      
+      if (dbError) {
+        console.error('❌ Error checking DB visits:', dbError);
+      } else {
+        console.log(`🔍 DB visits after insert (${dbVisits?.length || 0} total):`, dbVisits);
+      }
+
+      // Debug: Test derive_activity_state directly
+      console.log('🔍 Testing derive_activity_state function...');
+      const { data: testState, error: testError } = await supabase.rpc('derive_activity_state', { 
+        activity_id_param: activityId 
+      });
+      if (testError) {
+        console.error('❌ derive_activity_state test failed:', testError);
+      } else {
+        console.log('🔍 derive_activity_state result:', testState);
+      }
+
+      // Small delay to ensure DB transaction is fully committed
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Invalidate queries for immediate UI updates (all required keys)
       console.log('🔄 Starting cache invalidation...');
