@@ -41,7 +41,7 @@ const Activities = () => {
       return data;
     } catch (error) {
       console.error('Error deriving activity state:', error);
-      return { counts: { visited: 0, total: 0 } };
+      return { counts: { visited_actual: 0, planned_total: 0 } };
     }
   };
 
@@ -227,8 +227,8 @@ const Activities = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activities.map((activity: any) => {
-                const derivedState = activity._derivedState || { counts: { visited: 0, total: activity.station_tfl_ids?.length || 0 } };
-                const { visited, total } = derivedState.counts;
+                const derivedState = activity._derivedState || { counts: { visited_actual: 0, planned_total: activity.station_tfl_ids?.length || 0 } };
+                const { visited_actual, planned_total } = derivedState.counts;
                 const statusText = activity.status === 'draft' ? 'Not started' : 
                                  activity.status === 'active' ? 'Active' : 
                                  activity.status === 'paused' ? 'Paused' : 'Completed';
@@ -245,7 +245,7 @@ const Activities = () => {
                             {statusText}
                           </Badge>
                           <Badge variant="outline">
-                            Visited {visited}/{total}
+                            Visited {visited_actual}/{planned_total}
                           </Badge>
                         </div>
                       </CardTitle>

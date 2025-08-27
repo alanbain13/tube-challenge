@@ -11,7 +11,7 @@ import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2 } from "lucide-reac
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
-// Interface for derived activity state
+// Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
   activity_id: string;
   version: number;
@@ -23,16 +23,20 @@ interface DerivedActivityState {
     visited_at?: string;
     image_url?: string;
   }>;
-  counts: {
-    total: number;
-    visited: number;
-    pending: number;
-  };
-  next_expected?: {
+  actual_visits: Array<{
     sequence: number;
     station_tfl_id: string;
     display_name: string;
-  } | null;
+    visited_at: string;
+    image_url?: string;
+  }>;
+  counts: {
+    planned_total: number;
+    visited_actual: number;
+    pending: number;
+  };
+  started_at?: string;
+  finished_at?: string;
   warnings?: {
     empty_plan?: boolean;
   };
@@ -76,9 +80,8 @@ const ActivityDetail = () => {
       }
       
       const derivedState = data as unknown as DerivedActivityState;
-      const nextName = derivedState.next_expected?.display_name || 'none';
       const warnings = derivedState.warnings || {};
-      console.info("DerivedState", {id, total: derivedState.counts.total, visited: derivedState.counts.visited, next: derivedState.next_expected?.sequence || 'none', warnings});
+      console.info("DerivedState", {id, planned: derivedState.counts.planned_total, visited: derivedState.counts.visited_actual, actual_visits: derivedState.actual_visits?.length || 0, warnings});
       return derivedState;
     },
     enabled: !!user && !!id,
@@ -132,9 +135,8 @@ const ActivityDetail = () => {
     if (!activity || !activityState) return;
     
     try {
-      // Get the last visited station from derived state
-      const visitedStations = activityState.plan.filter(station => station.status === 'verified');
-      const lastVisited = visitedStations[visitedStations.length - 1];
+      // Get the last visited station from actual visits (chronological order)
+      const lastVisited = activityState.actual_visits?.[activityState.actual_visits.length - 1];
 
       const { error } = await supabase
         .from("activities")
@@ -149,7 +151,7 @@ const ActivityDetail = () => {
 
       toast({
         title: "Journey completed",
-        description: "Activity finished at " + (lastVisited ? lastVisited.display_name : "current position")
+        description: "Activity finished" + (lastVisited ? ` at ${lastVisited.display_name}` : "")
       });
 
       refetchActivityState();
@@ -225,7 +227,7 @@ const ActivityDetail = () => {
   if (!activity || !activityState) {
     // Enhanced error handling with specific diagnostics
     const isOwnershipIssue = activity && activity.user_id !== user?.id;
-    const hasEmptyPlan = activityState && activityState.counts.total === 0;
+    const hasEmptyPlan = activityState && activityState.counts.planned_total === 0;
     const activityExists = !!activity;
     const stateExists = !!activityState;
     
@@ -282,12 +284,10 @@ const ActivityDetail = () => {
   };
 
   // Use derived state for all UI rendering
-  const { plan, counts, next_expected } = activityState;
+  const { plan, counts, actual_visits } = activityState;
   
-  // Log HUD state
-  if (next_expected) {
-    console.log(`HUD(next=${next_expected.sequence}:${next_expected.display_name}, source=derive, version=${activityState.version})`);
-  }
+  // Log free-order mode state
+  console.log(`HUD: Free-order mode | planned=${counts.planned_total} visited=${counts.visited_actual} actual_visits=${actual_visits?.length || 0} (version=${activityState.version})`);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -338,24 +338,24 @@ const ActivityDetail = () => {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Visited Count</div>
-                  <div className="font-medium">{counts.visited}/{counts.total} stations</div>
+                  <div className="font-medium">{counts.visited_actual}/{counts.planned_total} stations</div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Empty Plan Warning */}
+          {/* Empty Plan Info - Updated for free-order mode */}
           {activityState.warnings?.empty_plan && (
-            <Card className="border-orange-200 bg-orange-50">
+            <Card className="border-blue-200 bg-blue-50">
               <CardHeader>
-                <CardTitle className="text-orange-800">This activity has no planned stations</CardTitle>
-                <CardDescription className="text-orange-700">
-                  You can edit the activity to add stations or delete it.
+                <CardTitle className="text-blue-800">Free-form Activity</CardTitle>
+                <CardDescription className="text-blue-700">
+                  This activity has no planned route. You can check in at any station to build your journey as you go.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex gap-2">
                 <Button onClick={() => navigate(`/activities/${activity.id}/edit`)} variant="outline">
-                  Edit Plan
+                  Add Planned Route
                 </Button>
                 <Button 
                   variant="outline" 
@@ -372,69 +372,93 @@ const ActivityDetail = () => {
             </Card>
           )}
 
-          {/* Stations List */}
+          {/* Stations List - Free-order mode */}
           <Card>
             <CardHeader>
-              <CardTitle>Stations</CardTitle>
-              <CardDescription>Journey progress through stations</CardDescription>
+              <CardTitle>Journey Progress</CardTitle>
+              <CardDescription>Check in at any station to continue your activity.</CardDescription>
             </CardHeader>
-            <CardContent>
-              {plan.length === 0 ? (
-                <p className="text-muted-foreground">No stations defined for this activity</p>
-              ) : (
-                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                   {plan.map((station) => {
-                     const statusColor = station.status === 'verified' ? 'bg-red-500' : 
-                                       station.status === 'pending' ? 'bg-pink-500' : 'bg-white border-2 border-gray-300';
-                     
-                     return (
-                       <div key={`${station.station_tfl_id}-${station.sequence}`} className="flex items-center justify-between p-3 border rounded-lg">
-                         <div className="flex items-center gap-3">
-                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${station.status === 'not_visited' ? 'text-gray-600' : 'text-white'}`}>
-                             {station.sequence}
-                           </div>
-                           <div>
-                             <div className="font-medium">{station.display_name}</div>
-                             {station.visited_at && station.status === 'verified' && (
-                               <div className="text-xs text-muted-foreground">
-                                 Visited {new Date(station.visited_at).toLocaleTimeString()}
-                                 <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 rounded">SIM</span>
-                               </div>
-                             )}
-                           </div>
-                         </div>
-                         <Badge variant={station.status === 'verified' ? 'default' : station.status === 'pending' ? 'secondary' : 'outline'}>
-                           {station.status === 'verified' ? 'Visited' : station.status === 'pending' ? 'Pending' : 'Not visited'}
-                         </Badge>
-                       </div>
-                     );
-                   })}
-                 </div>
+            <CardContent className="space-y-6">
+              {/* Actual Visits (chronological order) */}
+              {actual_visits && actual_visits.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Actual Visit Order</h4>
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    {actual_visits.map((visit, index) => (
+                      <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-medium">
+                            {visit.sequence}
+                          </div>
+                          <div>
+                            <div className="font-medium">{visit.display_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Visited {new Date(visit.visited_at).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </div>
+                        <Badge>Visited</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Planned Route (if exists) */}
+              {plan.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3">Planned Route {plan.length > 0 ? '(reference only)' : ''}</h4>
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    {plan.map((station) => {
+                      const statusColor = station.status === 'verified' ? 'bg-red-500' : 'bg-gray-200';
+                      
+                      return (
+                        <div key={`plan-${station.station_tfl_id}-${station.sequence}`} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${station.status === 'verified' ? 'text-white' : 'text-gray-600'}`}>
+                              {station.sequence}
+                            </div>
+                            <div>
+                              <div className="font-medium">{station.display_name}</div>
+                            </div>
+                          </div>
+                          <Badge variant={station.status === 'verified' ? 'default' : 'outline'}>
+                            {station.status === 'verified' ? 'Visited' : 'Not visited'}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {plan.length === 0 && (!actual_visits || actual_visits.length === 0) && (
+                <p className="text-muted-foreground">No stations visited or planned for this activity</p>
               )}
             </CardContent>
           </Card>
 
-          {/* Actions */}
+          {/* Actions - Free-order mode */}
           <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4">
             <div className="flex gap-2 justify-center">
-              {activity.status === 'draft' && !activityState.warnings?.empty_plan && (
+              {activity.status === 'draft' && (
                 <Button onClick={handleStartJourney} className="flex items-center gap-2">
                   <Play className="w-4 h-4" />
                   Start Journey
                 </Button>
               )}
-               {activity.status === 'active' && !activityState.warnings?.empty_plan && (
-                 <>
-                   <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
-                     <Play className="w-4 h-4" />
-                     Continue Check-in
-                   </Button>
-                   <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
-                     <Square className="w-4 h-4" />
-                     Finish Activity
-                   </Button>
-                 </>
-               )}
+              {activity.status === 'active' && (
+                <>
+                  <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
+                    <Play className="w-4 h-4" />
+                    {activityState.warnings?.empty_plan ? 'Start Check-in' : 'Continue Check-in'}
+                  </Button>
+                  <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
+                    <Square className="w-4 h-4" />
+                    Finish Activity
+                  </Button>
+                </>
+              )}
               <Button 
                 variant="outline" 
                 onClick={() => navigate(`/activities/${activity.id}/map`)}

@@ -251,17 +251,15 @@ const ActivityEdit = () => {
   };
 
   const recomputeSequenceAndStatus = (stations: string[]) => {
-    // Calculate stats for logging
+    // Calculate stats for logging (free-order mode)
     const totalStations = stations.length;
     const visitedCount = 0; // In edit mode, no visits yet
     const pendingCount = 0; // In edit mode, no pending visits
-    const nextExpected = totalStations > 0 ? stations[0] : null;
     
-    console.log('🔄 Sequence recompute:', { 
-      total: totalStations, 
-      visited: visitedCount, 
-      pending: pendingCount, 
-      next_expected: nextExpected ? getStationName(nextExpected) : 'none'
+    console.log('🔄 Free-order sequence recompute:', { 
+      planned_total: totalStations, 
+      visited_actual: visitedCount, 
+      pending: pendingCount
     });
     
     // Log the ordered list with sequence numbers and status
@@ -271,7 +269,7 @@ const ActivityEdit = () => {
       status: 'not_visited' as const
     }));
     
-    console.log('📋 Station sequence:', orderedList);
+    console.log('📋 Station sequence (free-order):', orderedList);
   };
 
   // Handle form field changes to update map
