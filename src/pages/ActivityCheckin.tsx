@@ -12,7 +12,6 @@ import { useStations } from "@/hooks/useStations";
 import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
-import { CheckinConfirmation } from "@/components/CheckinConfirmation";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { calculateDistance, extractImageGPS } from "@/lib/utils";
 
@@ -83,13 +82,6 @@ const ActivityCheckin = () => {
   } | null>(null);
   
   // Enhanced features
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [lastConfirmation, setLastConfirmation] = useState<{
-    stationName: string;
-    timestamp: Date;
-    sequenceNumber: number;
-    imageUrl?: string;
-  } | null>(null);
   const { uploadImage, isUploading } = useImageUpload();
 
   // Page entry logging
@@ -385,19 +377,23 @@ const ActivityCheckin = () => {
 
       console.log('🧭 Free-Order Checkin: Step 4 SUCCESS');
 
-      // Show confirmation
+      // Show success toast and close modal
       const sequenceNumber = (activityState?.actual_visits?.length || 0) + 1;
-      setLastConfirmation({
-        stationName: resolvedStation.display_name,
-        timestamp: new Date(),
-        sequenceNumber,
-        imageUrl
+      
+      toast({
+        title: "✅ Check-in successful",
+        description: `Checked in at ${resolvedStation.display_name} (#${sequenceNumber})`,
+        variant: "default"
       });
-      setShowConfirmation(true);
 
+      // Clear state and close modal
+      setCapturedImage(null);
       setVerificationError(null);
       setSuggestions(null);
       setGeofenceError(null);
+      
+      // Navigate back to activity detail
+      navigate(`/activities/${activityId}`);
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -480,19 +476,34 @@ const ActivityCheckin = () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activity", activityId] }),
+        queryClient.invalidateQueries({ queryKey: ["activityVisits", activityId] }),
+        queryClient.invalidateQueries({ queryKey: ["activitySummary", activityId] }),
+        queryClient.invalidateQueries({ queryKey: ["activityMapData", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activities"] }),
+        queryClient.invalidateQueries({ queryKey: ["activitiesList"] }),
       ]);
 
       console.log('✅ Query invalidations complete');
     },
     onError: (error: any) => {
-      console.error('🧭 Free-Order Checkin: Mutation failed -', error.message);
-      toast({
-        title: "Check-in failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
+      console.error("🧭 Free-Order Checkin: mutation failed -", error);
+      
+      // Handle duplicate check-in gracefully
+      if (error.message.includes('duplicate key value') || error.message.includes('uniq_visits_user_activity_station')) {
+        const stationName = stations.find(s => s.id === error.stationTflId)?.name || 'this station';
+        toast({
+          title: "Already checked in",
+          description: `You already checked in at ${stationName} for this activity.`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Check-in failed",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive"
+        });
+      }
+    },
   });
 
   // Camera and upload handlers
@@ -646,19 +657,6 @@ const ActivityCheckin = () => {
           className="mb-4"
         />
 
-        {/* Check-in Confirmation */}
-        {lastConfirmation && (
-          <CheckinConfirmation
-            stationName={lastConfirmation.stationName}
-            timestamp={lastConfirmation.timestamp}
-            isSimulation={simulationModeEffective}
-            sequenceNumber={lastConfirmation.sequenceNumber}
-            imageUrl={lastConfirmation.imageUrl}
-            onDismiss={() => setShowConfirmation(false)}
-            visible={showConfirmation}
-          />
-        )}
-
         {/* Activity Header - Free Order Mode */}
         <Card>
           <CardHeader>
@@ -809,28 +807,28 @@ const ActivityCheckin = () => {
                   className="w-full rounded-lg"
                 />
                 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleImageCheckin}
-                    disabled={isVerifying || checkinMutation.isPending}
-                    className="flex-1"
-                  >
-                    {isVerifying ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Check In
-                      </>
-                    )}
-                  </Button>
-                  <Button variant="outline" onClick={handleRetakePhoto}>
-                    Retake
-                  </Button>
-                </div>
+                 <div className="flex gap-2">
+                   <Button
+                     onClick={handleImageCheckin}
+                     disabled={isVerifying || checkinMutation.isPending}
+                     className="flex-1"
+                   >
+                     {isVerifying || checkinMutation.isPending ? (
+                       <>
+                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                         Verifying...
+                       </>
+                     ) : (
+                       <>
+                         <CheckCircle className="h-4 w-4 mr-2" />
+                         Check In
+                       </>
+                     )}
+                   </Button>
+                   <Button variant="outline" onClick={handleRetakePhoto}>
+                     Retake
+                   </Button>
+                 </div>
 
                 {/* Error Display */}
                 {verificationError && (
