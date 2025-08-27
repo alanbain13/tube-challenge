@@ -95,6 +95,27 @@ const ActivityCheckin = () => {
     };
   }, []);
 
+  // Defensive error handling for telemetry/analytics
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = (...args) => {
+      try {
+        return originalFetch.apply(window, args);
+      } catch (error: any) {
+        // Suppress DataCloneError from postMessage analytics
+        if (error.name === 'DataCloneError' && error.message.includes('postMessage')) {
+          console.debug('Suppressed DataCloneError from analytics:', error.message);
+          return Promise.reject(error);
+        }
+        throw error;
+      }
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
   // Page entry logging
   useEffect(() => {
     console.log(`🧭 ActivityCheckin: Free-order mode | id=${activityId} user=${user?.id || 'none'}`);
@@ -395,6 +416,7 @@ const ActivityCheckin = () => {
         title: "✅ Check-in successful",
         description: `Checked in at ${resolvedStation.display_name} (#${sequenceNumber})`,
         variant: "default",
+        duration: 5000, // Keep toast visible longer for user actions
         action: (
           <div className="flex gap-2">
             <Button 
@@ -430,7 +452,7 @@ const ActivityCheckin = () => {
       // Auto-navigate after successful check-in (user can stay via toast action)
       setTimeout(() => {
         navigate(`/activities/${activityId}`);
-      }, 3000);
+      }, 4000); // Slightly longer to allow toast interaction
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -536,11 +558,13 @@ const ActivityCheckin = () => {
           title: "Already checked in",
           description: `You already checked in at ${stationName} for this activity.`,
           variant: "destructive",
+          duration: 6000, // Keep visible longer for user to see the action
           action: (
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => navigate(`/activities/${activityId}`)}
+              className="bg-white hover:bg-gray-50"
             >
               View Timeline
             </Button>
