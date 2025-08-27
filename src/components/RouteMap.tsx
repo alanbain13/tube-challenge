@@ -278,15 +278,16 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-color': [
           'case',
           ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
-          ['==', ['get', 'visitStatus'], 'pending'], '#ec4899', // Pink - pending verification
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White - not yet visited
+          ['==', ['get', 'visitStatus'], 'pending'], '#f59e0b', // Orange - pending verification
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#3b82f6', // Blue - planned but not visited
           ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
           '#9ca3af' // Gray - default
         ],
         'circle-stroke-width': 2,
         'circle-stroke-color': [
           'case',
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#3b82f6', // Blue border for white circles
+          ['==', ['get', 'visitStatus'], 'verified'], '#ffffff', // White border for red circles
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White border for blue circles
           '#ffffff'
         ]
       }

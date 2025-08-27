@@ -14,6 +14,7 @@ import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
 import { CheckinConfirmation } from "@/components/CheckinConfirmation";
 import { useImageUpload } from "@/hooks/useImageUpload";
+import { calculateDistance, extractImageGPS } from "@/lib/utils";
 
 // Configuration
 const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
@@ -55,16 +56,6 @@ interface OCRResult {
 }
 
 // Helper functions
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-};
 
 const ActivityCheckin = () => {
   const { activityId } = useParams();
@@ -291,45 +282,76 @@ const ActivityCheckin = () => {
       
       console.log('🧭 Free-Order Checkin: Step 2 SUCCESS');
 
-      // STEP 3: Geofencing (skip if simulation mode)
+      // STEP 3: Geofencing using EXIF GPS from image (skip if simulation mode)
       if (simulationModeEffective) {
         console.log('🧭 Free-Order Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
       } else {
-        console.log('🧭 Free-Order Checkin: Step 3 - Geofencing validation');
+        console.log('🧭 Free-Order Checkin: Step 3 - EXIF GPS geofencing validation');
         
-        if (!location) {
-          const errorMessage = 'Location unavailable — we can\'t verify proximity. You can save this check-in as Pending.';
+        // Try to extract GPS from image EXIF data first
+        const imageGPS = extractImageGPS(imageData);
+        
+        if (!imageGPS) {
+          console.log('🧭 Free-Order Checkin: No EXIF GPS found in image - using device GPS as fallback');
           
-          setGeofenceError({
-            message: errorMessage,
-            code: 'gps_unavailable',
-            resolvedStation,
-            ocrResult: normalizedOCR
-          });
+          if (!location) {
+            const errorMessage = 'Location unavailable — no GPS in photo and device location denied. You can save this check-in as Pending.';
+            
+            setGeofenceError({
+              message: errorMessage,
+              code: 'gps_unavailable',
+              resolvedStation,
+              ocrResult: normalizedOCR
+            });
+            
+            throw new Error(errorMessage);
+          }
           
-          throw new Error(errorMessage);
-        }
+          // Use device GPS as fallback
+          const distance = calculateDistance(
+            location.lat,
+            location.lng,
+            resolvedStation.coords.lat,
+            resolvedStation.coords.lon
+          );
 
-        // Calculate distance to resolved station
-        const distance = calculateDistance(
-          location.lat,
-          location.lng,
-          resolvedStation.coords.lat,
-          resolvedStation.coords.lon
-        );
+          if (distance > GEOFENCE_RADIUS_METERS) {
+            const errorMessage = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
+            
+            setGeofenceError({
+              message: errorMessage,
+              code: 'out_of_range',
+              resolvedStation,
+              distance: Math.round(distance),
+              ocrResult: normalizedOCR
+            });
+            
+            throw new Error(errorMessage);
+          }
+        } else {
+          console.log('🧭 Free-Order Checkin: Using EXIF GPS from image');
+          
+          // Calculate distance using image GPS
+          const distance = calculateDistance(
+            imageGPS.lat,
+            imageGPS.lng,
+            resolvedStation.coords.lat,
+            resolvedStation.coords.lon
+          );
 
-        if (distance > GEOFENCE_RADIUS_METERS) {
-          const errorMessage = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Enable Simulation Mode for testing or try again near the station.`;
-          
-          setGeofenceError({
-            message: errorMessage,
-            code: 'out_of_range',
-            resolvedStation,
-            distance: Math.round(distance),
-            ocrResult: normalizedOCR
-          });
-          
-          throw new Error(errorMessage);
+          if (distance > GEOFENCE_RADIUS_METERS) {
+            const errorMessage = `Photo location is ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
+            
+            setGeofenceError({
+              message: errorMessage,
+              code: 'photo_too_far',
+              resolvedStation,
+              distance: Math.round(distance),
+              ocrResult: normalizedOCR
+            });
+            
+            throw new Error(errorMessage);
+          }
         }
 
         console.log('🧭 Free-Order Checkin: Step 3 SUCCESS');
@@ -644,7 +666,7 @@ const ActivityCheckin = () => {
               <div>
                 <CardTitle className="text-lg">Free-Order Check-in</CardTitle>
                 <CardDescription>
-                  Check in at any station in any order
+                  Check in at any station to continue your activity
                 </CardDescription>
               </div>
               <Badge variant="outline" className="capitalize">
@@ -729,9 +751,9 @@ const ActivityCheckin = () => {
                 
                 const actualVisits = activityState?.actual_visits?.length || 0;
                 if (actualVisits === 0) {
-                  return "Check in at any station to begin your journey.";
+                  return "Check in at any station to continue your activity.";
                 } else {
-                  return `Checked in at ${actualVisits} station${actualVisits === 1 ? '' : 's'} so far. Check in at any station to continue.`;
+                  return `Checked in at ${actualVisits} station${actualVisits === 1 ? '' : 's'} so far. Check in at any station to continue your activity.`;
                 }
               })()}
             </p>

@@ -345,10 +345,10 @@ const ActivityDetail = () => {
           </Card>
 
           {/* Empty Plan Info - Updated for free-order mode */}
-          {activityState.warnings?.empty_plan && (
+          {activityState.counts.planned_total === 0 && (
             <Card className="border-blue-200 bg-blue-50">
               <CardHeader>
-                <CardTitle className="text-blue-800">Free-form Activity</CardTitle>
+                <CardTitle className="text-blue-800">Unplanned Activity</CardTitle>
                 <CardDescription className="text-blue-700">
                   This activity has no planned route. You can check in at any station to build your journey as you go.
                 </CardDescription>
@@ -378,87 +378,89 @@ const ActivityDetail = () => {
               <CardTitle>Journey Progress</CardTitle>
               <CardDescription>Check in at any station to continue your activity.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Actual Visits (chronological order) */}
-              {actual_visits && actual_visits.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-3">Actual Visit Order</h4>
-                  <div className="space-y-3 max-h-48 overflow-y-auto">
-                    {actual_visits.map((visit, index) => (
-                      <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
+          <CardContent className="space-y-6">
+            {/* Actual Visits (chronological order) */}
+            {actual_visits && actual_visits.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-3 text-red-700">Visited Stations (in order)</h4>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {actual_visits.map((visit, index) => (
+                    <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-medium">
+                          {visit.sequence}
+                        </div>
+                        <div>
+                          <div className="font-medium">{visit.display_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Visited {new Date(visit.visited_at).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge className="bg-red-500 text-white">Visited</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Planned Route (if exists) */}
+            {plan.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-3 text-blue-700">Planned Route {plan.length > 0 ? '(reference only)' : ''}</h4>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {plan.map((station) => {
+                    const statusColor = station.status === 'verified' ? 'bg-red-500' : 'bg-blue-500';
+                    const textColor = station.status === 'verified' ? 'text-white' : 'text-white';
+                    const bgColor = station.status === 'verified' ? 'bg-red-50' : 'bg-blue-50';
+                    
+                    return (
+                      <div key={`plan-${station.station_tfl_id}-${station.sequence}`} className={`flex items-center justify-between p-3 border rounded-lg ${bgColor}`}>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-medium">
-                            {visit.sequence}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${textColor}`}>
+                            {station.sequence}
                           </div>
                           <div>
-                            <div className="font-medium">{visit.display_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              Visited {new Date(visit.visited_at).toLocaleTimeString()}
-                            </div>
+                            <div className="font-medium">{station.display_name}</div>
                           </div>
                         </div>
-                        <Badge>Visited</Badge>
+                        <Badge variant={station.status === 'verified' ? 'default' : 'outline'} className={station.status === 'verified' ? 'bg-red-500 text-white' : 'bg-blue-100 text-blue-700 border-blue-300'}>
+                          {station.status === 'verified' ? 'Visited' : 'Not visited'}
+                        </Badge>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Planned Route (if exists) */}
-              {plan.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-3">Planned Route {plan.length > 0 ? '(reference only)' : ''}</h4>
-                  <div className="space-y-3 max-h-48 overflow-y-auto">
-                    {plan.map((station) => {
-                      const statusColor = station.status === 'verified' ? 'bg-red-500' : 'bg-gray-200';
-                      
-                      return (
-                        <div key={`plan-${station.station_tfl_id}-${station.sequence}`} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${station.status === 'verified' ? 'text-white' : 'text-gray-600'}`}>
-                              {station.sequence}
-                            </div>
-                            <div>
-                              <div className="font-medium">{station.display_name}</div>
-                            </div>
-                          </div>
-                          <Badge variant={station.status === 'verified' ? 'default' : 'outline'}>
-                            {station.status === 'verified' ? 'Visited' : 'Not visited'}
-                          </Badge>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {plan.length === 0 && (!actual_visits || actual_visits.length === 0) && (
-                <p className="text-muted-foreground">No stations visited or planned for this activity</p>
-              )}
+            {plan.length === 0 && (!actual_visits || actual_visits.length === 0) && (
+              <p className="text-muted-foreground">No stations visited or planned for this activity</p>
+            )}
             </CardContent>
           </Card>
 
           {/* Actions - Free-order mode */}
           <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4">
             <div className="flex gap-2 justify-center">
-              {activity.status === 'draft' && (
-                <Button onClick={handleStartJourney} className="flex items-center gap-2">
-                  <Play className="w-4 h-4" />
-                  Start Journey
-                </Button>
-              )}
-              {activity.status === 'active' && (
-                <>
-                  <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
+                {activity.status === 'draft' && (
+                  <Button onClick={handleStartJourney} className="flex items-center gap-2">
                     <Play className="w-4 h-4" />
-                    {activityState.warnings?.empty_plan ? 'Start Check-in' : 'Continue Check-in'}
+                    Start Journey
                   </Button>
-                  <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
-                    <Square className="w-4 h-4" />
-                    Finish Activity
-                  </Button>
-                </>
-              )}
+                )}
+                {activity.status === 'active' && (
+                  <>
+                    <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
+                      <Play className="w-4 h-4" />
+                      {activityState.counts.planned_total === 0 ? 'Continue Check-in' : 'Continue Check-in'}
+                    </Button>
+                    <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
+                      <Square className="w-4 h-4" />
+                      Finish Activity
+                    </Button>
+                  </>
+                )}
               <Button 
                 variant="outline" 
                 onClick={() => navigate(`/activities/${activity.id}/map`)}

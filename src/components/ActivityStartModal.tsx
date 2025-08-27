@@ -6,15 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { MapPin, Route, Camera, Navigation } from 'lucide-react';
+import { Camera, Route } from 'lucide-react';
 import { useStations, Station } from '@/hooks/useStations';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import RouteMap from '@/components/RouteMap';
-import SearchStationInput from '@/components/SearchStationInput';
 
 interface ActivityStartModalProps {
   open: boolean;
@@ -32,22 +30,15 @@ interface Route {
 
 const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenChange }) => {
   const { user } = useAuth();
-  const { stations, loading: stationsLoading } = useStations();
+  const { stations } = useStations();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   // Form state
-  const [activeTab, setActiveTab] = useState('manual');
+  const [activeTab, setActiveTab] = useState('unplanned');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedStartStation, setSelectedStartStation] = useState<Station | null>(null);
-  const [selectedEndStation, setSelectedEndStation] = useState<Station | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
-  const [mapStations, setMapStations] = useState<Station[]>([]);
-
-  // GPS state
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [locationLoading, setLocationLoading] = useState(false);
 
   // Fetch user routes
   const { data: routes = [], isLoading: routesLoading } = useQuery({
@@ -71,48 +62,13 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       // Reset form when modal opens
       setTitle('');
       setDescription('');
-      setSelectedStartStation(null);
-      setSelectedEndStation(null);
       setSelectedRoute(null);
-      setMapStations([]);
-      setLocation(null);
     }
   }, [open]);
 
   const getStationName = (tflId: string) => {
     const station = stations.find(s => s.id === tflId);
     return station ? station.name : tflId;
-  };
-
-  const getCurrentLocation = async () => {
-    setLocationLoading(true);
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        });
-      });
-      
-      setLocation({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
-      });
-      
-      toast({
-        title: "Location found",
-        description: "Ready to check in at your current location"
-      });
-    } catch (error) {
-      toast({
-        title: "Location error",
-        description: "Could not get your current location",
-        variant: "destructive"
-      });
-    } finally {
-      setLocationLoading(false);
-    }
   };
 
   const createActivity = async (data: {
@@ -122,8 +78,6 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
     end_station_tfl_id?: string;
     route_id?: string;
     status: 'draft' | 'active';
-    start_latitude?: number;
-    start_longitude?: number;
   }) => {
     if (!user) return null;
 
@@ -149,16 +103,10 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
       } else {
         console.warn(`Route ${data.route_id} has no stations - creating empty activity`);
       }
-    } else if (data.start_station_tfl_id) {
-      // Manual activity with start/end stations - ensure proper order
-      station_tfl_ids = data.end_station_tfl_id ? 
-        [data.start_station_tfl_id, data.end_station_tfl_id] : 
-        [data.start_station_tfl_id];
-      console.log(`Manual activity: ${station_tfl_ids.length} stations planned`);
     } else {
-      // Quick check-in activity - empty plan initially, will be populated on first check-in
+      // Unplanned activity - empty plan initially, will be populated on first check-in
       station_tfl_ids = [];
-      console.log(`Quick check-in activity: empty initial plan`);
+      console.log(`Unplanned activity: empty initial plan`);
     }
 
     // Ensure we have valid station IDs by checking against stations table
@@ -178,18 +126,9 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         station_tfl_ids = station_tfl_ids.filter(id => validTflIds.includes(id));
       }
       
-      // Block creation if no valid stations remain
-      if (station_tfl_ids.length === 0) {
-        throw new Error("No valid stations selected. Please pick at least one valid station.");
-      }
-    }
-    
-    // For manual/route activities, ensure we have at least one station
-    if (!data.start_latitude && station_tfl_ids.length === 0) {
-      if (data.route_id) {
+      // Block creation if no valid stations remain for route activities
+      if (data.route_id && station_tfl_ids.length === 0) {
         throw new Error("This route has no valid stations. Please edit the route and try again.");
-      } else {
-        throw new Error("No valid stations selected. Please pick at least one valid station.");
       }
     }
 
@@ -203,8 +142,6 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
         end_station_tfl_id: data.end_station_tfl_id,
         route_id: data.route_id,
         status: data.status,
-        start_latitude: data.start_latitude,
-        start_longitude: data.start_longitude,
         station_tfl_ids: station_tfl_ids
       })
       .select()
@@ -221,65 +158,17 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
     return activity;
   };
 
-  const handleManualCreate = async () => {
-    if (!selectedStartStation) {
-      toast({
-        title: "Start station required",
-        description: "Please select a start station",
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const handleUnplannedCreate = async () => {
     try {
       const activity = await createActivity({
-        title: title || `${selectedStartStation.name} to ${selectedEndStation?.name || 'Unknown'}`,
+        title: title || `Unplanned Activity - ${new Date().toLocaleDateString()}`,
         description,
-        start_station_tfl_id: selectedStartStation.id,
-        end_station_tfl_id: selectedEndStation?.id,
-        status: 'draft'
+        status: 'draft' // Start as draft, will become active on first check-in
       });
 
       toast({
         title: "Activity created",
-        description: "Check in at your start station to begin"
-      });
-
-      console.log(`🧭 NAV: Navigating to activity detail: ${activity.id}`);
-      onOpenChange(false);
-      navigate(`/activities/${activity.id}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Please try again";
-      toast({
-        title: "Error creating activity",
-        description: errorMessage,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleQuickCheckin = async () => {
-    if (!location) {
-      toast({
-        title: "Location required",
-        description: "Please get your current location first",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const activity = await createActivity({
-        title: title || `Activity at ${new Date().toLocaleTimeString()}`,
-        description,
-        status: 'active',
-        start_latitude: location.latitude,
-        start_longitude: location.longitude
-      });
-
-      toast({
-        title: "Activity started",
-        description: "You're checked in and ready to go!"
+        description: "Check in at any station to begin your journey"
       });
 
       console.log(`🧭 NAV: Navigating to activity checkin: ${activity.id}`);
@@ -288,7 +177,7 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Please try again";
       toast({
-        title: "Error starting activity",
+        title: "Error creating activity",
         description: errorMessage,
         variant: "destructive"
       });
@@ -317,12 +206,12 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
 
       toast({
         title: "Route activity created",
-        description: "Check in at the start station to begin"
+        description: "Check in at any station to begin your journey"
       });
 
-      console.log(`🧭 NAV: Navigating to activity detail: ${activity.id}`);
+      console.log(`🧭 NAV: Navigating to activity checkin: ${activity.id}`);
       onOpenChange(false);
-      navigate(`/activities/${activity.id}`);
+      navigate(`/activities/${activity.id}/checkin`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Please try again";
       toast({
@@ -333,154 +222,51 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
     }
   };
 
-  const handleMapStationSelect = (station: Station) => {
-    setMapStations(prev => {
-      const existing = prev.find(s => s.id === station.id);
-      if (existing) {
-        return prev.filter(s => s.id !== station.id);
-      }
-      return [...prev, station];
-    });
-  };
-
-  const handleSearchStationSelect = (station: Station, type: 'start' | 'end') => {
-    if (type === 'start') {
-      setSelectedStartStation(station);
-    } else {
-      setSelectedEndStation(station);
-    }
-    // Auto-add to map selection for visual confirmation
-    setMapStations(prev => {
-      const existing = prev.find(s => s.id === station.id);
-      if (!existing) {
-        return [...prev, station];
-      }
-      return prev;
-    });
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Start Activity</DialogTitle>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="manual" className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              Manual
-            </TabsTrigger>
-            <TabsTrigger value="checkin" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="unplanned" className="flex items-center gap-2">
               <Camera className="h-4 w-4" />
-              Check-in
+              Unplanned
             </TabsTrigger>
-            <TabsTrigger value="route" className="flex items-center gap-2">
+            <TabsTrigger value="planned" className="flex items-center gap-2">
               <Route className="h-4 w-4" />
-              From Route
+              Planned
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="manual" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Activity Title (Optional)</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="My tube journey"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Journey notes..."
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <Label>Start Station</Label>
-                    <SearchStationInput
-                      stations={stations}
-                      onStationSelect={(station) => handleSearchStationSelect(station, 'start')}
-                      placeholder="Search start station..."
-                      selectedStation={selectedStartStation}
-                    />
-                  </div>
-
-                  <div>
-                    <Label>End Station (Optional)</Label>
-                    <SearchStationInput
-                      stations={stations}
-                      onStationSelect={(station) => handleSearchStationSelect(station, 'end')}
-                      placeholder="Search end station..."
-                      selectedStation={selectedEndStation}
-                    />
-                  </div>
-                </div>
-
-                <Button 
-                  onClick={handleManualCreate} 
-                  className="w-full"
-                  disabled={!selectedStartStation}
-                >
-                  Create Activity
-                </Button>
-              </div>
-
-              <div className="h-96">
-                {!stationsLoading && (
-                  <RouteMap
-                    selectedStations={mapStations.map(s => s.id)}
-                    onStationSelect={(stationId) => {
-                      const station = stations.find(s => s.id === stationId);
-                      if (station) handleMapStationSelect(station);
-                    }}
-                    onStationRemove={(stationId) => 
-                      setMapStations(prev => prev.filter(s => s.id !== stationId))
-                    }
-                    onSequenceChange={() => {}} // Not needed for activity creation
-                  />
-                )}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="checkin" className="space-y-6">
+          <TabsContent value="unplanned" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Navigation className="h-5 w-5" />
-                  Check-in at Current Location
+                  <Camera className="h-5 w-5" />
+                  Start Unplanned Activity
                 </CardTitle>
                 <CardDescription>
-                  Start an activity immediately by checking in at your current location
+                  Begin with your first check-in at any station. Activity starts on the first successful photo verification.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="checkin-title">Activity Title (Optional)</Label>
+                  <Label htmlFor="unplanned-title">Activity Title (Optional)</Label>
                   <Input
-                    id="checkin-title"
+                    id="unplanned-title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Quick activity"
+                    placeholder="My spontaneous journey"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="checkin-description">Description (Optional)</Label>
+                  <Label htmlFor="unplanned-description">Description (Optional)</Label>
                   <Textarea
-                    id="checkin-description"
+                    id="unplanned-description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Activity notes..."
@@ -488,39 +274,21 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
                   />
                 </div>
 
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={getCurrentLocation}
-                    disabled={locationLoading}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    {locationLoading ? "Getting location..." : "Get Location"}
-                  </Button>
-                  
-                  <Button 
-                    onClick={handleQuickCheckin}
-                    disabled={!location}
-                    className="flex-1"
-                  >
-                    Start Activity
-                  </Button>
-                </div>
-
-                {location && (
-                  <div className="text-sm text-muted-foreground">
-                    Location found: {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-                  </div>
-                )}
+                <Button 
+                  onClick={handleUnplannedCreate} 
+                  className="w-full"
+                >
+                  Create Unplanned Activity
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="route" className="space-y-6">
+          <TabsContent value="planned" className="space-y-6">
             <div>
-              <Label htmlFor="route-title">Activity Title (Optional)</Label>
+              <Label htmlFor="planned-title">Activity Title (Optional)</Label>
               <Input
-                id="route-title"
+                id="planned-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Route challenge"
@@ -528,9 +296,9 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
             </div>
 
             <div>
-              <Label htmlFor="route-description">Description (Optional)</Label>
+              <Label htmlFor="planned-description">Description (Optional)</Label>
               <Textarea
-                id="route-description"
+                id="planned-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Challenge notes..."
