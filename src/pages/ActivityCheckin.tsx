@@ -84,6 +84,17 @@ const ActivityCheckin = () => {
   // Enhanced features
   const { uploadImage, isUploading } = useImageUpload();
 
+  // Clean up component state on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount to prevent memory leaks
+      setCapturedImage(null);
+      setVerificationError(null);
+      setSuggestions(null);
+      setGeofenceError(null);
+    };
+  }, []);
+
   // Page entry logging
   useEffect(() => {
     console.log(`🧭 ActivityCheckin: Free-order mode | id=${activityId} user=${user?.id || 'none'}`);
@@ -377,23 +388,49 @@ const ActivityCheckin = () => {
 
       console.log('🧭 Free-Order Checkin: Step 4 SUCCESS');
 
-      // Show success toast and close modal
+      // Show success toast with actions
       const sequenceNumber = (activityState?.actual_visits?.length || 0) + 1;
       
       toast({
         title: "✅ Check-in successful",
         description: `Checked in at ${resolvedStation.display_name} (#${sequenceNumber})`,
-        variant: "default"
+        variant: "default",
+        action: (
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate(`/activities/${activityId}`)}
+            >
+              Done
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                // Clear state for next check-in
+                setCapturedImage(null);
+                setVerificationError(null);
+                setSuggestions(null);
+                setGeofenceError(null);
+              }}
+            >
+              Check Another
+            </Button>
+          </div>
+        )
       });
 
-      // Clear state and close modal
+      // Clear state and prepare for potential next check-in
       setCapturedImage(null);
       setVerificationError(null);
       setSuggestions(null);
       setGeofenceError(null);
       
-      // Navigate back to activity detail
-      navigate(`/activities/${activityId}`);
+      // Auto-navigate after successful check-in (user can stay via toast action)
+      setTimeout(() => {
+        navigate(`/activities/${activityId}`);
+      }, 3000);
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -472,29 +509,42 @@ const ActivityCheckin = () => {
           .eq('id', activity.id);
       }
 
-      // Invalidate queries for immediate UI updates
+      // Invalidate queries for immediate UI updates (all required keys)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activity", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activityVisits", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activitySummary", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activityMapData", activityId] }),
-        queryClient.invalidateQueries({ queryKey: ["activities"] }),
-        queryClient.invalidateQueries({ queryKey: ["activitiesList"] }),
+        queryClient.invalidateQueries({ queryKey: ["activitiesList"] }), // Dashboard counts update
       ]);
 
       console.log('✅ Query invalidations complete');
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       console.error("🧭 Free-Order Checkin: mutation failed -", error);
       
       // Handle duplicate check-in gracefully
       if (error.message.includes('duplicate key value') || error.message.includes('uniq_visits_user_activity_station')) {
-        const stationName = stations.find(s => s.id === error.stationTflId)?.name || 'this station';
+        const resolvedStation = stations.find(s => s.id === variables.stationTflId);
+        const stationName = resolvedStation?.name || 'this station';
+        
+        // Friendly duplicate error with CTA
+        setVerificationError(`You already checked in at ${stationName} for this activity.`);
+        
         toast({
           title: "Already checked in",
           description: `You already checked in at ${stationName} for this activity.`,
-          variant: "destructive"
+          variant: "destructive",
+          action: (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate(`/activities/${activityId}`)}
+            >
+              View Timeline
+            </Button>
+          )
         });
       } else {
         toast({
@@ -566,11 +616,17 @@ const ActivityCheckin = () => {
     }
   };
 
+  // Helper functions to clear image state and ensure unmounting
   const handleRetakePhoto = () => {
     setCapturedImage(null);
     setVerificationError(null);
     setSuggestions(null);
     setGeofenceError(null);
+    
+    // Ensure image preview unmounts completely
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleSuggestionSelect = (suggestionTflId: string) => {
