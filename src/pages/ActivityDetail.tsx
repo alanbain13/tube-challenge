@@ -90,7 +90,7 @@ const ActivityDetail = () => {
   });
 
   // Get basic activity info for other operations
-  const { data: activity } = useQuery({
+  const { data: activity, refetch: refetchActivity } = useQuery({
     queryKey: ["activity", id],
     queryFn: async () => {
     const { data, error } = await supabase
@@ -102,7 +102,42 @@ const ActivityDetail = () => {
       return data;
     },
     enabled: !!user && !!id,
+    staleTime: 0, // Always refetch to get latest state
   });
+
+  // Auto-refetch when returning to this page (especially from check-in)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔄 ActivityDetail page focused, refetching data...');
+      refetchActivityState();
+      refetchActivity();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 ActivityDetail page visible, refetching data...');
+        refetchActivityState();
+        refetchActivity();
+      }
+    };
+
+    // Listen for page focus and visibility changes
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also refetch when component mounts (user navigates back)
+    const timeoutId = setTimeout(() => {
+      console.log('🔄 ActivityDetail mounted, refetching data...');
+      refetchActivityState();
+      refetchActivity();
+    }, 100);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearTimeout(timeoutId);
+    };
+  }, [refetchActivityState, refetchActivity]);
 
   const handleStartJourney = async () => {
     if (!activity) return;

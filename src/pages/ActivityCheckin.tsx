@@ -449,10 +449,11 @@ const ActivityCheckin = () => {
       setSuggestions(null);
       setGeofenceError(null);
       
-      // Auto-navigate after successful check-in (user can stay via toast action)
+      // Auto-navigate after successful check-in with delay for cache update
       setTimeout(() => {
+        console.log('🧭 Navigating back to activity detail...');
         navigate(`/activities/${activityId}`);
-      }, 4000); // Slightly longer to allow toast interaction
+      }, 1000); // Allow time for cache invalidation to complete
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -532,6 +533,7 @@ const ActivityCheckin = () => {
       }
 
       // Invalidate queries for immediate UI updates (all required keys)
+      console.log('🔄 Starting cache invalidation...');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["activity_state", activityId] }),
         queryClient.invalidateQueries({ queryKey: ["activity", activityId] }),
@@ -541,7 +543,10 @@ const ActivityCheckin = () => {
         queryClient.invalidateQueries({ queryKey: ["activitiesList"] }), // Dashboard counts update
       ]);
 
-      console.log('✅ Query invalidations complete');
+      // Force refetch the activity state to ensure immediate update
+      await queryClient.refetchQueries({ queryKey: ["activity_state", activityId] });
+      
+      console.log('✅ Query invalidations and refetch complete');
     },
     onError: (error: any, variables) => {
       console.error("🧭 Free-Order Checkin: mutation failed -", error);
