@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 
 interface StationVisit {
   station_tfl_id: string;
-  status: 'pending' | 'visited' | 'failed';
+  status: 'pending' | 'verified' | 'rejected';
   sequence_number: number;
 }
 
@@ -21,6 +21,7 @@ interface RouteMapProps {
   readOnly?: boolean;
   visits?: StationVisit[];
   activityStations?: string[]; // Complete list of stations in activity sequence
+  activityMode?: 'planned' | 'unplanned';
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -31,7 +32,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
   onStationSetRole,
   readOnly = false,
   visits = [],
-  activityStations = []
+  activityStations = [],
+  activityMode = 'planned'
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -210,8 +212,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const getStationVisitStatus = (stationId: string) => {
     const visit = visits.find(v => v.station_tfl_id === stationId);
     if (visit) {
-      return visit.status === 'visited' ? 'verified' : 
-             visit.status === 'pending' ? 'pending' : 'failed';
+      return visit.status; // Return the status directly since it's already 'verified' | 'pending' | 'rejected'
     }
     
     // Check if station is in activity sequence but not visited

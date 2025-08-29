@@ -142,6 +142,41 @@ export type Database = {
           },
         ]
       }
+      activity_plan_item: {
+        Row: {
+          activity_id: string
+          created_at: string
+          id: string
+          line_hint: string | null
+          seq_planned: number
+          station_tfl_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          id?: string
+          line_hint?: string | null
+          seq_planned: number
+          station_tfl_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          id?: string
+          line_hint?: string | null
+          seq_planned?: number
+          station_tfl_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_activity_plan_item_activity"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

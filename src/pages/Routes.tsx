@@ -124,6 +124,7 @@ const Routes = () => {
       
       console.log('CloneRoute: activity_id=pending stations_copied=' + orderedStations.length + ' order_preserved=true');
 
+      // Create the activity first
       const { data: activity, error } = await supabase
         .from('activities')
         .insert({
@@ -134,12 +135,27 @@ const Routes = () => {
           start_station_tfl_id: orderedStations[0] || route.start_station_tfl_id,
           end_station_tfl_id: orderedStations[orderedStations.length - 1] || route.end_station_tfl_id,
           status: 'draft',
-          station_tfl_ids: orderedStations
+          station_tfl_ids: orderedStations // Keep for backwards compatibility
         })
         .select()
         .single();
 
       if (error) throw error;
+
+      // Create activity_plan_item records with seq_planned preserved
+      if (orderedStations.length > 0) {
+        const planItems = orderedStations.map((stationId, index) => ({
+          activity_id: activity.id,
+          station_tfl_id: stationId,
+          seq_planned: index + 1
+        }));
+
+        const { error: planError } = await supabase
+          .from('activity_plan_item')
+          .insert(planItems);
+
+        if (planError) throw planError;
+      }
 
       console.log('CloneRoute: activity_id=' + activity.id + ' stations_copied=' + orderedStations.length + ' order_preserved=true');
 

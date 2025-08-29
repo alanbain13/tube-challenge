@@ -31,17 +31,36 @@ const Activities = () => {
     return station ? station.name : tflId;
   };
 
-  // Helper function to get activity state using derive RPC
-  const getActivityState = async (activityId: string) => {
+  // Helper function to get unified activity state
+  const getUnifiedActivityState = async (activityId: string) => {
     try {
-      const { data, error } = await supabase.rpc('derive_activity_state', { 
-        activity_id_param: activityId 
-      });
-      if (error) throw error;
-      return data;
+      // Get activity plan items (for planned activities)
+      const { data: planItems, error: planError } = await supabase
+        .from('activity_plan_item')
+        .select('station_tfl_id, seq_planned')
+        .eq('activity_id', activityId);
+
+      if (planError) throw planError;
+
+      // Get station visits (verified and pending only)
+      const { data: visits, error: visitsError } = await supabase
+        .from('station_visits')
+        .select('station_tfl_id, status')
+        .eq('activity_id', activityId)
+        .in('status', ['verified', 'pending']);
+
+      if (visitsError) throw visitsError;
+
+      const visitedCount = visits?.length || 0;
+      const totalPlannedCount = planItems?.length || 0;
+
+      return {
+        visited_actual: visitedCount,
+        planned_total: totalPlannedCount
+      };
     } catch (error) {
-      console.error('Error deriving activity state:', error);
-      return { counts: { visited_actual: 0, planned_total: 0 } };
+      console.error('Error getting unified activity state:', error);
+      return { visited_actual: 0, planned_total: 0 };
     }
   };
 
@@ -74,13 +93,13 @@ const Activities = () => {
         .order("started_at", { ascending: false });
       if (error) throw error;
       
-      // Get derived state for each activity
+      // Get unified state for each activity
       const activitiesWithState = await Promise.all(
         data.map(async (activity) => {
-          const derivedState = await getActivityState(activity.id);
+          const unifiedState = await getUnifiedActivityState(activity.id);
           return {
             ...activity,
-            _derivedState: derivedState
+            _unifiedState: unifiedState
           };
         })
       );
@@ -227,8 +246,8 @@ const Activities = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {activities.map((activity: any) => {
-                const derivedState = activity._derivedState || { counts: { visited_actual: 0, planned_total: activity.station_tfl_ids?.length || 0 } };
-                const { visited_actual, planned_total } = derivedState.counts;
+                const unifiedState = activity._unifiedState || { visited_actual: 0, planned_total: 0 };
+                const { visited_actual, planned_total } = unifiedState;
                 const statusText = activity.status === 'draft' ? 'Not started' : 
                                  activity.status === 'active' ? 'Active' : 
                                  activity.status === 'paused' ? 'Paused' : 'Completed';

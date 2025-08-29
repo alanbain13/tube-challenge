@@ -381,7 +381,9 @@ const ActivityDetail = () => {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Visited Count</div>
-                  <div className="font-medium">{counts.visited_actual}/{counts.planned_total} stations</div>
+                  <div className="font-medium">
+                    {counts.visited_actual}/{counts.planned_total > 0 ? counts.planned_total : 'Open'} stations
+                  </div>
                 </div>
               </div>
             </CardContent>
