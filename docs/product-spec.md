@@ -4,7 +4,7 @@ Version: 0.1
 Last updated: 2025-08-11
 Owner: Product + Engineering
 
-Purpose
+Purpose:
 - Single source of truth to guide planning, implementation, and QA
 - Easy to update via PRs; reference in issues and commits
 
