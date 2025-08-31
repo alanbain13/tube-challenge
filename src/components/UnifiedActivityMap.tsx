@@ -166,27 +166,15 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="relative w-6 h-7">
-                      {/* Visited pin icon */}
-                      <svg width="24" height="28" viewBox="0 0 34 41" className="absolute inset-0">
-                        <path d="M17 0C7.6 0 0 7.6 0 17c0 9.4 17 24 17 24s17-14.6 17-24C34 7.6 26.4 0 17 0z" 
-                              fill="#E53935" stroke="white" strokeWidth="2"/>
-                        <circle cx="17" cy="17" r="8" fill="white" stroke="#E53935" strokeWidth="1"/>
-                        <text x="17" y="21" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#E53935">1</text>
-                      </svg>
+                    <div className="w-5 h-5 rounded-full bg-[#E53935] border-2 border-white flex items-center justify-center text-white text-xs font-bold">
+                      1
                     </div>
                     <span>Visited</span>
                   </div>
                   {mode === 'planned' && (
                     <div className="flex items-center gap-2">
-                      <div className="relative w-6 h-7">
-                        {/* Planned pin icon */}
-                        <svg width="24" height="28" viewBox="0 0 34 41" className="absolute inset-0">
-                          <path d="M17 0C7.6 0 0 7.6 0 17c0 9.4 17 24 17 24s17-14.6 17-24C34 7.6 26.4 0 17 0z" 
-                                fill="#1E88E5" stroke="white" strokeWidth="2"/>
-                          <circle cx="17" cy="17" r="8" fill="white" stroke="#1E88E5" strokeWidth="1"/>
-                          <text x="17" y="21" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#1E88E5">2</text>
-                        </svg>
+                      <div className="w-5 h-5 rounded-full bg-[#1E88E5] border-2 border-white flex items-center justify-center text-white text-xs font-bold">
+                        2
                       </div>
                       <span>Remaining</span>
                     </div>
@@ -200,15 +188,15 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
                       <div 
                         className="w-6 h-2 border border-white rounded-sm shadow-sm" 
                         style={{
-                          background: 'repeating-linear-gradient(90deg, #9C27B0 0, #9C27B0 2px, transparent 2px, transparent 5px)',
-                          backgroundSize: '5px 100%'
+                          background: 'repeating-linear-gradient(90deg, #9C27B0 0, #9C27B0 4px, transparent 4px, transparent 10px)',
+                          backgroundSize: '10px 100%'
                         }}
                       ></div>
                       <span>Preview Path</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full border-2 border-gray-400 bg-transparent"></div>
+                    <div className="w-4 h-4 rounded-full border-2 border-gray-400 bg-gray-400 opacity-60"></div>
                     <span>Other Stations</span>
                   </div>
                 </div>

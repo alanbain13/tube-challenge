@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { UnifiedActivityState } from '@/hooks/useActivityState';
-import { buildActivityGeoJSON, createPinSVG, createRoundelSVG } from '@/lib/activityMapUtils';
+import { MAP_COLORS, MAP_SIZES, LAYER_STYLES, LAYER_ORDER } from '@/map/MapStyle';
 
 interface StationVisit {
   station_tfl_id: string;
@@ -24,7 +24,7 @@ interface RouteMapProps {
   visits?: StationVisit[];
   activityStations?: string[]; // Complete list of stations in activity sequence
   activityMode?: 'planned' | 'unplanned';
-  activityState?: UnifiedActivityState; // New prop for activity data
+  activityState?: UnifiedActivityState;
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -102,16 +102,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('load', () => {
       console.log('🗺️ RouteMap - Map loaded, adding data...');
       addTubeLinesToMap();
-      
-      // Load pin and roundel images
-      loadMapImages();
-      
-      // Use new pin system if activity state provided, otherwise fallback to old system
-      if (activityState) {
-        addActivityPinSystem();
-      } else {
-        addStationsToMap();
-      }
+      addStationsToMap();
     });
 
     return () => {
@@ -132,11 +123,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     });
     
     if (map.current && stations.length > 0) {
-      if (activityState) {
-        updateActivityPinSystem();
-      } else {
-        updateStationStyles();
-      }
+      updateStationStyles();
     }
   }, [selectedStations, stations, visits, activityStations, activityState]);
 
@@ -263,297 +250,11 @@ const RouteMap: React.FC<RouteMapProps> = ({
     return 0;
   };
 
-  const loadMapImages = () => {
-    if (!map.current) return;
+  // Remove pin system - reverting to A1 baseline circular markers
 
-    // Create pin images for different states
-    const pinConfigs = [
-      { id: 'pin-visited', color: '#E53935', size: 34 },
-      { id: 'pin-planned', color: '#1E88E5', size: 34 },
-      { id: 'pin-pending', color: '#FB8C00', size: 34 },
-      { id: 'pin-visited-small', color: '#E53935', size: 28 },
-      { id: 'pin-planned-small', color: '#1E88E5', size: 28 },
-      { id: 'pin-pending-small', color: '#FB8C00', size: 28 }
-    ];
+  // Removed pin system - using A1 baseline circular markers
 
-    pinConfigs.forEach(config => {
-      const svg = createPinSVG(config.color, '1', config.size);
-      const img = new Image();
-      img.onload = () => {
-        if (map.current) {
-          map.current.addImage(config.id, img, { sdf: false });
-        }
-      };
-      img.src = 'data:image/svg+xml;base64,' + btoa(svg);
-    });
-
-    // Create roundel image
-    const roundelSvg = createRoundelSVG(16);
-    const roundelImg = new Image();
-    roundelImg.onload = () => {
-      if (map.current) {
-        map.current.addImage('roundel-grey', roundelImg, { sdf: false });
-      }
-    };
-    roundelImg.src = 'data:image/svg+xml;base64,' + btoa(roundelSvg);
-  };
-
-  const addActivityPinSystem = () => {
-    if (!map.current || !activityState) return;
-
-    const stationData = stations.map(s => ({
-      id: s.id,
-      name: s.name,
-      coordinates: s.coordinates as [number, number]
-    }));
-
-    const geoData = buildActivityGeoJSON(activityState, stationData);
-
-    // Add visited path (solid line with glow)
-    map.current.addSource('activity-visited-path', {
-      type: 'geojson',
-      data: geoData.visitedPath
-    });
-
-    map.current.addLayer({
-      id: 'activity-visited-path',
-      type: 'line',
-      source: 'activity-visited-path',
-      paint: {
-        'line-color': '#E53935',
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 4,
-          15, 6
-        ]
-      }
-    });
-
-    // Add visited path glow
-    map.current.addLayer({
-      id: 'activity-visited-path-glow',
-      type: 'line',
-      source: 'activity-visited-path',
-      paint: {
-        'line-color': '#ffffff',
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 6,
-          15, 8
-        ],
-        'line-opacity': 0.6
-      }
-    }, 'activity-visited-path');
-
-    // Add planned path (dotted line)
-    map.current.addSource('activity-planned-path', {
-      type: 'geojson',
-      data: geoData.plannedPath
-    });
-
-    map.current.addLayer({
-      id: 'activity-planned-path',
-      type: 'line',
-      source: 'activity-planned-path',
-      paint: {
-        'line-color': '#9C27B0',
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 3,
-          15, 4
-        ],
-        'line-dasharray': [2, 3]
-      }
-    });
-
-    // Add roundels for non-activity stations
-    map.current.addSource('station-roundels', {
-      type: 'geojson',
-      data: geoData.roundels
-    });
-
-    map.current.addLayer({
-      id: 'station-roundels',
-      type: 'symbol',
-      source: 'station-roundels',
-      layout: {
-        'icon-image': 'roundel-grey',
-        'icon-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          10, 0.8,
-          14, 1.2
-        ],
-        'icon-allow-overlap': false,
-        'icon-ignore-placement': false
-      }
-    });
-
-    // Add visited pins
-    map.current.addSource('activity-visited-pins', {
-      type: 'geojson',
-      data: geoData.visitedPins
-    });
-
-    map.current.addLayer({
-      id: 'activity-visited-pins',
-      type: 'symbol',
-      source: 'activity-visited-pins',
-      layout: {
-        'icon-image': [
-          'case',
-          ['<', ['zoom'], 12], 'pin-visited-small',
-          'pin-visited'
-        ],
-        'icon-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 0.6,
-          13, 0.8,
-          15, 1.0
-        ],
-        'icon-anchor': 'bottom',
-        'icon-allow-overlap': true,
-        'text-field': ['get', 'labelNum'],
-        'text-font': ['Open Sans Bold'],
-        'text-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 10,
-          15, 14
-        ],
-        'text-anchor': 'center',
-        'text-offset': [0, -1.8],
-        'text-allow-overlap': true
-      },
-      paint: {
-        'text-color': '#E53935',
-        'text-halo-color': '#ffffff',
-        'text-halo-width': 2
-      }
-    });
-
-    // Add planned pins
-    map.current.addSource('activity-planned-pins', {
-      type: 'geojson',
-      data: geoData.plannedPins
-    });
-
-    map.current.addLayer({
-      id: 'activity-planned-pins',
-      type: 'symbol',
-      source: 'activity-planned-pins',
-      layout: {
-        'icon-image': [
-          'case',
-          ['<', ['zoom'], 12], 'pin-planned-small',
-          'pin-planned'
-        ],
-        'icon-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 0.6,
-          13, 0.8,
-          15, 1.0
-        ],
-        'icon-anchor': 'bottom',
-        'icon-allow-overlap': true,
-        'text-field': ['get', 'labelNum'],
-        'text-font': ['Open Sans Bold'],
-        'text-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          11, 10,
-          15, 14
-        ],
-        'text-anchor': 'center',
-        'text-offset': [0, -1.8],
-        'text-allow-overlap': true
-      },
-      paint: {
-        'text-color': '#1E88E5',
-        'text-halo-color': '#ffffff',
-        'text-halo-width': 2
-      }
-    });
-
-    // Add click handlers for pins
-    ['activity-visited-pins', 'activity-planned-pins'].forEach(layerId => {
-      map.current!.on('click', layerId, (e) => {
-        if (e.features && e.features[0]) {
-          const stationId = e.features[0].properties?.station_tfl_id;
-          const stationName = e.features[0].properties?.station_name;
-          
-          // Create station info popup or handle tap
-          new mapboxgl.Popup({
-            closeButton: true,
-            closeOnClick: true,
-            className: 'station-popup'
-          })
-          .setLngLat(e.lngLat)
-          .setHTML(`
-            <div class="p-3">
-              <h3 class="font-bold text-sm mb-1">${stationName}</h3>
-              <p class="text-xs text-gray-600">Station ID: ${stationId}</p>
-            </div>
-          `)
-          .addTo(map.current!);
-        }
-      });
-
-      // Add cursor pointer
-      map.current!.on('mouseenter', layerId, () => {
-        if (map.current) {
-          map.current.getCanvas().style.cursor = 'pointer';
-        }
-      });
-
-      map.current!.on('mouseleave', layerId, () => {
-        if (map.current) {
-          map.current.getCanvas().style.cursor = '';
-        }
-      });
-    });
-  };
-
-  const updateActivityPinSystem = () => {
-    if (!map.current || !activityState) return;
-
-    const stationData = stations.map(s => ({
-      id: s.id,
-      name: s.name,
-      coordinates: s.coordinates as [number, number]
-    }));
-
-    const geoData = buildActivityGeoJSON(activityState, stationData);
-
-    // Update all sources with new data
-    const sources = [
-      { id: 'activity-visited-path', data: geoData.visitedPath },
-      { id: 'activity-planned-path', data: geoData.plannedPath },
-      { id: 'activity-visited-pins', data: geoData.visitedPins },
-      { id: 'activity-planned-pins', data: geoData.plannedPins },
-      { id: 'station-roundels', data: geoData.roundels }
-    ];
-
-    sources.forEach(({ id, data }) => {
-      const source = map.current!.getSource(id) as mapboxgl.GeoJSONSource;
-      if (source) {
-        source.setData(data);
-      }
-    });
-  };
+  // Remove old pin system references - reverted to A1 baseline
 
   const addStationsToMap = () => {
     if (!map.current) return;
@@ -587,7 +288,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station circles with visit status colors (crimson for visited, royal blue for planned)
+    // Add station circles using A1 baseline styling with MapStyle constants
     map.current.addLayer({
       id: 'stations',
       type: 'circle',
@@ -596,24 +297,24 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          10,
-          6
+          MAP_SIZES.MARKER_LARGE,
+          MAP_SIZES.MARKER_SMALL
         ],
         'circle-color': [
           'case',
-          ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Crimson - verified visited
-          ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Crimson - pending verification
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Royal blue - planned but not visited
-          ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
-          '#9ca3af' // Gray - default
+          ['==', ['get', 'visitStatus'], 'verified'], MAP_COLORS.VISITED,
+          ['==', ['get', 'visitStatus'], 'pending'], MAP_COLORS.VISITED,
+          ['==', ['get', 'visitStatus'], 'not_visited'], MAP_COLORS.PLANNED,
+          ['get', 'isSelected'], '#3b82f6',
+          MAP_COLORS.OTHER
         ],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': MAP_SIZES.PATH_OUTLINE,
+        'circle-stroke-color': MAP_COLORS.WHITE,
         'circle-opacity': 1
       }
     });
 
-    // Add numeric badges as separate overlay layer with better visibility
+    // Add numeric badges with A1 baseline styling  
     map.current.addLayer({
       id: 'station-number-badges',
       type: 'circle',
@@ -623,18 +324,18 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': 9,
         'circle-color': [
           'case',
-          ['==', ['get', 'visitStatus'], 'verified'], '#1a1a1a', // Dark badge for visited
-          ['==', ['get', 'visitStatus'], 'pending'], '#1a1a1a', // Dark badge for pending
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Blue badge for planned
-          '#1a1a1a' // Dark default
+          ['==', ['get', 'visitStatus'], 'verified'], '#1a1a1a',
+          ['==', ['get', 'visitStatus'], 'pending'], '#1a1a1a', 
+          ['==', ['get', 'visitStatus'], 'not_visited'], MAP_COLORS.PLANNED,
+          '#1a1a1a'
         ],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#ffffff',
-        'circle-translate': [0, -8] // Offset badges from station dots
+        'circle-stroke-width': MAP_SIZES.PATH_OUTLINE,
+        'circle-stroke-color': MAP_COLORS.WHITE,
+        'circle-translate': [0, -8]
       }
     });
 
-    // Add numeric text with white halo for readability
+    // Add numeric text using MapStyle constants
     map.current.addLayer({
       id: 'station-numbers',
       type: 'symbol',
@@ -643,12 +344,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
       layout: {
         'text-field': ['get', 'sequence'],
         'text-font': ['Open Sans Bold'],
-        'text-size': 12,
+        'text-size': MAP_SIZES.MARKER_TEXT,
         'text-anchor': 'center',
-        'text-offset': [0, -0.6] // Offset to match badge position
+        'text-offset': [0, -0.6]
       },
       paint: {
-        'text-color': '#ffffff',
+        'text-color': MAP_COLORS.WHITE,
         'text-halo-color': '#000000',
         'text-halo-width': 1
       }
@@ -806,26 +507,26 @@ const RouteMap: React.FC<RouteMapProps> = ({
       })
     });
 
-    // Update layer styles with visit status colors (crimson for visited, royal blue for planned)
+    // Update layer styles using A1 baseline colors with MapStyle constants
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
-      ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Crimson - verified visited
-      ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Crimson - pending verification  
-      ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Royal blue - not yet visited
-      ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
-      '#9ca3af' // Gray - default
+      ['==', ['get', 'visitStatus'], 'verified'], MAP_COLORS.VISITED,
+      ['==', ['get', 'visitStatus'], 'pending'], MAP_COLORS.VISITED,
+      ['==', ['get', 'visitStatus'], 'not_visited'], MAP_COLORS.PLANNED,
+      ['get', 'isSelected'], '#3b82f6',
+      MAP_COLORS.OTHER
     ]);
 
-    map.current.setPaintProperty('stations', 'circle-stroke-color', '#ffffff');
+    map.current.setPaintProperty('stations', 'circle-stroke-color', MAP_COLORS.WHITE);
 
-    // Update badge colors
+    // Update badge colors using MapStyle constants
     if (map.current.getLayer('station-number-badges')) {
       map.current.setPaintProperty('station-number-badges', 'circle-color', [
         'case',
-        ['==', ['get', 'visitStatus'], 'verified'], '#1a1a1a', // Dark badge for visited
-        ['==', ['get', 'visitStatus'], 'pending'], '#1a1a1a', // Dark badge for pending
-        ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Blue badge for planned
-        '#1a1a1a' // Dark default
+        ['==', ['get', 'visitStatus'], 'verified'], '#1a1a1a',
+        ['==', ['get', 'visitStatus'], 'pending'], '#1a1a1a',
+        ['==', ['get', 'visitStatus'], 'not_visited'], MAP_COLORS.PLANNED,
+        '#1a1a1a'
       ]);
     }
 
@@ -955,27 +656,38 @@ const RouteMap: React.FC<RouteMapProps> = ({
           }
         });
 
-        // Add white outline for the actual path (lower z-index)
+        // Add white outline using MapStyle constants
         map.current.addLayer({
           id: 'actual-path-outline',
           type: 'line',
           source: 'actual-path',
           paint: {
-            'line-color': '#ffffff',
-            'line-width': 6,
-            'line-opacity': 0.9
+            'line-color': MAP_COLORS.WHITE,
+            'line-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              11, MAP_SIZES.PATH_WIDTH_MOBILE + 2,
+              15, MAP_SIZES.PATH_WIDTH_DESKTOP + 2
+            ],
+            'line-opacity': 0.6
           }
         });
 
-        // Add actual path (higher z-index than outline)
+        // Add actual path using MapStyle constants
         map.current.addLayer({
           id: 'actual-path',
           type: 'line',
           source: 'actual-path',
           paint: {
-            'line-color': '#dc143c', // Crimson
-            'line-width': 4,
-            'line-opacity': 1
+            'line-color': MAP_COLORS.ACTUAL_PATH,
+            'line-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              11, MAP_SIZES.PATH_WIDTH_MOBILE,
+              15, MAP_SIZES.PATH_WIDTH_DESKTOP
+            ]
           }
         });
       }
@@ -1015,29 +727,29 @@ const RouteMap: React.FC<RouteMapProps> = ({
               }
             });
 
-            // Add white outline for preview path (lower z-index)
+            // Add white outline for preview path using MapStyle constants
             map.current!.addLayer({
               id: 'preview-path-outline',
               type: 'line',
               source: 'preview-path',
               paint: {
-                'line-color': '#ffffff',
-                'line-width': 6,
-                'line-opacity': 0.9,
-                'line-dasharray': [2, 3]
+                'line-color': MAP_COLORS.WHITE,
+                'line-width': window.innerWidth < 768 ? MAP_SIZES.PATH_WIDTH_MOBILE + 2 : MAP_SIZES.PATH_WIDTH_DESKTOP + 2,
+                'line-opacity': 0.6,
+                'line-dasharray': [4, 6]
               }
             });
 
-            // Add preview path with contrasting purple color
+            // Add preview path using MapStyle constants
             map.current!.addLayer({
               id: 'preview-path',
               type: 'line',
               source: 'preview-path',
               paint: {
-                'line-color': '#9C27B0', // Purple - contrasting color that doesn't collide with tube lines
-                'line-width': window.innerWidth < 768 ? 3 : 4, // Responsive width
+                'line-color': MAP_COLORS.PREVIEW_PATH,
+                'line-width': window.innerWidth < 768 ? MAP_SIZES.PATH_WIDTH_MOBILE : MAP_SIZES.PATH_WIDTH_DESKTOP,
                 'line-opacity': 0.8,
-                'line-dasharray': [2, 3] // Shorter dashes with clear gaps
+                'line-dasharray': [4, 6]
               }
             });
           }
