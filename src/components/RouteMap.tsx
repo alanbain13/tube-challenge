@@ -333,6 +333,11 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
+    // Add route connector lines (dotted grey reference line for route editing)
+    if (selectedStations.length > 1) {
+      addRouteConnectorLines();
+    }
+
     // Add click handler (only if not read-only)
     if (!readOnly) {
       map.current.on('click', 'stations', (e) => {
@@ -471,6 +476,64 @@ const RouteMap: React.FC<RouteMapProps> = ({
     ]);
 
     map.current.setFilter('station-numbers', ['>', ['get', 'sequence'], 0]);
+    
+    // Update route connector lines
+    if (selectedStations.length > 1) {
+      addRouteConnectorLines();
+    } else if (map.current.getSource('route-line')) {
+      if (map.current.getLayer('route-line')) {
+        map.current.removeLayer('route-line');
+      }
+      map.current.removeSource('route-line');
+    }
+  };
+
+  const addRouteConnectorLines = () => {
+    if (!map.current || selectedStations.length < 2) return;
+
+    // Remove existing route line if it exists
+    if (map.current.getSource('route-line')) {
+      if (map.current.getLayer('route-line')) {
+        map.current.removeLayer('route-line');
+      }
+      map.current.removeSource('route-line');
+    }
+
+    // Create line coordinates from selected stations
+    const lineCoordinates: number[][] = [];
+    selectedStations.forEach(stationId => {
+      const station = stations.find(s => s.id === stationId);
+      if (station) {
+        lineCoordinates.push(station.coordinates);
+      }
+    });
+
+    if (lineCoordinates.length < 2) return;
+
+    // Add route line source
+    map.current.addSource('route-line', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: lineCoordinates
+        }
+      }
+    });
+
+    // Add route line layer (dotted grey reference line)
+    map.current.addLayer({
+      id: 'route-line',
+      type: 'line',
+      source: 'route-line',
+      paint: {
+        'line-color': '#9ca3af',
+        'line-width': 3,
+        'line-dasharray': [2, 2]
+      }
+    });
   };
 
   const getStationName = (stationId: string) => {

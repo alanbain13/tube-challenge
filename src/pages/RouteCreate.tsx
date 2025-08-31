@@ -170,22 +170,26 @@ const RouteCreate = () => {
       };
 
       let response;
+      let currentRouteId: string;
+      
       if (isEditMode && routeId) {
         response = await supabase
           .from('routes')
           .update(routeData)
           .eq('id', routeId);
+        currentRouteId = routeId;
       } else {
         response = await supabase
           .from('routes')
-          .insert([routeData]);
+          .insert([routeData])
+          .select('id')
+          .single();
+        currentRouteId = response.data?.id;
       }
 
       // Handle route stations separately
-      if (!response.error) {
-        const currentRouteId = isEditMode ? routeId : response.data?.[0]?.id;
-        
-        if (currentRouteId && selectedStations.length > 0) {
+      if (!response.error && currentRouteId) {
+        if (selectedStations.length > 0) {
           // Delete existing route stations for edit mode
           if (isEditMode) {
             await supabase
@@ -194,16 +198,22 @@ const RouteCreate = () => {
               .eq('route_id', currentRouteId);
           }
 
-          // Insert new route stations
+          // Insert new route stations with proper sequencing
           const routeStations = selectedStations.map((stationId, index) => ({
             route_id: currentRouteId,
             station_tfl_id: stationId,
             sequence_number: index + 1,
+            is_bypass_allowed: false
           }));
 
-          await supabase
+          const stationInsertResponse = await supabase
             .from('route_stations')
             .insert(routeStations);
+            
+          if (stationInsertResponse.error) {
+            console.error('Error saving route stations:', stationInsertResponse.error);
+            throw new Error('Failed to save route stations');
+          }
         }
       }
 
