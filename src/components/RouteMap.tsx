@@ -220,14 +220,28 @@ const RouteMap: React.FC<RouteMapProps> = ({
     return isInActivitySequence ? 'not_visited' : 'not_in_sequence';
   };
 
+  const isOffPlan = (stationId: string) => {
+    // A station is off-plan if it's visited but not in the planned sequence
+    const isVisited = visits.some(v => v.station_tfl_id === stationId);
+    const isPlanned = activityStations.includes(stationId);
+    return isVisited && !isPlanned;
+  };
+
   const getStationSequenceNumber = (stationId: string) => {
-    // First check if it's in selectedStations (for route creation)
-    const selectedIndex = selectedStations.indexOf(stationId);
-    if (selectedIndex >= 0) return selectedIndex + 1;
-    
-    // Then check activity sequence
-    const activityIndex = activityStations.indexOf(stationId);
-    if (activityIndex >= 0) return activityIndex + 1;
+    // For activity mode, prioritize visit sequence number over planned sequence
+    if (activityMode) {
+      const visit = visits.find(v => v.station_tfl_id === stationId);
+      if (visit) {
+        return visit.sequence_number; // Use actual visit sequence for visited stations
+      }
+      // For planned but unvisited stations, use planned sequence 
+      const activityIndex = activityStations.indexOf(stationId);
+      if (activityIndex >= 0) return activityIndex + 1;
+    } else {
+      // For route creation mode, use selectedStations index
+      const selectedIndex = selectedStations.indexOf(stationId);
+      if (selectedIndex >= 0) return selectedIndex + 1;
+    }
     
     return 0;
   };
@@ -264,7 +278,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station circles with visit status colors
+    // Add station circles with visit status colors (crimson for visited, royal blue for planned)
     map.current.addLayer({
       id: 'stations',
       type: 'circle',
@@ -273,24 +287,20 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          10,
-          6
+          12,
+          7
         ],
         'circle-color': [
           'case',
-          ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
-          ['==', ['get', 'visitStatus'], 'pending'], '#f59e0b', // Orange - pending verification
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#3b82f6', // Blue - planned but not visited
+          ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Crimson - verified visited
+          ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Crimson - pending verification
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Royal blue - planned but not visited
           ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
           '#9ca3af' // Gray - default
         ],
         'circle-stroke-width': 2,
-        'circle-stroke-color': [
-          'case',
-          ['==', ['get', 'visitStatus'], 'verified'], '#ffffff', // White border for red circles
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White border for blue circles
-          '#ffffff'
-        ]
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 1
       }
     });
 
@@ -333,9 +343,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route connector lines (dotted grey reference line for route editing)
+    // Add route connector lines
     if (selectedStations.length > 1) {
-      addRouteConnectorLines();
+      if (activityMode) {
+        addActivityPaths();
+      } else {
+        addRouteConnectorLines();
+      }
     }
 
     // Add click handler (only if not read-only)
@@ -459,32 +473,37 @@ const RouteMap: React.FC<RouteMapProps> = ({
       })
     });
 
-    // Update layer styles with visit status colors
+    // Update layer styles with visit status colors (crimson for visited, royal blue for planned)
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
-      ['==', ['get', 'visitStatus'], 'verified'], '#dc2626', // Red - verified visited
-      ['==', ['get', 'visitStatus'], 'pending'], '#ec4899', // Pink - pending verification
-      ['==', ['get', 'visitStatus'], 'not_visited'], '#ffffff', // White - not yet visited
+      ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Crimson - verified visited
+      ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Crimson - pending verification  
+      ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Royal blue - not yet visited
       ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
       '#9ca3af' // Gray - default
     ]);
 
-    map.current.setPaintProperty('stations', 'circle-stroke-color', [
-      'case',
-      ['==', ['get', 'visitStatus'], 'not_visited'], '#3b82f6', // Blue border for white circles
-      '#ffffff'
-    ]);
+    map.current.setPaintProperty('stations', 'circle-stroke-color', '#ffffff');
 
     map.current.setFilter('station-numbers', ['>', ['get', 'sequence'], 0]);
     
     // Update route connector lines
     if (selectedStations.length > 1) {
-      addRouteConnectorLines();
-    } else if (map.current.getSource('route-line')) {
-      if (map.current.getLayer('route-line')) {
-        map.current.removeLayer('route-line');
+      if (activityMode) {
+        addActivityPaths();
+      } else {
+        addRouteConnectorLines();
       }
-      map.current.removeSource('route-line');
+    } else {
+      // Clean up existing lines
+      ['route-line', 'actual-path', 'preview-path'].forEach(layerId => {
+        if (map.current!.getSource(layerId)) {
+          if (map.current!.getLayer(layerId)) {
+            map.current!.removeLayer(layerId);
+          }
+          map.current!.removeSource(layerId);
+        }
+      });
     }
   };
 
@@ -534,6 +553,142 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'line-dasharray': [2, 2]
       }
     });
+  };
+
+  const addActivityPaths = () => {
+    if (!map.current) return;
+
+    // Clean up existing activity paths (including outline layers)
+    ['actual-path', 'actual-path-outline', 'preview-path', 'preview-path-outline'].forEach(layerId => {
+      if (map.current!.getSource(layerId) || map.current!.getLayer(layerId)) {
+        try {
+          if (map.current!.getLayer(layerId)) {
+            map.current!.removeLayer(layerId);
+          }
+          if (map.current!.getSource(layerId)) {
+            map.current!.removeSource(layerId);
+          }
+        } catch (error) {
+          // Ignore errors for non-existent layers/sources
+        }
+      }
+    });
+
+    // Get visited stations in chronological order (including off-plan visits)
+    const visitedStationsInOrder = visits
+      .sort((a, b) => a.sequence_number - b.sequence_number)
+      .map(v => v.station_tfl_id);
+
+    // Add solid crimson path for actual visits
+    if (visitedStationsInOrder.length >= 2) {
+      const actualCoordinates: number[][] = [];
+      visitedStationsInOrder.forEach(stationId => {
+        const station = stations.find(s => s.id === stationId);
+        if (station) {
+          actualCoordinates.push(station.coordinates);
+        }
+      });
+
+      if (actualCoordinates.length >= 2) {
+        map.current.addSource('actual-path', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: actualCoordinates
+            }
+          }
+        });
+
+        map.current.addLayer({
+          id: 'actual-path',
+          type: 'line',
+          source: 'actual-path',
+          paint: {
+            'line-color': '#dc143c', // Crimson
+            'line-width': 4,
+            'line-opacity': 1
+          }
+        });
+
+        // Add white outline for the actual path
+        map.current.addLayer({
+          id: 'actual-path-outline',
+          type: 'line',
+          source: 'actual-path',
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 6,
+            'line-opacity': 0.8
+          }
+        }, 'actual-path');
+      }
+    }
+
+    // For planned activities, add dashed preview path from last visited to remaining planned
+    if (activityMode === 'planned' && visitedStationsInOrder.length > 0) {
+      const lastVisitedStation = visitedStationsInOrder[visitedStationsInOrder.length - 1];
+      const lastVisitedCoords = stations.find(s => s.id === lastVisitedStation)?.coordinates;
+      
+      if (lastVisitedCoords) {
+        // Get remaining planned stations that haven't been visited
+        const remainingPlanned = activityStations.filter(stationId => 
+          !visitedStationsInOrder.includes(stationId)
+        );
+
+        if (remainingPlanned.length > 0) {
+          const previewCoordinates: number[][] = [lastVisitedCoords];
+          
+          remainingPlanned.forEach(stationId => {
+            const station = stations.find(s => s.id === stationId);
+            if (station) {
+              previewCoordinates.push(station.coordinates);
+            }
+          });
+
+          if (previewCoordinates.length >= 2) {
+            map.current!.addSource('preview-path', {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                  type: 'LineString',
+                  coordinates: previewCoordinates
+                }
+              }
+            });
+
+            // Add white outline for preview path
+            map.current!.addLayer({
+              id: 'preview-path-outline',
+              type: 'line',
+              source: 'preview-path',
+              paint: {
+                'line-color': '#ffffff',
+                'line-width': 6,
+                'line-opacity': 0.8,
+                'line-dasharray': [8, 6]
+              }
+            });
+
+            map.current!.addLayer({
+              id: 'preview-path',
+              type: 'line',
+              source: 'preview-path',
+              paint: {
+                'line-color': '#dc143c', // Crimson
+                'line-width': 4,
+                'line-opacity': 0.7,
+                'line-dasharray': [8, 6]
+              }
+            });
+          }
+        }
+      }
+    }
   };
 
   const getStationName = (stationId: string) => {

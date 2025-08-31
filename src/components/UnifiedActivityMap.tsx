@@ -164,24 +164,26 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-[#dc143c] rounded-full border-2 border-white"></div>
+                    <span>Visited (●)</span>
+                  </div>
                   {mode === 'planned' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                      <span>Planned (remaining)</span>
+                      <div className="w-4 h-4 bg-[#4169e1] rounded-full border-2 border-white"></div>
+                      <span>Remaining (○)</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-red-600 rounded-full"></div>
-                    <span>Verified</span>
+                    <div className="w-6 h-1 bg-[#dc143c] border border-white"></div>
+                    <span>Actual (—)</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
-                    <span>Pending</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-red-600 rounded-full text-white text-xs flex items-center justify-center font-bold">1</div>
-                    <span>Visit sequence</span>
-                  </div>
+                  {mode === 'planned' && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-1 bg-[#dc143c] border border-white" style={{backgroundImage: 'repeating-linear-gradient(90deg, #dc143c 0, #dc143c 4px, transparent 4px, transparent 8px)'}}></div>
+                      <span>Preview (– –)</span>
+                    </div>
+                  )}
                 </div>
                 
                 {mode === 'unplanned' && visitedCount === 0 && (
