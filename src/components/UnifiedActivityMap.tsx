@@ -165,23 +165,35 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#dc143c] rounded-full border-2 border-white"></div>
-                    <span>Visited (●)</span>
+                    <div className="relative">
+                      <div className="w-4 h-4 bg-[#dc143c] rounded-full border-2 border-white"></div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#1a1a1a] text-white rounded-full flex items-center justify-center text-[8px] font-bold border border-white">1</div>
+                    </div>
+                    <span>Visited</span>
                   </div>
                   {mode === 'planned' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-[#4169e1] rounded-full border-2 border-white"></div>
-                      <span>Remaining (○)</span>
+                      <div className="relative">
+                        <div className="w-4 h-4 bg-[#4169e1] rounded-full border-2 border-white"></div>
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#4169e1] text-white rounded-full flex items-center justify-center text-[8px] font-bold border border-white">2</div>
+                      </div>
+                      <span>Remaining</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-1 bg-[#dc143c] border border-white"></div>
-                    <span>Actual (—)</span>
+                    <div className="w-6 h-2 bg-[#dc143c] border border-white rounded-sm shadow-sm"></div>
+                    <span>Actual</span>
                   </div>
                   {mode === 'planned' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-1 bg-[#dc143c] border border-white" style={{backgroundImage: 'repeating-linear-gradient(90deg, #dc143c 0, #dc143c 4px, transparent 4px, transparent 8px)'}}></div>
-                      <span>Preview (– –)</span>
+                      <div 
+                        className="w-6 h-2 border border-white rounded-sm shadow-sm" 
+                        style={{
+                          background: 'repeating-linear-gradient(90deg, #9C27B0 0, #9C27B0 2px, transparent 2px, transparent 5px)',
+                          backgroundSize: '5px 100%'
+                        }}
+                      ></div>
+                      <span>Preview</span>
                     </div>
                   )}
                 </div>

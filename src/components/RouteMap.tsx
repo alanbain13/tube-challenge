@@ -287,8 +287,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          12,
-          7
+          10,
+          6
         ],
         'circle-color': [
           'case',
@@ -304,7 +304,28 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station labels for selected stations and activity stations
+    // Add numeric badges as separate overlay layer with better visibility
+    map.current.addLayer({
+      id: 'station-number-badges',
+      type: 'circle',
+      source: 'stations',
+      filter: ['>', ['get', 'sequence'], 0],
+      paint: {
+        'circle-radius': 9,
+        'circle-color': [
+          'case',
+          ['==', ['get', 'visitStatus'], 'verified'], '#1a1a1a', // Dark badge for visited
+          ['==', ['get', 'visitStatus'], 'pending'], '#1a1a1a', // Dark badge for pending
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Blue badge for planned
+          '#1a1a1a' // Dark default
+        ],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#ffffff',
+        'circle-translate': [0, -8] // Offset badges from station dots
+      }
+    });
+
+    // Add numeric text with white halo for readability
     map.current.addLayer({
       id: 'station-numbers',
       type: 'symbol',
@@ -314,10 +335,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'text-field': ['get', 'sequence'],
         'text-font': ['Open Sans Bold'],
         'text-size': 12,
-        'text-anchor': 'center'
+        'text-anchor': 'center',
+        'text-offset': [0, -0.6] // Offset to match badge position
       },
       paint: {
-        'text-color': '#ffffff'
+        'text-color': '#ffffff',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1
       }
     });
 
@@ -485,7 +509,21 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
     map.current.setPaintProperty('stations', 'circle-stroke-color', '#ffffff');
 
+    // Update badge colors
+    if (map.current.getLayer('station-number-badges')) {
+      map.current.setPaintProperty('station-number-badges', 'circle-color', [
+        'case',
+        ['==', ['get', 'visitStatus'], 'verified'], '#1a1a1a', // Dark badge for visited
+        ['==', ['get', 'visitStatus'], 'pending'], '#1a1a1a', // Dark badge for pending
+        ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Blue badge for planned
+        '#1a1a1a' // Dark default
+      ]);
+    }
+
     map.current.setFilter('station-numbers', ['>', ['get', 'sequence'], 0]);
+    if (map.current.getLayer('station-number-badges')) {
+      map.current.setFilter('station-number-badges', ['>', ['get', 'sequence'], 0]);
+    }
     
     // Update route connector lines
     if (selectedStations.length > 1) {
@@ -495,13 +533,19 @@ const RouteMap: React.FC<RouteMapProps> = ({
         addRouteConnectorLines();
       }
     } else {
-      // Clean up existing lines
-      ['route-line', 'actual-path', 'preview-path'].forEach(layerId => {
-        if (map.current!.getSource(layerId)) {
-          if (map.current!.getLayer(layerId)) {
-            map.current!.removeLayer(layerId);
+      // Clean up existing lines (including badge layers)
+      ['route-line', 'actual-path', 'preview-path', 'actual-path-outline', 'preview-path-outline', 'station-number-badges'].forEach(layerId => {
+        if (map.current!.getSource(layerId) || map.current!.getLayer(layerId)) {
+          try {
+            if (map.current!.getLayer(layerId)) {
+              map.current!.removeLayer(layerId);
+            }
+            if (map.current!.getSource(layerId)) {
+              map.current!.removeSource(layerId);
+            }
+          } catch (error) {
+            // Ignore errors for non-existent layers/sources
           }
-          map.current!.removeSource(layerId);
         }
       });
     }
@@ -602,6 +646,19 @@ const RouteMap: React.FC<RouteMapProps> = ({
           }
         });
 
+        // Add white outline for the actual path (lower z-index)
+        map.current.addLayer({
+          id: 'actual-path-outline',
+          type: 'line',
+          source: 'actual-path',
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 6,
+            'line-opacity': 0.9
+          }
+        });
+
+        // Add actual path (higher z-index than outline)
         map.current.addLayer({
           id: 'actual-path',
           type: 'line',
@@ -612,18 +669,6 @@ const RouteMap: React.FC<RouteMapProps> = ({
             'line-opacity': 1
           }
         });
-
-        // Add white outline for the actual path
-        map.current.addLayer({
-          id: 'actual-path-outline',
-          type: 'line',
-          source: 'actual-path',
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 6,
-            'line-opacity': 0.8
-          }
-        }, 'actual-path');
       }
     }
 
@@ -661,7 +706,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
               }
             });
 
-            // Add white outline for preview path
+            // Add white outline for preview path (lower z-index)
             map.current!.addLayer({
               id: 'preview-path-outline',
               type: 'line',
@@ -669,20 +714,21 @@ const RouteMap: React.FC<RouteMapProps> = ({
               paint: {
                 'line-color': '#ffffff',
                 'line-width': 6,
-                'line-opacity': 0.8,
-                'line-dasharray': [8, 6]
+                'line-opacity': 0.9,
+                'line-dasharray': [2, 3]
               }
             });
 
+            // Add preview path with contrasting purple color
             map.current!.addLayer({
               id: 'preview-path',
               type: 'line',
               source: 'preview-path',
               paint: {
-                'line-color': '#dc143c', // Crimson
-                'line-width': 4,
-                'line-opacity': 0.7,
-                'line-dasharray': [8, 6]
+                'line-color': '#9C27B0', // Purple - contrasting color that doesn't collide with tube lines
+                'line-width': window.innerWidth < 768 ? 3 : 4, // Responsive width
+                'line-opacity': 0.8,
+                'line-dasharray': [2, 3] // Shorter dashes with clear gaps
               }
             });
           }
