@@ -5,6 +5,8 @@ import { useStations, Station } from '@/hooks/useStations';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { UnifiedActivityState } from '@/hooks/useActivityState';
+import { buildActivityGeoJSON, createPinSVG, createRoundelSVG } from '@/lib/activityMapUtils';
 
 interface StationVisit {
   station_tfl_id: string;
@@ -22,6 +24,7 @@ interface RouteMapProps {
   visits?: StationVisit[];
   activityStations?: string[]; // Complete list of stations in activity sequence
   activityMode?: 'planned' | 'unplanned';
+  activityState?: UnifiedActivityState; // New prop for activity data
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -33,7 +36,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
   readOnly = false,
   visits = [],
   activityStations = [],
-  activityMode = 'planned'
+  activityMode = 'planned',
+  activityState
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -98,7 +102,16 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('load', () => {
       console.log('🗺️ RouteMap - Map loaded, adding data...');
       addTubeLinesToMap();
-      addStationsToMap();
+      
+      // Load pin and roundel images
+      loadMapImages();
+      
+      // Use new pin system if activity state provided, otherwise fallback to old system
+      if (activityState) {
+        addActivityPinSystem();
+      } else {
+        addStationsToMap();
+      }
     });
 
     return () => {
@@ -119,9 +132,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
     });
     
     if (map.current && stations.length > 0) {
-      updateStationStyles();
+      if (activityState) {
+        updateActivityPinSystem();
+      } else {
+        updateStationStyles();
+      }
     }
-  }, [selectedStations, stations, visits, activityStations]);
+  }, [selectedStations, stations, visits, activityStations, activityState]);
 
   // TfL official tube line colors
   const tubeLineColors: { [key: string]: string } = {
@@ -244,6 +261,298 @@ const RouteMap: React.FC<RouteMapProps> = ({
     }
     
     return 0;
+  };
+
+  const loadMapImages = () => {
+    if (!map.current) return;
+
+    // Create pin images for different states
+    const pinConfigs = [
+      { id: 'pin-visited', color: '#E53935', size: 34 },
+      { id: 'pin-planned', color: '#1E88E5', size: 34 },
+      { id: 'pin-pending', color: '#FB8C00', size: 34 },
+      { id: 'pin-visited-small', color: '#E53935', size: 28 },
+      { id: 'pin-planned-small', color: '#1E88E5', size: 28 },
+      { id: 'pin-pending-small', color: '#FB8C00', size: 28 }
+    ];
+
+    pinConfigs.forEach(config => {
+      const svg = createPinSVG(config.color, '1', config.size);
+      const img = new Image();
+      img.onload = () => {
+        if (map.current) {
+          map.current.addImage(config.id, img, { sdf: false });
+        }
+      };
+      img.src = 'data:image/svg+xml;base64,' + btoa(svg);
+    });
+
+    // Create roundel image
+    const roundelSvg = createRoundelSVG(16);
+    const roundelImg = new Image();
+    roundelImg.onload = () => {
+      if (map.current) {
+        map.current.addImage('roundel-grey', roundelImg, { sdf: false });
+      }
+    };
+    roundelImg.src = 'data:image/svg+xml;base64,' + btoa(roundelSvg);
+  };
+
+  const addActivityPinSystem = () => {
+    if (!map.current || !activityState) return;
+
+    const stationData = stations.map(s => ({
+      id: s.id,
+      name: s.name,
+      coordinates: s.coordinates as [number, number]
+    }));
+
+    const geoData = buildActivityGeoJSON(activityState, stationData);
+
+    // Add visited path (solid line with glow)
+    map.current.addSource('activity-visited-path', {
+      type: 'geojson',
+      data: geoData.visitedPath
+    });
+
+    map.current.addLayer({
+      id: 'activity-visited-path',
+      type: 'line',
+      source: 'activity-visited-path',
+      paint: {
+        'line-color': '#E53935',
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 4,
+          15, 6
+        ]
+      }
+    });
+
+    // Add visited path glow
+    map.current.addLayer({
+      id: 'activity-visited-path-glow',
+      type: 'line',
+      source: 'activity-visited-path',
+      paint: {
+        'line-color': '#ffffff',
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 6,
+          15, 8
+        ],
+        'line-opacity': 0.6
+      }
+    }, 'activity-visited-path');
+
+    // Add planned path (dotted line)
+    map.current.addSource('activity-planned-path', {
+      type: 'geojson',
+      data: geoData.plannedPath
+    });
+
+    map.current.addLayer({
+      id: 'activity-planned-path',
+      type: 'line',
+      source: 'activity-planned-path',
+      paint: {
+        'line-color': '#9C27B0',
+        'line-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 3,
+          15, 4
+        ],
+        'line-dasharray': [2, 3]
+      }
+    });
+
+    // Add roundels for non-activity stations
+    map.current.addSource('station-roundels', {
+      type: 'geojson',
+      data: geoData.roundels
+    });
+
+    map.current.addLayer({
+      id: 'station-roundels',
+      type: 'symbol',
+      source: 'station-roundels',
+      layout: {
+        'icon-image': 'roundel-grey',
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          10, 0.8,
+          14, 1.2
+        ],
+        'icon-allow-overlap': false,
+        'icon-ignore-placement': false
+      }
+    });
+
+    // Add visited pins
+    map.current.addSource('activity-visited-pins', {
+      type: 'geojson',
+      data: geoData.visitedPins
+    });
+
+    map.current.addLayer({
+      id: 'activity-visited-pins',
+      type: 'symbol',
+      source: 'activity-visited-pins',
+      layout: {
+        'icon-image': [
+          'case',
+          ['<', ['zoom'], 12], 'pin-visited-small',
+          'pin-visited'
+        ],
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 0.6,
+          13, 0.8,
+          15, 1.0
+        ],
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'text-field': ['get', 'labelNum'],
+        'text-font': ['Open Sans Bold'],
+        'text-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 10,
+          15, 14
+        ],
+        'text-anchor': 'center',
+        'text-offset': [0, -1.8],
+        'text-allow-overlap': true
+      },
+      paint: {
+        'text-color': '#E53935',
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 2
+      }
+    });
+
+    // Add planned pins
+    map.current.addSource('activity-planned-pins', {
+      type: 'geojson',
+      data: geoData.plannedPins
+    });
+
+    map.current.addLayer({
+      id: 'activity-planned-pins',
+      type: 'symbol',
+      source: 'activity-planned-pins',
+      layout: {
+        'icon-image': [
+          'case',
+          ['<', ['zoom'], 12], 'pin-planned-small',
+          'pin-planned'
+        ],
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 0.6,
+          13, 0.8,
+          15, 1.0
+        ],
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'text-field': ['get', 'labelNum'],
+        'text-font': ['Open Sans Bold'],
+        'text-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          11, 10,
+          15, 14
+        ],
+        'text-anchor': 'center',
+        'text-offset': [0, -1.8],
+        'text-allow-overlap': true
+      },
+      paint: {
+        'text-color': '#1E88E5',
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 2
+      }
+    });
+
+    // Add click handlers for pins
+    ['activity-visited-pins', 'activity-planned-pins'].forEach(layerId => {
+      map.current!.on('click', layerId, (e) => {
+        if (e.features && e.features[0]) {
+          const stationId = e.features[0].properties?.station_tfl_id;
+          const stationName = e.features[0].properties?.station_name;
+          
+          // Create station info popup or handle tap
+          new mapboxgl.Popup({
+            closeButton: true,
+            closeOnClick: true,
+            className: 'station-popup'
+          })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div class="p-3">
+              <h3 class="font-bold text-sm mb-1">${stationName}</h3>
+              <p class="text-xs text-gray-600">Station ID: ${stationId}</p>
+            </div>
+          `)
+          .addTo(map.current!);
+        }
+      });
+
+      // Add cursor pointer
+      map.current!.on('mouseenter', layerId, () => {
+        if (map.current) {
+          map.current.getCanvas().style.cursor = 'pointer';
+        }
+      });
+
+      map.current!.on('mouseleave', layerId, () => {
+        if (map.current) {
+          map.current.getCanvas().style.cursor = '';
+        }
+      });
+    });
+  };
+
+  const updateActivityPinSystem = () => {
+    if (!map.current || !activityState) return;
+
+    const stationData = stations.map(s => ({
+      id: s.id,
+      name: s.name,
+      coordinates: s.coordinates as [number, number]
+    }));
+
+    const geoData = buildActivityGeoJSON(activityState, stationData);
+
+    // Update all sources with new data
+    const sources = [
+      { id: 'activity-visited-path', data: geoData.visitedPath },
+      { id: 'activity-planned-path', data: geoData.plannedPath },
+      { id: 'activity-visited-pins', data: geoData.visitedPins },
+      { id: 'activity-planned-pins', data: geoData.plannedPins },
+      { id: 'station-roundels', data: geoData.roundels }
+    ];
+
+    sources.forEach(({ id, data }) => {
+      const source = map.current!.getSource(id) as mapboxgl.GeoJSONSource;
+      if (source) {
+        source.setData(data);
+      }
+    });
   };
 
   const addStationsToMap = () => {
