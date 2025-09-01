@@ -21,7 +21,7 @@ interface RouteMapProps {
   readOnly?: boolean;
   visits?: StationVisit[];
   activityStations?: string[]; // Complete list of stations in activity sequence
-  activityMode?: 'planned' | 'unplanned';
+  activityMode?: 'planned' | 'unplanned'; // undefined = route creation/view mode
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -33,7 +33,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   readOnly = false,
   visits = [],
   activityStations = [],
-  activityMode = 'planned'
+  activityMode // undefined for route creation/view mode
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -228,8 +228,15 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const getStationSequenceNumber = (stationId: string) => {
-    // For activity mode, prioritize visit sequence number over planned sequence
-    if (activityMode) {
+    // For route creation/view mode (when activityMode is undefined), use selectedStations index
+    if (activityMode === undefined) {
+      const selectedIndex = selectedStations.indexOf(stationId);
+      if (selectedIndex >= 0) {
+        console.log(`🔢 Station ${stationId} sequence: ${selectedIndex + 1}`);
+        return selectedIndex + 1;
+      }
+    } else {
+      // For activity mode, prioritize visit sequence number over planned sequence
       const visit = visits.find(v => v.station_tfl_id === stationId);
       if (visit) {
         return visit.sequence_number; // Use actual visit sequence for visited stations
@@ -237,12 +244,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
       // For planned but unvisited stations, use planned sequence 
       const activityIndex = activityStations.indexOf(stationId);
       if (activityIndex >= 0) return activityIndex + 1;
-    } else {
-      // For route creation mode, use selectedStations index
-      const selectedIndex = selectedStations.indexOf(stationId);
-      if (selectedIndex >= 0) return selectedIndex + 1;
     }
     
+    console.log(`🔢 Station ${stationId} no sequence found`);
     return 0;
   };
 
@@ -260,7 +264,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
           const isSelected = selectedStations.includes(station.id) || activityStations.includes(station.id);
           
           return {
-            type: 'Feature',
+            type: 'Feature' as const,
             properties: {
               id: station.id,
               name: station.name,
@@ -270,7 +274,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
               visitStatus: visitStatus
             },
             geometry: {
-              type: 'Point',
+              type: 'Point' as const,
               coordinates: station.coordinates
             }
           };
@@ -452,30 +456,36 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
     // Update the source data with new sequence numbers and visit status
     const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
+    const updatedFeatures = stations.map(station => {
+      const sequenceNumber = getStationSequenceNumber(station.id);
+      const visitStatus = getStationVisitStatus(station.id);
+      const isSelected = selectedStations.includes(station.id) || activityStations.includes(station.id);
+      
+      console.log(`🗺️ Updating station ${station.name}: sequence=${sequenceNumber}, selected=${isSelected}`);
+      
+      return {
+        type: 'Feature' as const,
+        properties: {
+          id: station.id,
+          name: station.name,
+          zone: station.zone,
+          sequence: sequenceNumber,
+          isSelected: isSelected,
+          visitStatus: visitStatus
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: station.coordinates
+        }
+      };
+    });
+    
     source.setData({
       type: 'FeatureCollection',
-      features: stations.map(station => {
-        const sequenceNumber = getStationSequenceNumber(station.id);
-        const visitStatus = getStationVisitStatus(station.id);
-        const isSelected = selectedStations.includes(station.id) || activityStations.includes(station.id);
-        
-        return {
-          type: 'Feature',
-          properties: {
-            id: station.id,
-            name: station.name,
-            zone: station.zone,
-            sequence: sequenceNumber,
-            isSelected: isSelected,
-            visitStatus: visitStatus
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: station.coordinates
-          }
-        };
-      })
+      features: updatedFeatures
     });
+
+    console.log(`🗺️ Updated ${updatedFeatures.filter(f => f.properties.sequence > 0).length} stations with sequence numbers`);
 
     // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
     map.current.setPaintProperty('stations', 'circle-radius', [
