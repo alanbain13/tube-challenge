@@ -165,23 +165,23 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#dc143c] rounded-full border-2 border-white"></div>
-                    <span>Visited (●)</span>
+                    <div className="w-4 h-4 bg-[#dc143c] rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold">1</div>
+                    <span>🔴 Visited (1…n)</span>
                   </div>
                   {mode === 'planned' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 bg-[#4169e1] rounded-full border-2 border-white"></div>
-                      <span>Remaining (○)</span>
+                      <div className="w-4 h-4 bg-[#4169e1] rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold">2</div>
+                      <span>🔵 Planned (1…n)</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-1 bg-[#dc143c] border border-white"></div>
-                    <span>Actual (—)</span>
+                    <div className="w-6 h-1 bg-[#9ca3af]"></div>
+                    <span>Grey solid = visited path</span>
                   </div>
                   {mode === 'planned' && (
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-1 bg-[#dc143c] border border-white" style={{backgroundImage: 'repeating-linear-gradient(90deg, #dc143c 0, #dc143c 4px, transparent 4px, transparent 8px)'}}></div>
-                      <span>Preview (– –)</span>
+                      <div className="w-6 h-1 bg-[#9ca3af]" style={{backgroundImage: 'repeating-linear-gradient(90deg, #9ca3af 0, #9ca3af 4px, transparent 4px, transparent 10px)'}}></div>
+                      <span>Grey dotted = planned path</span>
                     </div>
                   )}
                 </div>

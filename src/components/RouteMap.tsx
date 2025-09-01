@@ -278,7 +278,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station circles with visit status colors (crimson for visited, royal blue for planned)
+    // Add station circles with visit status colors (red for visited, blue for planned, grey for others)
     map.current.addLayer({
       id: 'stations',
       type: 'circle',
@@ -292,11 +292,11 @@ const RouteMap: React.FC<RouteMapProps> = ({
         ],
         'circle-color': [
           'case',
-          ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Crimson - verified visited
-          ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Crimson - pending verification
-          ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Royal blue - planned but not visited
-          ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
-          '#9ca3af' // Gray - default
+          ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Red - verified visited
+          ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Red - pending verification
+          ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Blue - planned but not visited
+          ['get', 'isSelected'], '#4169e1', // Blue - selected in route creation
+          '#9ca3af' // Grey - default
         ],
         'circle-stroke-width': 2,
         'circle-stroke-color': '#ffffff',
@@ -473,14 +473,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
       })
     });
 
-    // Update layer styles with visit status colors (crimson for visited, royal blue for planned)
+    // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
-      ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Crimson - verified visited
-      ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Crimson - pending verification  
-      ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Royal blue - not yet visited
-      ['get', 'isSelected'], '#3b82f6', // Blue - selected in route creation
-      '#9ca3af' // Gray - default
+      ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Red - verified visited
+      ['==', ['get', 'visitStatus'], 'pending'], '#dc143c', // Red - pending verification  
+      ['==', ['get', 'visitStatus'], 'not_visited'], '#4169e1', // Blue - not yet visited
+      ['get', 'isSelected'], '#4169e1', // Blue - selected in route creation
+      '#9ca3af' // Grey - default
     ]);
 
     map.current.setPaintProperty('stations', 'circle-stroke-color', '#ffffff');
@@ -542,17 +542,17 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route line layer (dotted grey reference line)
+    // Add route line layer (dotted light grey reference line for planned routes)
     map.current.addLayer({
       id: 'route-line',
       type: 'line',
       source: 'route-line',
       paint: {
-        'line-color': '#9ca3af',
+        'line-color': '#9ca3af', // Light grey
         'line-width': 3,
-        'line-dasharray': [2, 2]
+        'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
       }
-    });
+    }, 'stations'); // Insert before stations so markers appear on top
   };
 
   const addActivityPaths = () => {
@@ -607,23 +607,11 @@ const RouteMap: React.FC<RouteMapProps> = ({
           type: 'line',
           source: 'actual-path',
           paint: {
-            'line-color': '#dc143c', // Crimson
+            'line-color': '#9ca3af', // Light grey for visited path
             'line-width': 4,
             'line-opacity': 1
           }
-        });
-
-        // Add white outline for the actual path
-        map.current.addLayer({
-          id: 'actual-path-outline',
-          type: 'line',
-          source: 'actual-path',
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 6,
-            'line-opacity': 0.8
-          }
-        }, 'actual-path');
+        }, 'stations'); // Insert before stations so markers appear on top
       }
     }
 
@@ -661,30 +649,17 @@ const RouteMap: React.FC<RouteMapProps> = ({
               }
             });
 
-            // Add white outline for preview path
-            map.current!.addLayer({
-              id: 'preview-path-outline',
-              type: 'line',
-              source: 'preview-path',
-              paint: {
-                'line-color': '#ffffff',
-                'line-width': 6,
-                'line-opacity': 0.8,
-                'line-dasharray': [8, 6]
-              }
-            });
-
             map.current!.addLayer({
               id: 'preview-path',
               type: 'line',
               source: 'preview-path',
               paint: {
-                'line-color': '#dc143c', // Crimson
+                'line-color': '#9ca3af', // Light grey for planned preview
                 'line-width': 4,
                 'line-opacity': 0.7,
-                'line-dasharray': [8, 6]
+                'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
               }
-            });
+            }, 'stations'); // Insert before stations so markers appear on top
           }
         }
       }
