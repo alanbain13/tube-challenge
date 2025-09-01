@@ -98,13 +98,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.current.on('load', () => {
-      console.log('🗺️ RouteMap - Map loaded, adding data...');
+      console.log('🗺️ RouteMap - Map loaded, setting mapLoaded state...');
       setMapLoaded(true);
-      addTubeLinesToMap();
-      // Only add stations if data is loaded
-      if (!loading && stations.length > 0) {
-        addStationsToMap();
-      }
     });
 
     return () => {
@@ -115,6 +110,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
     };
   }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
 
+  // Effect to add tube lines when map is loaded and line features are available
+  useEffect(() => {
+    if (mapLoaded && lineFeatures.length > 0) {
+      addTubeLinesToMap();
+    }
+  }, [mapLoaded, lineFeatures]);
+
   useEffect(() => {
     // Update the ref whenever selectedStations changes
     selectedStationsRef.current = selectedStations;
@@ -122,6 +124,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     console.log('🔧 RouteMap useEffect - selectedStations changed:', selectedStations);
     console.log('🗺️ RouteMap - Station styles update:', {
       hasMap: !!map.current,
+      mapLoaded,
       stationsCount: stations.length,
       selectedCount: selectedStations.length,
       selectedStations: selectedStations
@@ -179,7 +182,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addTubeLinesToMap = () => {
-    if (!map.current || lineFeatures.length === 0) return;
+    if (!map.current || !mapLoaded || lineFeatures.length === 0) return;
     
     lineFeatures.forEach((lineFeature, index) => {
       const lineName = lineFeature.properties.line_name || `Line-${index}`;
