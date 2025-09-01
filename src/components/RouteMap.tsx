@@ -321,7 +321,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station circles with visit status colors (red for visited, blue for planned, grey for others)
+    // Add station circles with proper sizing for numbered pins
     map.current.addLayer({
       id: 'stations',
       type: 'circle',
@@ -330,7 +330,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          12,
+          14, // Larger radius for numbered pins to contain numbers clearly
           7
         ],
         'circle-color': [
@@ -347,7 +347,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station labels for selected stations and activity stations
+    // Add station numbers - ensure they render above everything else
     map.current.addLayer({
       id: 'station-numbers',
       type: 'symbol',
@@ -356,11 +356,15 @@ const RouteMap: React.FC<RouteMapProps> = ({
       layout: {
         'text-field': ['get', 'sequence'],
         'text-font': ['Open Sans Bold'],
-        'text-size': 12,
-        'text-anchor': 'center'
+        'text-size': 13, // Slightly larger for better visibility
+        'text-anchor': 'center',
+        'text-allow-overlap': true, // Ensure numbers always show
+        'text-ignore-placement': true
       },
       paint: {
-        'text-color': '#ffffff'
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(0,0,0,0.3)', // Subtle halo for better contrast
+        'text-halo-width': 1
       }
     });
 
@@ -386,12 +390,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route connector lines - always show for route maps when multiple stations selected
+    // Add route connector lines first (bottom layer)
     if (selectedStations.length > 1) {
       if (activityMode) {
         addActivityPaths();
       } else {
-        // For route maps, always show dotted planned route line
+        // For route maps, always show light-grey dotted planned route line
         addRouteConnectorLines();
       }
     }
@@ -569,7 +573,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       map.current.removeSource('route-line');
     }
 
-    // Create line coordinates from selected stations
+    // Create line coordinates from selected stations in sequence order
     const lineCoordinates: number[][] = [];
     selectedStations.forEach(stationId => {
       const station = stations.find(s => s.id === stationId);
@@ -593,7 +597,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route line layer (dotted light grey reference line for planned routes)
+    // Add route line layer - light-grey dotted path for planned route
+    // Insert at the bottom layer so pins and numbers render above it
     map.current.addLayer({
       id: 'route-line',
       type: 'line',
@@ -601,9 +606,10 @@ const RouteMap: React.FC<RouteMapProps> = ({
       paint: {
         'line-color': '#9ca3af', // Light grey
         'line-width': 3,
-        'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
+        'line-dasharray': [4, 6], // Dotted appearance
+        'line-opacity': 0.8
       }
-    }, 'stations'); // Insert before stations so markers appear on top
+    });
   };
 
   const addActivityPaths = () => {
