@@ -287,7 +287,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          12,
+          14, // Larger for selected stations with numbers
           7
         ],
         'circle-color': [
@@ -304,7 +304,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station labels for selected stations and activity stations
+    // Add station sequence numbers - these render ABOVE the station circles
     map.current.addLayer({
       id: 'station-numbers',
       type: 'symbol',
@@ -312,12 +312,16 @@ const RouteMap: React.FC<RouteMapProps> = ({
       filter: ['>', ['get', 'sequence'], 0],
       layout: {
         'text-field': ['get', 'sequence'],
-        'text-font': ['Open Sans Bold'],
-        'text-size': 12,
-        'text-anchor': 'center'
+        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        'text-size': 13,
+        'text-anchor': 'center',
+        'text-allow-overlap': true, // Ensure numbers are always visible
+        'text-ignore-placement': true
       },
       paint: {
-        'text-color': '#ffffff'
+        'text-color': '#ffffff',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1
       }
     });
 
@@ -543,6 +547,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     });
 
     // Add route line layer (dotted light grey reference line for planned routes)
+    // Insert at the bottom so all station elements render above the path
     map.current.addLayer({
       id: 'route-line',
       type: 'line',
@@ -550,9 +555,10 @@ const RouteMap: React.FC<RouteMapProps> = ({
       paint: {
         'line-color': '#9ca3af', // Light grey
         'line-width': 3,
-        'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
+        'line-dasharray': [4, 6], // Short dashes for clear dotted appearance
+        'line-opacity': 0.8
       }
-    }, 'stations'); // Insert before stations so markers appear on top
+    });
   };
 
   const addActivityPaths = () => {
@@ -670,43 +676,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     return stations.find(s => s.id === stationId)?.name || stationId;
   };
 
-  if (!tokenValid) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Mapbox Setup Required</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              To use the interactive map, please enter your Mapbox public token.
-              Get yours at <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">mapbox.com</a>
-            </p>
-            <div className="flex gap-2">
-              <Input
-                placeholder="pk.your-mapbox-token-here"
-                value={mapboxToken}
-                onChange={(e) => setMapboxToken(e.target.value)}
-              />
-              <Button onClick={validateToken}>Set Token</Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardContent className="p-6">
-            <p>Loading map...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Always show the map container - handle loading states within
 
   return (
     <div className="space-y-4">
@@ -723,7 +693,43 @@ const RouteMap: React.FC<RouteMapProps> = ({
           </p>
         </CardHeader>
         <CardContent>
-          <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }} />
+          <div className="relative">
+            <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }} />
+            
+            {/* Show loading overlay or token setup */}
+            {(!tokenValid || loading || stations.length === 0) && (
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                <div className="text-center space-y-4 p-6">
+                  {!tokenValid ? (
+                    <>
+                      <h3 className="font-semibold">Mapbox Setup Required</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Enter your Mapbox public token from{' '}
+                        <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                          mapbox.com
+                        </a>
+                      </p>
+                      <div className="flex gap-2 max-w-md">
+                        <Input
+                          placeholder="pk.your-mapbox-token-here"
+                          value={mapboxToken}
+                          onChange={(e) => setMapboxToken(e.target.value)}
+                        />
+                        <Button onClick={validateToken}>Set</Button>
+                      </div>
+                    </>
+                  ) : loading ? (
+                    <>
+                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                      <p className="text-sm text-muted-foreground">Loading stations...</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading map data...</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
