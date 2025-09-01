@@ -478,6 +478,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
     });
 
     // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
+    map.current.setPaintProperty('stations', 'circle-radius', [
+      'case',
+      ['get', 'isSelected'],
+      14, // Larger for selected stations with numbers
+      7
+    ]);
+
     map.current.setPaintProperty('stations', 'circle-color', [
       'case',
       ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Red - verified visited
@@ -617,7 +624,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
             'line-width': 4,
             'line-opacity': 1
           }
-        }, 'stations'); // Insert before stations so markers appear on top
+        });
       }
     }
 
@@ -665,7 +672,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
                 'line-opacity': 0.7,
                 'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
               }
-            }, 'stations'); // Insert before stations so markers appear on top
+            });
           }
         }
       }
