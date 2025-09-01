@@ -40,7 +40,6 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const selectedStationsRef = useRef<string[]>(selectedStations);
   const [mapboxToken, setMapboxToken] = useState<string>('');
   const [tokenValid, setTokenValid] = useState<boolean>(false);
-  const [mapLoaded, setMapLoaded] = useState<boolean>(false);
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
   const { stations, loading } = useStations();
 
@@ -83,8 +82,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       mapboxToken: mapboxToken ? 'present' : 'missing'
     });
     
-    // Mount map container immediately when token is valid, don't wait for data loading
-    if (!mapContainer.current || !tokenValid) return;
+    if (!mapContainer.current || !tokenValid || loading || stations.length === 0) return;
 
     mapboxgl.accessToken = mapboxToken;
     
@@ -98,42 +96,15 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.current.on('load', () => {
-      console.log('🗺️ RouteMap - Map loaded, initializing all data...');
-      setMapLoaded(true);
-      
-      // Handle all initial setup directly in the load event to avoid race conditions
-      if (lineFeatures.length > 0) {
-        addTubeLinesToMap();
-      }
-      
-      if (!loading && stations.length > 0) {
-        addStationsToMap();
-      }
+      console.log('🗺️ RouteMap - Map loaded, adding data...');
+      addTubeLinesToMap();
+      addStationsToMap();
     });
 
     return () => {
-      if (map.current) {
-        setMapLoaded(false);
-        map.current.remove();
-      }
+      map.current?.remove();
     };
   }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
-
-  // Effect to add tube lines when map is loaded and line features are available
-  useEffect(() => {
-    if (mapLoaded && map.current && map.current.isStyleLoaded() && lineFeatures.length > 0) {
-      // Only add if not already added
-      const hasExistingTubeLines = lineFeatures.some((_, index) => {
-        const lineName = lineFeatures[index]?.properties?.line_name || `Line-${index}`;
-        const sourceId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
-        return map.current!.getSource(sourceId);
-      });
-      
-      if (!hasExistingTubeLines) {
-        addTubeLinesToMap();
-      }
-    }
-  }, [mapLoaded, lineFeatures]);
 
   useEffect(() => {
     // Update the ref whenever selectedStations changes
@@ -142,23 +113,15 @@ const RouteMap: React.FC<RouteMapProps> = ({
     console.log('🔧 RouteMap useEffect - selectedStations changed:', selectedStations);
     console.log('🗺️ RouteMap - Station styles update:', {
       hasMap: !!map.current,
-      mapLoaded,
-      mapStyleLoaded: map.current ? map.current.isStyleLoaded() : false,
       stationsCount: stations.length,
       selectedCount: selectedStations.length,
       selectedStations: selectedStations
     });
     
-    // Add stations to map when data becomes available - with extra safety checks
-    if (map.current && mapLoaded && map.current.isStyleLoaded() && !loading && stations.length > 0) {
-      // Check if stations layer already exists
-      if (!map.current.getSource('stations')) {
-        addStationsToMap();
-      } else {
-        updateStationStyles();
-      }
+    if (map.current && stations.length > 0) {
+      updateStationStyles();
     }
-  }, [selectedStations, stations, visits, activityStations, loading, mapLoaded]);
+  }, [selectedStations, stations, visits, activityStations]);
 
   // TfL official tube line colors
   const tubeLineColors: { [key: string]: string } = {
@@ -201,10 +164,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addTubeLinesToMap = () => {
-    if (!map.current || !map.current.isStyleLoaded() || lineFeatures.length === 0) {
-      console.log('⚠️ Cannot add tube lines - map not ready or no features');
-      return;
-    }
+    if (!map.current || lineFeatures.length === 0) return;
     
     lineFeatures.forEach((lineFeature, index) => {
       const lineName = lineFeature.properties.line_name || `Line-${index}`;
@@ -287,10 +247,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addStationsToMap = () => {
-    if (!map.current || !map.current.isStyleLoaded()) {
-      console.log('⚠️ Cannot add stations - map not ready');
-      return;
-    }
+    if (!map.current) return;
 
     // Add station source
     map.current.addSource('stations', {
@@ -321,7 +278,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station circles with proper sizing for numbered pins
+    // Add station circles with visit status colors (red for visited, blue for planned, grey for others)
     map.current.addLayer({
       id: 'stations',
       type: 'circle',
@@ -330,7 +287,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'circle-radius': [
           'case',
           ['get', 'isSelected'],
-          14, // Larger radius for numbered pins to contain numbers clearly
+          12,
           7
         ],
         'circle-color': [
@@ -347,7 +304,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add station numbers - ensure they render above everything else
+    // Add station labels for selected stations and activity stations
     map.current.addLayer({
       id: 'station-numbers',
       type: 'symbol',
@@ -356,15 +313,11 @@ const RouteMap: React.FC<RouteMapProps> = ({
       layout: {
         'text-field': ['get', 'sequence'],
         'text-font': ['Open Sans Bold'],
-        'text-size': 13, // Slightly larger for better visibility
-        'text-anchor': 'center',
-        'text-allow-overlap': true, // Ensure numbers always show
-        'text-ignore-placement': true
+        'text-size': 12,
+        'text-anchor': 'center'
       },
       paint: {
-        'text-color': '#ffffff',
-        'text-halo-color': 'rgba(0,0,0,0.3)', // Subtle halo for better contrast
-        'text-halo-width': 1
+        'text-color': '#ffffff'
       }
     });
 
@@ -390,12 +343,11 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route connector lines first (bottom layer)
+    // Add route connector lines
     if (selectedStations.length > 1) {
       if (activityMode) {
         addActivityPaths();
       } else {
-        // For route maps, always show light-grey dotted planned route line
         addRouteConnectorLines();
       }
     }
@@ -492,10 +444,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const updateStationStyles = () => {
-    if (!map.current || !map.current.isStyleLoaded() || !map.current.getSource('stations')) {
-      console.log('⚠️ Cannot update station styles - map not ready or no stations source');
-      return;
-    }
+    if (!map.current || !map.current.getSource('stations')) return;
 
     // Update the source data with new sequence numbers and visit status
     const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
@@ -538,16 +487,15 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
     map.current.setFilter('station-numbers', ['>', ['get', 'sequence'], 0]);
     
-    // Update route connector lines - always show for route maps when multiple stations selected
+    // Update route connector lines
     if (selectedStations.length > 1) {
       if (activityMode) {
         addActivityPaths();
       } else {
-        // For route maps, always show dotted planned route line
         addRouteConnectorLines();
       }
     } else {
-      // Clean up existing lines when no route to show
+      // Clean up existing lines
       ['route-line', 'actual-path', 'preview-path'].forEach(layerId => {
         if (map.current!.getSource(layerId)) {
           if (map.current!.getLayer(layerId)) {
@@ -560,10 +508,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addRouteConnectorLines = () => {
-    if (!map.current || !map.current.isStyleLoaded() || selectedStations.length < 2) {
-      console.log('⚠️ Cannot add route lines - map not ready or insufficient stations');
-      return;
-    }
+    if (!map.current || selectedStations.length < 2) return;
 
     // Remove existing route line if it exists
     if (map.current.getSource('route-line')) {
@@ -573,7 +518,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       map.current.removeSource('route-line');
     }
 
-    // Create line coordinates from selected stations in sequence order
+    // Create line coordinates from selected stations
     const lineCoordinates: number[][] = [];
     selectedStations.forEach(stationId => {
       const station = stations.find(s => s.id === stationId);
@@ -597,8 +542,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route line layer - light-grey dotted path for planned route
-    // Insert at the bottom layer so pins and numbers render above it
+    // Add route line layer (dotted light grey reference line for planned routes)
     map.current.addLayer({
       id: 'route-line',
       type: 'line',
@@ -606,17 +550,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
       paint: {
         'line-color': '#9ca3af', // Light grey
         'line-width': 3,
-        'line-dasharray': [4, 6], // Dotted appearance
-        'line-opacity': 0.8
+        'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
       }
-    });
+    }, 'stations'); // Insert before stations so markers appear on top
   };
 
   const addActivityPaths = () => {
-    if (!map.current || !map.current.isStyleLoaded()) {
-      console.log('⚠️ Cannot add activity paths - map not ready');
-      return;
-    }
+    if (!map.current) return;
 
     // Clean up existing activity paths (including outline layers)
     ['actual-path', 'actual-path-outline', 'preview-path', 'preview-path-outline'].forEach(layerId => {
@@ -756,8 +696,17 @@ const RouteMap: React.FC<RouteMapProps> = ({
     );
   }
 
-  // Don't show loading state - mount map container immediately and show skeleton
-  // Map will populate with data once loading completes
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="p-6">
+            <p>Loading map...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -774,13 +723,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
           </p>
         </CardHeader>
         <CardContent>
-          <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }}>
-            {loading && (
-              <div className="absolute inset-0 bg-muted/50 flex items-center justify-center rounded-lg">
-                <p className="text-sm text-muted-foreground">Loading map data...</p>
-              </div>
-            )}
-          </div>
+          <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }} />
         </CardContent>
       </Card>
 
