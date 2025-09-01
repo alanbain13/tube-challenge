@@ -40,6 +40,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const selectedStationsRef = useRef<string[]>(selectedStations);
   const [mapboxToken, setMapboxToken] = useState<string>('');
   const [tokenValid, setTokenValid] = useState<boolean>(false);
+  const [mapLoaded, setMapLoaded] = useState<boolean>(false);
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
   const { stations, loading } = useStations();
 
@@ -98,6 +99,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
     map.current.on('load', () => {
       console.log('🗺️ RouteMap - Map loaded, adding data...');
+      setMapLoaded(true);
       addTubeLinesToMap();
       // Only add stations if data is loaded
       if (!loading && stations.length > 0) {
@@ -106,7 +108,10 @@ const RouteMap: React.FC<RouteMapProps> = ({
     });
 
     return () => {
-      map.current?.remove();
+      if (map.current) {
+        setMapLoaded(false);
+        map.current.remove();
+      }
     };
   }, [tokenValid, mapboxToken, stations, loading, lineFeatures]);
 
@@ -122,8 +127,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
       selectedStations: selectedStations
     });
     
-    // Add stations to map when data becomes available
-    if (map.current && !loading && stations.length > 0) {
+    // Add stations to map when data becomes available - but only if map is loaded
+    if (map.current && mapLoaded && !loading && stations.length > 0) {
       // Check if stations layer already exists
       if (!map.current.getSource('stations')) {
         addStationsToMap();
@@ -131,7 +136,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         updateStationStyles();
       }
     }
-  }, [selectedStations, stations, visits, activityStations, loading]);
+  }, [selectedStations, stations, visits, activityStations, loading, mapLoaded]);
 
   // TfL official tube line colors
   const tubeLineColors: { [key: string]: string } = {
@@ -257,7 +262,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addStationsToMap = () => {
-    if (!map.current) return;
+    if (!map.current || !mapLoaded) return;
 
     // Add station source
     map.current.addSource('stations', {
@@ -455,7 +460,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const updateStationStyles = () => {
-    if (!map.current || !map.current.getSource('stations')) return;
+    if (!map.current || !mapLoaded || !map.current.getSource('stations')) return;
 
     // Update the source data with new sequence numbers and visit status
     const source = map.current.getSource('stations') as mapboxgl.GeoJSONSource;
@@ -520,7 +525,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addRouteConnectorLines = () => {
-    if (!map.current || selectedStations.length < 2) return;
+    if (!map.current || !mapLoaded || selectedStations.length < 2) return;
 
     // Remove existing route line if it exists
     if (map.current.getSource('route-line')) {
@@ -568,7 +573,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const addActivityPaths = () => {
-    if (!map.current) return;
+    if (!map.current || !mapLoaded) return;
 
     // Clean up existing activity paths (including outline layers)
     ['actual-path', 'actual-path-outline', 'preview-path', 'preview-path-outline'].forEach(layerId => {
