@@ -82,7 +82,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
       mapboxToken: mapboxToken ? 'present' : 'missing'
     });
     
-    if (!mapContainer.current || !tokenValid || loading || stations.length === 0) return;
+    // Mount map container immediately when token is valid, don't wait for data loading
+    if (!mapContainer.current || !tokenValid) return;
 
     mapboxgl.accessToken = mapboxToken;
     
@@ -98,7 +99,10 @@ const RouteMap: React.FC<RouteMapProps> = ({
     map.current.on('load', () => {
       console.log('🗺️ RouteMap - Map loaded, adding data...');
       addTubeLinesToMap();
-      addStationsToMap();
+      // Only add stations if data is loaded
+      if (!loading && stations.length > 0) {
+        addStationsToMap();
+      }
     });
 
     return () => {
@@ -118,10 +122,16 @@ const RouteMap: React.FC<RouteMapProps> = ({
       selectedStations: selectedStations
     });
     
-    if (map.current && stations.length > 0) {
-      updateStationStyles();
+    // Add stations to map when data becomes available
+    if (map.current && !loading && stations.length > 0) {
+      // Check if stations layer already exists
+      if (!map.current.getSource('stations')) {
+        addStationsToMap();
+      } else {
+        updateStationStyles();
+      }
     }
-  }, [selectedStations, stations, visits, activityStations]);
+  }, [selectedStations, stations, visits, activityStations, loading]);
 
   // TfL official tube line colors
   const tubeLineColors: { [key: string]: string } = {
@@ -343,11 +353,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     });
 
-    // Add route connector lines
+    // Add route connector lines - always show for route maps when multiple stations selected
     if (selectedStations.length > 1) {
       if (activityMode) {
         addActivityPaths();
       } else {
+        // For route maps, always show dotted planned route line
         addRouteConnectorLines();
       }
     }
@@ -487,15 +498,16 @@ const RouteMap: React.FC<RouteMapProps> = ({
 
     map.current.setFilter('station-numbers', ['>', ['get', 'sequence'], 0]);
     
-    // Update route connector lines
+    // Update route connector lines - always show for route maps when multiple stations selected
     if (selectedStations.length > 1) {
       if (activityMode) {
         addActivityPaths();
       } else {
+        // For route maps, always show dotted planned route line
         addRouteConnectorLines();
       }
     } else {
-      // Clean up existing lines
+      // Clean up existing lines when no route to show
       ['route-line', 'actual-path', 'preview-path'].forEach(layerId => {
         if (map.current!.getSource(layerId)) {
           if (map.current!.getLayer(layerId)) {
@@ -696,17 +708,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
     );
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardContent className="p-6">
-            <p>Loading map...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Don't show loading state - mount map container immediately and show skeleton
+  // Map will populate with data once loading completes
 
   return (
     <div className="space-y-4">
@@ -723,7 +726,13 @@ const RouteMap: React.FC<RouteMapProps> = ({
           </p>
         </CardHeader>
         <CardContent>
-          <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }} />
+          <div ref={mapContainer} className="h-96 w-full rounded-lg border" style={{ minHeight: '400px' }}>
+            {loading && (
+              <div className="absolute inset-0 bg-muted/50 flex items-center justify-center rounded-lg">
+                <p className="text-sm text-muted-foreground">Loading map data...</p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
