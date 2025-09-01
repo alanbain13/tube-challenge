@@ -192,6 +192,7 @@ const RouteView = () => {
                 onStationRemove={() => {}}
                 onSequenceChange={() => {}}
                 readOnly={true}
+                // Don't pass activityMode - undefined means route creation/view mode
               />
 
               {/* Route Summary */}

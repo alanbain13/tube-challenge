@@ -228,9 +228,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const getStationSequenceNumber = (stationId: string) => {
+    console.log(`🔢 Getting sequence for station ${stationId}, activityMode=${activityMode}, selectedStations=`, selectedStations);
+    
     // For route creation/view mode (when activityMode is undefined), use selectedStations index
     if (activityMode === undefined) {
       const selectedIndex = selectedStations.indexOf(stationId);
+      console.log(`🔢 Route mode: Station ${stationId} index=${selectedIndex}`);
       if (selectedIndex >= 0) {
         console.log(`🔢 Station ${stationId} sequence: ${selectedIndex + 1}`);
         return selectedIndex + 1;
@@ -239,11 +242,15 @@ const RouteMap: React.FC<RouteMapProps> = ({
       // For activity mode, prioritize visit sequence number over planned sequence
       const visit = visits.find(v => v.station_tfl_id === stationId);
       if (visit) {
+        console.log(`🔢 Activity mode: Station ${stationId} visit sequence: ${visit.sequence_number}`);
         return visit.sequence_number; // Use actual visit sequence for visited stations
       }
       // For planned but unvisited stations, use planned sequence 
       const activityIndex = activityStations.indexOf(stationId);
-      if (activityIndex >= 0) return activityIndex + 1;
+      if (activityIndex >= 0) {
+        console.log(`🔢 Activity mode: Station ${stationId} planned sequence: ${activityIndex + 1}`);
+        return activityIndex + 1;
+      }
     }
     
     console.log(`🔢 Station ${stationId} no sequence found`);
