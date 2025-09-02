@@ -7,11 +7,13 @@ import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useStations } from '@/hooks/useStations';
+import { useActivityState } from '@/hooks/useActivityState';
 import { supabase } from '@/integrations/supabase/client';
 import RouteMap from '@/components/RouteMap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -33,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Lock, GripVertical, X } from 'lucide-react';
 
 const activitySchema = z.object({
   title: z.string().min(2, {
@@ -60,12 +62,14 @@ const ActivityEdit = () => {
   const navigate = useNavigate();
   const { id: activityId } = useParams<{ id: string }>();
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedStations, setSelectedStations] = useState<string[]>([]);
+  const [remainingStations, setRemainingStations] = useState<string[]>([]);
   const { stations } = useStations();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  
+  // Use unified activity state hook
+  const { data: activityState, isLoading: activityLoading, refetch } = useActivityState(activityId);
 
   console.log('🧭 NAV: ActivityEdit mounted for activity:', activityId);
 
@@ -84,17 +88,16 @@ const ActivityEdit = () => {
     },
   });
 
+  // Load activity data and initialize form
   useEffect(() => {
-    if (activityId) {
+    if (activityId && activityState) {
       loadActivityData(activityId);
     }
-  }, [activityId]);
+  }, [activityId, activityState]);
 
   const loadActivityData = async (activityId: string) => {
     console.log('📦 DATA: Loading activity edit data for ID:', activityId);
     try {
-      setLoading(true);
-      
       const { data, error } = await supabase
         .from('activities')
         .select('*')
@@ -108,7 +111,7 @@ const ActivityEdit = () => {
       }
 
       const activityData = data as Activity;
-      console.log('📦 DATA: Activity loaded:', { title: activityData.title, stationCount: activityData.station_tfl_ids?.length || 0 });
+      console.log('📦 DATA: Activity loaded:', { title: activityData.title });
       setActivity(activityData);
       
       // Set form values
@@ -116,24 +119,28 @@ const ActivityEdit = () => {
       form.setValue('notes', activityData.notes || '');
       form.setValue('startStation', activityData.start_station_tfl_id || '');
       form.setValue('endStation', activityData.end_station_tfl_id || '');
-      
-      // Set selected stations
-      if (activityData.station_tfl_ids) {
-        setSelectedStations(activityData.station_tfl_ids);
-      }
     } catch (error) {
       console.error('Error loading activity data:', error);
       navigate('/activities');
-    } finally {
-      setLoading(false);
     }
   };
+
+  // Initialize remaining stations from activity state
+  useEffect(() => {
+    if (activityState && activityState.remaining) {
+      const remainingIds = activityState.remaining.map(r => r.station_tfl_id);
+      setRemainingStations(remainingIds);
+    } else if (activityState && activityState.mode === 'unplanned') {
+      // For unplanned activities with no visits, show empty remaining
+      setRemainingStations([]);
+    }
+  }, [activityState]);
 
   const onSubmit = async (values: z.infer<typeof activitySchema>) => {
     console.log('📦 DATA: Saving activity changes:', values);
     setIsSubmitting(true);
     try {
-      if (!user || !activity) {
+      if (!user || !activity || !activityState) {
         toast({
           title: 'Error',
           description: 'Invalid session or activity data.',
@@ -142,33 +149,56 @@ const ActivityEdit = () => {
         return;
       }
 
-      const activityData = {
+      // Update basic activity info (only if no visited stations to prevent changing locked start/end)
+      const hasVisitedStations = activityState.visited.length > 0;
+      const activityData: any = {
         title: values.title,
         notes: values.notes,
-        start_station_tfl_id: values.startStation || selectedStations[0] || null,
-        end_station_tfl_id: values.endStation || selectedStations[selectedStations.length - 1] || null,
-        station_tfl_ids: selectedStations,
       };
 
-      const { error } = await supabase
+      // Only update start/end if no stations have been visited
+      if (!hasVisitedStations) {
+        activityData.start_station_tfl_id = values.startStation || remainingStations[0] || null;
+        activityData.end_station_tfl_id = values.endStation || remainingStations[remainingStations.length - 1] || null;
+      }
+
+      const { error: activityError } = await supabase
         .from('activities')
         .update(activityData)
         .eq('id', activity.id);
 
-      if (error) {
-        console.error('Error updating activity:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to save activity.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Success',
-          description: 'Activity updated successfully!',
-        });
-        navigate(`/activities/${activity.id}`);
+      if (activityError) throw activityError;
+
+      // Update activity plan items for remaining stations only
+      // First, delete all existing plan items for this activity
+      const { error: deleteError } = await supabase
+        .from('activity_plan_item')
+        .delete()
+        .eq('activity_id', activity.id);
+
+      if (deleteError) throw deleteError;
+
+      // Then insert new plan items for remaining stations only
+      // (visited stations should not be in plan items anymore)
+      if (remainingStations.length > 0) {
+        const planItems = remainingStations.map((stationId, index) => ({
+          activity_id: activity.id,
+          station_tfl_id: stationId,
+          seq_planned: (activityState.visited.length || 0) + index + 1, // Continue numbering after visited
+        }));
+
+        const { error: insertError } = await supabase
+          .from('activity_plan_item')
+          .insert(planItems);
+
+        if (insertError) throw insertError;
       }
+
+      toast({
+        title: 'Success',
+        description: 'Activity updated successfully!',
+      });
+      navigate(`/activities/${activity.id}`);
     } catch (error) {
       console.error('Error saving activity:', error);
       toast({
@@ -182,118 +212,115 @@ const ActivityEdit = () => {
   };
 
   const handleStationAdd = (stationId: string) => {
-    setSelectedStations((prev) => {
+    // Only allow adding to remaining stations (not visited)
+    if (activityState?.visited.some(v => v.station_tfl_id === stationId)) {
+      toast({
+        title: 'Cannot add station',
+        description: 'This station has already been visited and cannot be modified.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setRemainingStations((prev) => {
       if (!prev.includes(stationId)) {
         const newStations = [...prev, stationId];
-        recomputeSequenceAndStatus(newStations);
+        console.log('🏁 Adding station to remaining:', { tfl_id: stationId, name: getStationName(stationId) });
         return newStations;
       }
       return prev;
     });
     
-    // Auto-set start if not set, or update end station
-    if (!form.getValues('startStation')) {
-      form.setValue('startStation', stationId);
-      console.log('🏁 UI Bind: Auto-setting start station:', { tfl_id: stationId, name: getStationName(stationId) });
+    // Auto-set start/end only if no visited stations
+    const hasVisitedStations = activityState?.visited.length > 0;
+    if (!hasVisitedStations) {
+      if (!form.getValues('startStation')) {
+        form.setValue('startStation', stationId);
+        console.log('🏁 UI Bind: Auto-setting start station:', { tfl_id: stationId, name: getStationName(stationId) });
+      }
+      form.setValue('endStation', stationId);
+      console.log('🏁 UI Bind: Auto-setting end station:', { tfl_id: stationId, name: getStationName(stationId) });
     }
-    form.setValue('endStation', stationId);
-    console.log('🏁 UI Bind: Auto-setting end station:', { tfl_id: stationId, name: getStationName(stationId) });
   };
 
   const handleStationRemove = (stationId: string) => {
-    setSelectedStations((prev) => {
+    // Only allow removing from remaining stations (not visited)
+    if (activityState?.visited.some(v => v.station_tfl_id === stationId)) {
+      toast({
+        title: 'Cannot remove station',
+        description: 'Visited stations cannot be removed.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setRemainingStations((prev) => {
       const newStations = prev.filter((id) => id !== stationId);
-      recomputeSequenceAndStatus(newStations);
       
-      // Clear start/end if they were the removed station
-      if (form.getValues('startStation') === stationId) {
-        form.setValue('startStation', newStations[0] || '');
-      }
-      if (form.getValues('endStation') === stationId) {
-        form.setValue('endStation', newStations[newStations.length - 1] || '');
+      // Clear start/end if they were the removed station and no visited stations
+      const hasVisitedStations = activityState?.visited.length > 0;
+      if (!hasVisitedStations) {
+        if (form.getValues('startStation') === stationId) {
+          form.setValue('startStation', newStations[0] || '');
+        }
+        if (form.getValues('endStation') === stationId) {
+          form.setValue('endStation', newStations[newStations.length - 1] || '');
+        }
       }
       
       return newStations;
     });
   };
 
-  const handleStationSetRole = (stationId: string, role: 'start' | 'finish') => {
-    const stationName = getStationName(stationId);
-    console.log(`🏁 UI Bind: ${role}=${stationId}/${stationName}`);
-    
-    if (role === 'start') {
-      form.setValue('startStation', stationId);
-      // Ensure the station is in the selected list and at the beginning
-      setSelectedStations((prev) => {
-        const filtered = prev.filter(id => id !== stationId);
-        const newStations = [stationId, ...filtered];
-        recomputeSequenceAndStatus(newStations);
-        return newStations;
-      });
-    } else if (role === 'finish') {
-      form.setValue('endStation', stationId);
-      // Ensure the station is in the selected list and at the end
-      setSelectedStations((prev) => {
-        const filtered = prev.filter(id => id !== stationId);
-        const newStations = [...filtered, stationId];
-        recomputeSequenceAndStatus(newStations);
-        return newStations;
-      });
-    }
-  };
-
   const handleSequenceChange = (fromIndex: number, toIndex: number) => {
-    const newStations = [...selectedStations];
-    const [movedStation] = newStations.splice(fromIndex, 1);
-    newStations.splice(toIndex, 0, movedStation);
-    setSelectedStations(newStations);
-    recomputeSequenceAndStatus(newStations);
+    // Only allow reordering within remaining stations
+    const visitedCount = activityState?.visited.length || 0;
+    const remainingStartIndex = visitedCount;
+    
+    // Adjust indices to be relative to remaining stations only
+    const adjustedFromIndex = fromIndex - remainingStartIndex;
+    const adjustedToIndex = toIndex - remainingStartIndex;
+    
+    if (adjustedFromIndex < 0 || adjustedToIndex < 0) {
+      toast({
+        title: 'Cannot reorder',
+        description: 'Visited stations cannot be reordered.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    const newStations = [...remainingStations];
+    const [movedStation] = newStations.splice(adjustedFromIndex, 1);
+    newStations.splice(adjustedToIndex, 0, movedStation);
+    setRemainingStations(newStations);
   };
 
-  const recomputeSequenceAndStatus = (stations: string[]) => {
-    // Calculate stats for logging (free-order mode)
-    const totalStations = stations.length;
-    const visitedCount = 0; // In edit mode, no visits yet
-    const pendingCount = 0; // In edit mode, no pending visits
-    
-    console.log('🔄 Free-order sequence recompute:', { 
-      planned_total: totalStations, 
-      visited_actual: visitedCount, 
-      pending: pendingCount
-    });
-    
-    // Log the ordered list with sequence numbers and status
-    const orderedList = stations.map((stationId, index) => ({
-      seq: index + 1,
-      tfl_id: stationId,
-      status: 'not_visited' as const
-    }));
-    
-    console.log('📋 Station sequence (free-order):', orderedList);
-  };
-
-  // Handle form field changes to update map
+  // Handle form field changes to update remaining stations
   useEffect(() => {
+    const hasVisitedStations = activityState?.visited.length > 0;
+    if (hasVisitedStations) return; // Don't allow changes if there are visited stations
+    
     const subscription = form.watch((value, { name }) => {
       if (name === 'startStation' && value.startStation) {
         console.log('🏁 UI Bind: Form start changed:', { tfl_id: value.startStation, name: getStationName(value.startStation) });
-        // Move start station to beginning of sequence
-        setSelectedStations((prev) => {
+        // Move start station to beginning of remaining sequence
+        setRemainingStations((prev) => {
           const filtered = prev.filter(id => id !== value.startStation);
           return [value.startStation, ...filtered];
         });
       }
       if (name === 'endStation' && value.endStation) {
         console.log('🏁 UI Bind: Form end changed:', { tfl_id: value.endStation, name: getStationName(value.endStation) });
-        // Move end station to end of sequence
-        setSelectedStations((prev) => {
+        // Move end station to end of remaining sequence
+        setRemainingStations((prev) => {
           const filtered = prev.filter(id => id !== value.endStation);
           return [...filtered, value.endStation];
         });
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, getStationName]);
+  }, [form, getStationName, activityState?.visited.length]);
 
 
   // SEO
@@ -301,7 +328,7 @@ const ActivityEdit = () => {
     document.title = `Edit ${activity?.title || 'Activity'} | Tube Challenge`;
   }, [activity]);
 
-  if (loading) {
+  if (authLoading || activityLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
         <p className="text-lg">Loading activity...</p>
@@ -309,7 +336,7 @@ const ActivityEdit = () => {
     );
   }
 
-  if (!activity) {
+  if (!activity || !activityState) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
         <div className="text-center">
@@ -321,6 +348,22 @@ const ActivityEdit = () => {
       </div>
     );
   }
+
+  const { visited, remaining, visitedCount, totalPlannedCount } = activityState;
+  const hasVisitedStations = visited.length > 0;
+  
+  // Get all stations for map display (visited + remaining)
+  const allMapStations = [
+    ...visited.map(v => v.station_tfl_id),
+    ...remainingStations
+  ];
+  
+  // Convert visits for RouteMap component
+  const mapVisits = visited.map(visit => ({
+    station_tfl_id: visit.station_tfl_id,
+    status: visit.status,
+    sequence_number: visit.seq_actual
+  }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -343,134 +386,238 @@ const ActivityEdit = () => {
           </header>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column - Form */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <FormField
-                      control={form.control}
-                      name="title"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Activity Title</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter activity title" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Notes (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea placeholder="Enter activity notes" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="startStation"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Start Station</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Auto-set from map selection" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {stations.map((station) => (
-                                  <SelectItem key={station.id} value={station.id}>
-                                    {station.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="endStation"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>End Station</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Auto-set from map selection" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {stations.map((station) => (
-                                  <SelectItem key={station.id} value={station.id}>
-                                    {station.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <Button type="submit" className="w-full" disabled={isSubmitting}>
-                      {isSubmitting ? 'Saving...' : 'Save Activity'}
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-
-            {/* Right Column - Activity Map and Summary */}
+            {/* Left Column - Form and Station Lists */}
             <div className="space-y-6">
-              <RouteMap
-                selectedStations={selectedStations}
-                onStationSelect={handleStationAdd}
-                onStationRemove={handleStationRemove}
-                onSequenceChange={handleSequenceChange}
-                onStationSetRole={handleStationSetRole}
-              />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                      <FormField
+                        control={form.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Activity Title</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter activity title" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-              {/* Activity Summary */}
-              {selectedStations.length > 0 && (
+                      <FormField
+                        control={form.control}
+                        name="notes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Notes (Optional)</FormLabel>
+                            <FormControl>
+                              <Textarea placeholder="Enter activity notes" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="startStation"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Start Station</FormLabel>
+                              <Select 
+                                onValueChange={field.onChange} 
+                                value={field.value}
+                                disabled={hasVisitedStations}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={
+                                      hasVisitedStations ? 
+                                      `Locked to ${getStationName(visited[0]?.station_tfl_id)}` :
+                                      "Auto-set from map selection"
+                                    } />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {stations.map((station) => (
+                                    <SelectItem key={station.id} value={station.id}>
+                                      {station.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {hasVisitedStations && (
+                                <p className="text-xs text-muted-foreground">
+                                  Start is locked to {getStationName(visited[0].station_tfl_id)} once you've checked in.
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="endStation"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>End Station</FormLabel>
+                              <Select 
+                                onValueChange={field.onChange} 
+                                value={field.value}
+                                disabled={hasVisitedStations}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={
+                                      hasVisitedStations ? 
+                                      "Locked after check-in" :
+                                      "Auto-set from map selection"
+                                    } />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {stations.map((station) => (
+                                    <SelectItem key={station.id} value={station.id}>
+                                      {station.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {hasVisitedStations && (
+                                <p className="text-xs text-muted-foreground">
+                                  End station changes are locked after check-in.
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? 'Saving...' : 'Save Activity'}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              {/* Visited Stations (Read-only) */}
+              {visited.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Activity Summary</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-red-500" />
+                      Visited Stations ({visited.length})
+                      <Badge variant="destructive" className="ml-2">Locked</Badge>
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Total Stations:</span>
-                        <span className="font-medium">{selectedStations.length}</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="text-muted-foreground">Route: </span>
-                        <span className="font-medium">
-                          {selectedStations.map(getStationName).join(' → ')}
-                        </span>
-                      </div>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {visited.map((visit) => (
+                        <div key={`visited-${visit.station_tfl_id}-${visit.seq_actual}`} className="flex items-center gap-3 p-2 bg-red-50 border border-red-200 rounded">
+                          <span className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                            {visit.seq_actual}
+                          </span>
+                          <span className="font-medium flex-1">{getStationName(visit.station_tfl_id)}</span>
+                          <Badge variant="destructive" className="text-xs">
+                            {visit.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
               )}
+
+              {/* Remaining Stations (Editable) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    Remaining Stations ({remainingStations.length})
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Editable</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {remainingStations.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      Click on stations on the map to add them to your planned route.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {remainingStations.map((stationId, index) => (
+                        <div key={`remaining-${stationId}-${index}`} className="flex items-center gap-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                          <GripVertical className="w-4 h-4 text-muted-foreground cursor-move" />
+                          <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                            {visitedCount + index + 1}
+                          </span>
+                          <span className="font-medium flex-1">{getStationName(stationId)}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleStationRemove(stationId)}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Map */}
+            <div className="space-y-6">
+              <RouteMap
+                selectedStations={allMapStations}
+                onStationSelect={handleStationAdd}
+                onStationRemove={handleStationRemove}
+                onSequenceChange={handleSequenceChange}
+                readOnly={false}
+                activityStations={allMapStations}
+                visits={mapVisits}
+                activityMode={activityState.mode}
+              />
+
+              {/* Activity Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Visited:</span>
+                      <span className="font-medium text-red-600">{visitedCount}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Remaining:</span>
+                      <span className="font-medium text-blue-600">{remainingStations.length}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Total Planned:</span>
+                      <span className="font-medium">{visitedCount + remainingStations.length}</span>
+                    </div>
+                    {allMapStations.length > 0 && (
+                      <div className="text-sm pt-2 border-t">
+                        <span className="text-muted-foreground">Route: </span>
+                        <span className="font-medium">
+                          {allMapStations.map(getStationName).join(' → ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
