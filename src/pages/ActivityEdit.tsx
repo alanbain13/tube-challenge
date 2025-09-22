@@ -28,14 +28,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { ArrowLeft, GripVertical, X, Lock } from 'lucide-react';
+import { ArrowLeft, Lock } from 'lucide-react';
 
 const activitySchema = z.object({
   title: z.string().min(2, {
@@ -61,16 +54,12 @@ const ActivityEdit = () => {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [remainingStations, setRemainingStations] = useState<string[]>([]);
   const { stations } = useStations();
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // Use unified activity state hook
-  const { data: activityState, isLoading: stateLoading, refetch: refetchState } = useActivityState(activityId);
-
-  console.log('🧭 NAV: ActivityEdit mounted for activity:', activityId);
-  console.log('📊 Unified State:', activityState);
+  // Use unified activity state hook for display parity only
+  const { data: activityState, isLoading: stateLoading } = useActivityState(activityId);
 
   const getStationName = (stationId: string) => {
     const station = stations.find((s) => s.id === stationId);
@@ -90,18 +79,6 @@ const ActivityEdit = () => {
       loadActivityData(activityId);
     }
   }, [activityId]);
-
-  // Update remaining stations when activity state changes
-  useEffect(() => {
-    if (activityState?.remaining) {
-      const remainingStationIds = activityState.remaining.map(item => item.station_tfl_id);
-      setRemainingStations(remainingStationIds);
-      console.log('🔄 Updated remaining stations:', remainingStationIds);
-    } else if (activityState?.mode === 'unplanned') {
-      // For unplanned activities, start with empty remaining
-      setRemainingStations([]);
-    }
-  }, [activityState]);
 
   const loadActivityData = async (activityId: string) => {
     console.log('📦 DATA: Loading activity edit data for ID:', activityId);
@@ -137,10 +114,9 @@ const ActivityEdit = () => {
   };
 
   const onSubmit = async (values: z.infer<typeof activitySchema>) => {
-    console.log('📦 DATA: Saving activity changes:', values);
     setIsSubmitting(true);
     try {
-      if (!user || !activity || !activityState) {
+      if (!user || !activity) {
         toast({
           title: 'Error',
           description: 'Invalid session or activity data.',
@@ -149,7 +125,7 @@ const ActivityEdit = () => {
         return;
       }
 
-      // Update basic activity info
+      // Update only metadata fields
       const activityData = {
         title: values.title,
         notes: values.notes,
@@ -170,52 +146,11 @@ const ActivityEdit = () => {
         return;
       }
 
-      // Update activity plan items for remaining stations only
-      // First, delete existing plan items for stations that are not visited
-      const visitedStationIds = activityState.visited.map(v => v.station_tfl_id);
-      
-      // Delete all plan items that aren't visited (we'll recreate them)
-      const { error: deleteError } = await supabase
-        .from('activity_plan_item')
-        .delete()
-        .eq('activity_id', activity.id)
-        .not('station_tfl_id', 'in', `(${visitedStationIds.map(id => `"${id}"`).join(',')})`);
-
-      if (deleteError) {
-        console.error('Error deleting old plan items:', deleteError);
-        // Continue anyway, this is not critical
-      }
-
-      // Insert new plan items for remaining stations
-      if (remainingStations.length > 0) {
-        const newPlanItems = remainingStations.map((stationId, index) => ({
-          activity_id: activity.id,
-          station_tfl_id: stationId,
-          seq_planned: activityState.visited.length + index + 1, // Continue sequence after visited
-        }));
-
-        const { error: planError } = await supabase
-          .from('activity_plan_item')
-          .insert(newPlanItems);
-
-        if (planError) {
-          console.error('Error updating plan items:', planError);
-          toast({
-            title: 'Error',
-            description: 'Failed to update activity plan.',
-            variant: 'destructive',
-          });
-          return;
-        }
-      }
-
       toast({
         title: 'Success',
         description: 'Activity updated successfully!',
       });
       
-      // Refresh state and navigate back
-      await refetchState();
       navigate(`/activities/${activity.id}`);
       
     } catch (error) {
@@ -230,44 +165,6 @@ const ActivityEdit = () => {
     }
   };
 
-  const handleStationAdd = (stationId: string) => {
-    // Only allow adding to remaining stations if not already visited
-    if (activityState?.visited.some(v => v.station_tfl_id === stationId)) {
-      toast({
-        title: 'Station already visited',
-        description: 'Cannot add a station that has already been visited.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setRemainingStations((prev) => {
-      if (!prev.includes(stationId)) {
-        const newStations = [...prev, stationId];
-        console.log('➕ Added station to remaining:', { stationId, newCount: newStations.length });
-        return newStations;
-      }
-      return prev;
-    });
-  };
-
-  const handleStationRemove = (stationId: string) => {
-    // Only allow removing from remaining stations
-    setRemainingStations((prev) => {
-      const newStations = prev.filter((id) => id !== stationId);
-      console.log('➖ Removed station from remaining:', { stationId, newCount: newStations.length });
-      return newStations;
-    });
-  };
-
-  const handleSequenceChange = (fromIndex: number, toIndex: number) => {
-    // Only allow reordering within remaining stations
-    const newStations = [...remainingStations];
-    const [movedStation] = newStations.splice(fromIndex, 1);
-    newStations.splice(toIndex, 0, movedStation);
-    setRemainingStations(newStations);
-    console.log('🔄 Reordered remaining stations:', newStations);
-  };
 
 
   // SEO
@@ -403,47 +300,32 @@ const ActivityEdit = () => {
                 </Card>
               )}
 
-              {/* Remaining Stations (Editable) */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <span>Remaining Stations ({remainingStations.length})</span>
-                    <Badge variant="secondary" className="text-xs">EDITABLE</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {remainingStations.map((stationId, index) => {
-                      const sequenceNumber = visitedCount + index + 1;
-                      return (
-                        <div key={`remaining-${stationId}`} className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg group">
-                          <div className="flex items-center gap-2">
-                            <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
+              {/* Remaining Stations (Read-only) */}
+              {remaining && remaining.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <span>Remaining Stations ({remaining.length})</span>
+                      <Badge variant="secondary" className="text-xs">READ-ONLY</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {remaining.map((item, index) => {
+                        const sequenceNumber = visitedCount + index + 1;
+                        return (
+                          <div key={`remaining-${item.station_tfl_id}`} className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <span className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
                               {sequenceNumber}
                             </span>
+                            <span className="font-medium flex-1">{getStationName(item.station_tfl_id)}</span>
                           </div>
-                          <span className="font-medium flex-1">{getStationName(stationId)}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleStationRemove(stationId)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      );
-                    })}
-                    {remainingStations.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <p>No remaining stations planned.</p>
-                        <p className="text-sm">Use the map to add stations to your route.</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Right Column - Unified Activity Map */}
@@ -455,33 +337,6 @@ const ActivityEdit = () => {
                 />
               </div>
 
-              {/* Add Station Search */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Add Station</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Select onValueChange={handleStationAdd}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Search and select a station to add" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stations
-                        .filter(station => 
-                          // Exclude already visited stations
-                          !visited.some(v => v.station_tfl_id === station.id) &&
-                          // Exclude already planned stations
-                          !remainingStations.includes(station.id)
-                        )
-                        .map((station) => (
-                          <SelectItem key={station.id} value={station.id}>
-                            {station.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </div>
