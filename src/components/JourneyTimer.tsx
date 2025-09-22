@@ -199,35 +199,7 @@ export function JourneyTimer() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Show pending notice if activity exists but no verified start (on any page)  
-  if (pendingActivity && !activeActivity) {
-    return (
-      <Card className={cn(
-        "fixed z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg",
-        isMobile ? "bottom-20 left-4 right-4" : "bottom-6 right-6 min-w-[280px]"
-      )}>
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          <div className="text-sm flex-1">
-            <div className="font-medium text-foreground">
-              Check in at your start station to begin
-            </div>
-            <div className="text-muted-foreground">
-              {pendingActivity.title}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            onClick={() => navigate(`/activities/${pendingActivity.id}/checkin`)}
-          >
-            Check-in
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
-  // Don't show if no active activity with verified start
+  // Don't show timer if no active activity with verified start
   if (!activeActivity) {
     return null;
   }
