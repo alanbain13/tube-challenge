@@ -14,7 +14,7 @@ import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { calculateDistance, extractImageGPS } from "@/lib/utils";
-import { CheckinHUD, CheckinState } from "@/components/CheckinHUD";
+
 
 // Configuration
 const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
@@ -85,21 +85,6 @@ const ActivityCheckin = () => {
   // Enhanced features
   const { uploadImage, isUploading } = useImageUpload();
   
-  // CheckinHUD state management
-  const [checkinHudState, setCheckinHudState] = useState<CheckinState>('idle');
-  const [hudStationName, setHudStationName] = useState<string | undefined>(undefined);
-  const [hudError, setHudError] = useState<string | undefined>(undefined);
-
-  // Handle retry action from HUD
-  const handleRetryCheckin = () => {
-    setCapturedImage(null);
-    setVerificationError(null);
-    setSuggestions(null);
-    setGeofenceError(null);
-    setCheckinHudState('idle');
-    setHudError(undefined);
-    setHudStationName(undefined);
-  };
 
   // Clean up component state on unmount
   useEffect(() => {
@@ -259,8 +244,6 @@ const ActivityCheckin = () => {
   const runValidationPipeline = async (imageData: string) => {
     try {
       setIsVerifying(true);
-      setCheckinHudState('verifying');
-      setHudError(undefined);
       
       // STEP 1: OCR Validation
       console.log('🧭 Free-Order Checkin: Step 1 - OCR validation');
@@ -478,8 +461,6 @@ const ActivityCheckin = () => {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
       
       setVerificationError(error.message);
-      setCheckinHudState('failed');
-      setHudError(error.message);
       
       toast({
         title: "Check-in failed",
@@ -602,8 +583,6 @@ const ActivityCheckin = () => {
       
       // Detect offline state
       if (!navigator.onLine) {
-        setCheckinHudState('offline');
-        setHudError('Offline: saved locally, will sync automatically');
         return;
       }
       
@@ -614,8 +593,6 @@ const ActivityCheckin = () => {
         
         // Friendly duplicate error with CTA
         setVerificationError(`You already checked in at ${stationName} for this activity.`);
-        setCheckinHudState('failed');
-        setHudError(`You already checked in at ${stationName} for this activity.`);
         
         toast({
           title: "Already checked in",
@@ -634,8 +611,6 @@ const ActivityCheckin = () => {
           )
         });
       } else {
-        setCheckinHudState('failed');
-        setHudError(error.message || "An unexpected error occurred");
         toast({
           title: "Check-in failed",
           description: error.message || "An unexpected error occurred",
@@ -1061,26 +1036,11 @@ const ActivityCheckin = () => {
           </CardContent>
         </Card>
 
+        
         {/* Dev Panel */}
         {SIMULATION_MODE_ENV && (
           <DevPanel />
         )}
-        
-        {/* CheckinHUD Component */}
-        <CheckinHUD
-          state={checkinHudState}
-          stationName={hudStationName}
-          error={hudError}
-          onCameraCapture={canUploadImage() ? startCamera : undefined}
-          onFileUpload={canUploadImage() ? () => fileInputRef.current?.click() : undefined}
-          onRetry={handleRetryCheckin}
-          onHelp={() => toast({ 
-            title: "Check-in Help", 
-            description: "Take a clear photo of the station roundel to check in. Make sure you're within 500m of the station." 
-          })}
-          isUploading={isUploading || isVerifying}
-          autoHideAfterSuccess={true}
-        />
       </div>
     </div>
   );

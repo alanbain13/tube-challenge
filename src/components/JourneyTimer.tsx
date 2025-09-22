@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Clock, Play, Square, ArrowRight, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Clock, Play, Square, ArrowRight, X, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -39,10 +39,6 @@ export function JourneyTimer() {
   const isMobile = useIsMobile();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isExpanded, setIsExpanded] = useState(true);
-  const [hasAutoHidden, setHasAutoHidden] = useState(false);
-  
-  // Only show HUD when user is actively checking in
-  const isOnCheckinPage = location.pathname.includes('/checkin');
 
   // Update timer every second
   useEffect(() => {
@@ -178,9 +174,6 @@ export function JourneyTimer() {
         description: `${Math.floor(durationMinutes / 60).toString().padStart(2, '0')}:${(durationMinutes % 60).toString().padStart(2, '0')}:00 recorded`
       });
 
-      // Auto-hide HUD after successful completion
-      setIsExpanded(false);
-      setHasAutoHidden(true);
 
       // Force immediate refetch to hide the HUD
       await refetch();
@@ -194,17 +187,6 @@ export function JourneyTimer() {
     }
   };
 
-  // Auto-hide HUD after first successful check-in (start journey)
-  useEffect(() => {
-    if (activeActivity?.gate_start_at && !hasAutoHidden && isOnCheckinPage) {
-      const timer = setTimeout(() => {
-        setIsExpanded(false);
-        setHasAutoHidden(true);
-      }, 3000); // Show for 3 seconds after starting
-      
-      return () => clearTimeout(timer);
-    }
-  }, [activeActivity?.gate_start_at, hasAutoHidden, isOnCheckinPage]);
 
   const formatElapsedTime = (startTime: string): string => {
     const start = new Date(startTime);
@@ -217,8 +199,8 @@ export function JourneyTimer() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Show pending notice if activity exists but no verified start (on any page)
-  if (pendingActivity && !activeActivity && !isOnCheckinPage) {
+  // Show pending notice if activity exists but no verified start (on any page)  
+  if (pendingActivity && !activeActivity) {
     return (
       <Card className={cn(
         "fixed z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg",
@@ -245,8 +227,8 @@ export function JourneyTimer() {
     );
   }
 
-  // Don't show if no active activity with verified start or not on checkin page
-  if (!activeActivity || !isOnCheckinPage) {
+  // Don't show if no active activity with verified start
+  if (!activeActivity) {
     return null;
   }
 
