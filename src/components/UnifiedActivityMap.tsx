@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from 'lucide-react';
+import { CheckinHUD, CheckinState } from '@/components/CheckinHUD';
 
 interface UnifiedActivityMapProps {
   activityId: string;
@@ -33,6 +34,11 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
   const { data: activityState, isLoading } = useActivityState(activityId);
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
   const [visits, setVisits] = useState<RouteMapStationVisit[]>([]);
+  
+  // CheckinHUD state
+  const [checkinHudState, setCheckinHudState] = useState<CheckinState>('idle');
+  const [hudStationName, setHudStationName] = useState<string | undefined>(undefined);
+  const [hudError, setHudError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (activityState) {
@@ -64,6 +70,19 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
   const getStationName = (stationId: string) => {
     const station = stations.find((s) => s.id === stationId);
     return station ? station.name : stationId;
+  };
+
+  // Handle check-in actions from HUD
+  const handleCheckinFromMap = () => {
+    if (activity?.id) {
+      navigate(`/activities/${activity.id}/checkin`);
+    }
+  };
+
+  const handleRetryCheckin = () => {
+    setCheckinHudState('idle');
+    setHudError(undefined);
+    setHudStationName(undefined);
   };
 
   if (isLoading) {
@@ -250,6 +269,24 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
           </div>
         </div>
       </div>
+      
+      {/* CheckinHUD for map-based check-ins */}
+      <CheckinHUD
+        state={checkinHudState}
+        stationName={hudStationName}
+        error={hudError}
+        onCameraCapture={handleCheckinFromMap}
+        onFileUpload={handleCheckinFromMap}
+        onRetry={handleRetryCheckin}
+        onHelp={() => {
+          // Navigate to checkin page for help
+          if (activity?.id) {
+            navigate(`/activities/${activity.id}/checkin`);
+          }
+        }}
+        isUploading={false}
+        autoHideAfterSuccess={true}
+      />
     </div>
   );
 };
