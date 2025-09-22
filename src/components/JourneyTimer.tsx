@@ -1,18 +1,25 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Clock, Play, Square, ArrowRight, X } from "lucide-react";
+import { Clock, Play, Square, ArrowRight, X, ChevronUp, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface Activity {
   id: string;
@@ -29,7 +36,10 @@ export function JourneyTimer() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [hasAutoHidden, setHasAutoHidden] = useState(false);
   
   // Only show HUD when user is actively checking in
   const isOnCheckinPage = location.pathname.includes('/checkin');
@@ -168,6 +178,10 @@ export function JourneyTimer() {
         description: `${Math.floor(durationMinutes / 60).toString().padStart(2, '0')}:${(durationMinutes % 60).toString().padStart(2, '0')}:00 recorded`
       });
 
+      // Auto-hide HUD after successful completion
+      setIsExpanded(false);
+      setHasAutoHidden(true);
+
       // Force immediate refetch to hide the HUD
       await refetch();
     } catch (error) {
@@ -179,6 +193,18 @@ export function JourneyTimer() {
       });
     }
   };
+
+  // Auto-hide HUD after first successful check-in (start journey)
+  useEffect(() => {
+    if (activeActivity?.gate_start_at && !hasAutoHidden && isOnCheckinPage) {
+      const timer = setTimeout(() => {
+        setIsExpanded(false);
+        setHasAutoHidden(true);
+      }, 3000); // Show for 3 seconds after starting
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeActivity?.gate_start_at, hasAutoHidden, isOnCheckinPage]);
 
   const formatElapsedTime = (startTime: string): string => {
     const start = new Date(startTime);
@@ -194,10 +220,13 @@ export function JourneyTimer() {
   // Show pending notice if activity exists but no verified start (on any page)
   if (pendingActivity && !activeActivity && !isOnCheckinPage) {
     return (
-      <Card className="fixed bottom-4 right-4 z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg">
-        <div className="flex items-center gap-3 min-w-[280px]">
+      <Card className={cn(
+        "fixed z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg",
+        isMobile ? "bottom-20 left-4 right-4" : "bottom-6 right-6 min-w-[280px]"
+      )}>
+        <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          <div className="text-sm">
+          <div className="text-sm flex-1">
             <div className="font-medium text-foreground">
               Check in at your start station to begin
             </div>
@@ -208,7 +237,6 @@ export function JourneyTimer() {
           <Button
             size="sm"
             onClick={() => navigate(`/activities/${pendingActivity.id}/checkin`)}
-            className="ml-auto"
           >
             Check-in
           </Button>
@@ -227,82 +255,137 @@ export function JourneyTimer() {
   const canStart = !hasStarted;
   const canFinish = hasStarted && !hasFinished;
 
+  // FAB for mobile when collapsed
+  if (!isExpanded) {
+    return (
+      <TooltipProvider>
+        <div className={cn(
+          "fixed z-50",
+          isMobile 
+            ? "bottom-20 right-4" // Above bottom nav on mobile
+            : "bottom-6 right-6"
+        )}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={() => setIsExpanded(true)}
+                size={isMobile ? "default" : "lg"}
+                className={cn(
+                  "rounded-full shadow-lg",
+                  isMobile ? "h-14 w-14" : "h-16 w-16"
+                )}
+              >
+                <Clock className={cn(
+                  isMobile ? "h-6 w-6" : "h-8 w-8"
+                )} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>View journey timer</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
   return (
     <TooltipProvider>
-      <Card className="fixed bottom-4 right-4 z-50 p-4 bg-background/95 backdrop-blur-sm border shadow-lg">
-        <div className="flex items-center gap-4 min-w-[280px]">
-          {/* Timer Display */}
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <div className="text-sm">
-              <div className="font-medium text-foreground">
-                {activeActivity.title}
+      <Card className={cn(
+        "fixed z-40 bg-background/95 backdrop-blur-sm border shadow-lg",
+        isMobile 
+          ? "bottom-20 left-4 right-4" // Above bottom nav, full width on mobile
+          : "bottom-6 right-6 min-w-[320px] max-w-[400px]"
+      )}>
+        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+          <div className="p-4">
+            {/* Header with timer and collapse toggle */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm">
+                  <div className="font-medium text-foreground">
+                    {activeActivity.title}
+                  </div>
+                </div>
               </div>
-              <div className="text-muted-foreground">
-                {hasStarted ? (
-                  hasFinished ? (
-                    `Completed in ${formatElapsedTime(activeActivity.gate_start_at!)}`
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                      {formatElapsedTime(activeActivity.gate_start_at!)}
-                    </span>
-                  )
-                ) : (
-                  "Ready to start official timing"
-                )}
-              </div>
+              
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </CollapsibleTrigger>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/activities/${activeActivity.id}`)}
-                  className="h-8"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Cancel
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                Exit check-in and return to activity
-              </TooltipContent>
-            </Tooltip>
+            {/* Timer status */}
+            <div className="text-sm text-muted-foreground mb-4">
+              {hasStarted ? (
+                hasFinished ? (
+                  `Completed in ${formatElapsedTime(activeActivity.gate_start_at!)}`
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    {formatElapsedTime(activeActivity.gate_start_at!)}
+                  </span>
+                )
+              ) : (
+                "Ready to start official timing"
+              )}
+            </div>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  onClick={hasStarted ? handleFinishJourney : handleStartJourney}
-                  disabled={hasFinished}
-                  className="h-8"
-                >
-                  {hasStarted ? (
-                    <>
-                      <Square className="h-3 w-3 mr-1" />
-                      Finish
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRight className="h-3 w-3 mr-1" />
-                      Continue
-                    </>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {!hasStarted ? "Continue with check-in process" : 
-                 hasFinished ? "Journey already finished" : 
-                 "Finish official journey timing"}
-              </TooltipContent>
-            </Tooltip>
+            <CollapsibleContent className="space-y-3">
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/activities/${activeActivity.id}`)}
+                      className="flex-1"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Exit check-in and return to activity</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      onClick={hasStarted ? handleFinishJourney : handleStartJourney}
+                      disabled={hasFinished}
+                      className="flex-1"
+                    >
+                      {hasStarted ? (
+                        <>
+                          <Square className="h-4 w-4 mr-2" />
+                          Finish
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="h-4 w-4 mr-2" />
+                          Continue
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      {!hasStarted ? "Continue with check-in process" : 
+                       hasFinished ? "Journey already finished" : 
+                       "Finish official journey timing"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </CollapsibleContent>
           </div>
-        </div>
+        </Collapsible>
       </Card>
     </TooltipProvider>
   );
