@@ -13,7 +13,7 @@ import { resolveStation, ResolvedStation } from "@/lib/stationResolver";
 import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
 import { useImageUpload } from "@/hooks/useImageUpload";
-import { calculateDistance, extractImageGPS } from "@/lib/utils";
+import { calculateDistance, extractImageGPS, extractImageTimestamp } from "@/lib/utils";
 
 
 // Configuration
@@ -315,7 +315,7 @@ const ActivityCheckin = () => {
         console.log('🧭 Free-Order Checkin: Step 3 - EXIF GPS geofencing validation');
         
         // Try to extract GPS from image EXIF data first
-        const imageGPS = extractImageGPS(imageData);
+        const imageGPS = await extractImageGPS(imageData);
         
         if (!imageGPS) {
           console.log('🧭 Free-Order Checkin: No EXIF GPS found in image - using device GPS as fallback');

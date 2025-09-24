@@ -18,14 +18,59 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
 }
 
 // Extract EXIF GPS data from base64 image
-export function extractImageGPS(base64Image: string): { lat: number; lng: number } | null {
+export async function extractImageGPS(base64Image: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    // This is a simplified implementation - in production you'd use a proper EXIF library
-    // For now, we'll return null to indicate no GPS data available
-    // TODO: Implement proper EXIF extraction when needed
+    // Import exifr dynamically to avoid issues with SSR
+    const { parse } = await import('exifr');
+    
+    // Convert base64 to buffer
+    const base64Data = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
+    const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    
+    // Parse EXIF data
+    const exifData = await parse(buffer, { gps: true });
+    
+    if (exifData?.latitude && exifData?.longitude) {
+      return {
+        lat: exifData.latitude,
+        lng: exifData.longitude
+      };
+    }
+    
     return null;
   } catch (error) {
     console.warn('Failed to extract GPS from image:', error);
+    return null;
+  }
+}
+
+// Extract EXIF timestamp data from base64 image
+export async function extractImageTimestamp(base64Image: string): Promise<Date | null> {
+  try {
+    // Import exifr dynamically to avoid issues with SSR
+    const { parse } = await import('exifr');
+    
+    // Convert base64 to buffer
+    const base64Data = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
+    const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    
+    // Parse EXIF data for timestamps
+    const exifData = await parse(buffer, { 
+      pick: ['DateTimeOriginal', 'DateTime', 'CreateDate'] 
+    });
+    
+    // Try different timestamp fields in order of preference
+    const timestamp = exifData?.DateTimeOriginal || 
+                     exifData?.DateTime || 
+                     exifData?.CreateDate;
+    
+    if (timestamp && timestamp instanceof Date) {
+      return timestamp;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('Failed to extract timestamp from image:', error);
     return null;
   }
 }
