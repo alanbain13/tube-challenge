@@ -347,8 +347,13 @@ export type Database = {
           ai_confidence: number | null
           ai_station_text: string | null
           ai_verification_result: Json | null
+          captured_at: string | null
           checkin_type: string | null
           created_at: string
+          exif_gps_present: boolean | null
+          exif_time_present: boolean | null
+          geofence_distance_m: number | null
+          gps_source: string | null
           id: string
           is_bypassed: boolean | null
           is_end_station: boolean | null
@@ -356,15 +361,19 @@ export type Database = {
           is_start_station: boolean | null
           latitude: number | null
           longitude: number | null
+          pending_reason: string | null
           photo_url: string | null
+          seq_actual: number | null
           sequence_number: number | null
           station_id: string | null
           station_tfl_id: string | null
           status: string
+          thumb_url: string | null
           user_id: string
           verification_image_url: string | null
           verification_method: string | null
           verified_at: string | null
+          verifier_version: string | null
           visit_lat: number | null
           visit_lon: number | null
           visited_at: string
@@ -374,8 +383,13 @@ export type Database = {
           ai_confidence?: number | null
           ai_station_text?: string | null
           ai_verification_result?: Json | null
+          captured_at?: string | null
           checkin_type?: string | null
           created_at?: string
+          exif_gps_present?: boolean | null
+          exif_time_present?: boolean | null
+          geofence_distance_m?: number | null
+          gps_source?: string | null
           id?: string
           is_bypassed?: boolean | null
           is_end_station?: boolean | null
@@ -383,15 +397,19 @@ export type Database = {
           is_start_station?: boolean | null
           latitude?: number | null
           longitude?: number | null
+          pending_reason?: string | null
           photo_url?: string | null
+          seq_actual?: number | null
           sequence_number?: number | null
           station_id?: string | null
           station_tfl_id?: string | null
           status?: string
+          thumb_url?: string | null
           user_id: string
           verification_image_url?: string | null
           verification_method?: string | null
           verified_at?: string | null
+          verifier_version?: string | null
           visit_lat?: number | null
           visit_lon?: number | null
           visited_at?: string
@@ -401,8 +419,13 @@ export type Database = {
           ai_confidence?: number | null
           ai_station_text?: string | null
           ai_verification_result?: Json | null
+          captured_at?: string | null
           checkin_type?: string | null
           created_at?: string
+          exif_gps_present?: boolean | null
+          exif_time_present?: boolean | null
+          geofence_distance_m?: number | null
+          gps_source?: string | null
           id?: string
           is_bypassed?: boolean | null
           is_end_station?: boolean | null
@@ -410,15 +433,19 @@ export type Database = {
           is_start_station?: boolean | null
           latitude?: number | null
           longitude?: number | null
+          pending_reason?: string | null
           photo_url?: string | null
+          seq_actual?: number | null
           sequence_number?: number | null
           station_id?: string | null
           station_tfl_id?: string | null
           status?: string
+          thumb_url?: string | null
           user_id?: string
           verification_image_url?: string | null
           verification_method?: string | null
           verified_at?: string | null
+          verifier_version?: string | null
           visit_lat?: number | null
           visit_lon?: number | null
           visited_at?: string
