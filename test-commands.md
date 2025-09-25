@@ -16,6 +16,11 @@ npm test src/lib/__tests__/backend-geofence.test.ts
 
 # Run checkin pipeline tests
 npm test src/lib/__tests__/checkin-pipeline.test.ts
+
+# Run UI/UX polish tests
+npm test src/lib/__tests__/modal-dismissal-timing.test.ts
+npm test src/lib/__tests__/toast-copy-snapshot.test.ts  
+npm test src/lib/__tests__/cache-invalidation-e2e.test.ts
 ```
 
 ## Full Test Suite
@@ -28,6 +33,12 @@ npm test -- --coverage
 
 # Run tests in watch mode
 npm test -- --watch
+
+# Run E2E tests
+npx playwright test
+
+# Run E2E tests in headed mode
+npx playwright test --headed
 ```
 
 ## Manual Testing

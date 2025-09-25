@@ -146,11 +146,11 @@ const ActivityCheckin = () => {
         },
         (error) => {
           console.warn("Location access denied:", error);
-          toast({
-            title: "Location access denied",
-            description: "GPS checkin will not be available.",
-            variant: "destructive",
-          });
+        toast({
+          title: "Location access denied",
+          description: "GPS check-in will not be available.",
+          variant: "destructive",
+        });
         }
       );
     }
@@ -212,7 +212,7 @@ const ActivityCheckin = () => {
       const stationName = stations.find(s => s.id === stationTflId)?.name || stationTflId;
       return { 
         allowed: false,
-        reason: `Already checked in at ${stationName} for this activity.`
+        reason: `Already checked in to ${stationName} for this activity.`
       };
     }
 
@@ -334,7 +334,7 @@ const ActivityCheckin = () => {
           console.log('🧭 Free-Order Checkin: No EXIF GPS found in image - using device GPS as fallback');
           
           if (!location) {
-            const errorMessage = 'Location unavailable — no GPS in photo and device location denied. You can save this check-in as Pending.';
+            const errorMessage = "You're offline. Your check-in is saved as pending and will sync automatically.";
             
             setGeofenceError({
               message: errorMessage,
@@ -355,7 +355,7 @@ const ActivityCheckin = () => {
           );
 
           if (distance > getGeofenceRadiusMeters()) {
-            const errorMessage = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${getGeofenceRadiusMeters()}m). Take photo closer to the station.`;
+            const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
             
             setGeofenceError({
               message: errorMessage,
@@ -379,7 +379,7 @@ const ActivityCheckin = () => {
           );
 
           if (distance > getGeofenceRadiusMeters()) {
-            const errorMessage = `Photo location is ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${getGeofenceRadiusMeters()}m). Take photo closer to the station.`;
+            const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
             
             setGeofenceError({
               message: errorMessage,
@@ -399,18 +399,19 @@ const ActivityCheckin = () => {
       // STEP 4: Upload Image and Persist Visit
       console.log('🧭 Free-Order Checkin: Step 4 - Upload image and persist visit');
       
-      // Upload image to storage
+      // Upload image to storage (both full image and thumbnail)
       const fileName = `${user?.id}/${activityId}/${Date.now()}-roundel.jpg`;
-      const imageUrl = await uploadImage(imageData, fileName);
+      const uploadResult = await uploadImage(imageData, fileName);
       
-      if (!imageUrl) {
+      if (!uploadResult) {
         throw new Error('Failed to upload verification image');
       }
       
       await checkinMutation.mutateAsync({
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
-        imageUrl,
+        imageUrl: uploadResult.imageUrl,
+        thumbUrl: uploadResult.thumbUrl,
         imageGPS,
         capturedTimestamp,
         resolvedStation, // Pass station coordinates for geofence calculation
@@ -467,11 +468,11 @@ const ActivityCheckin = () => {
       setSuggestions(null);
       setGeofenceError(null);
       
-      // Auto-navigate after successful check-in with delay for cache update
+      // Auto-navigate after successful check-in with minimal delay
       setTimeout(() => {
         console.log('🧭 Navigating back to activity detail...');
         navigate(`/activities/${activityId}`);
-      }, 1000); // Allow time for cache invalidation to complete
+      }, 250); // Fast modal dismissal for better UX
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -494,6 +495,7 @@ const ActivityCheckin = () => {
       stationTflId, 
       checkinType, 
       imageUrl,
+      thumbUrl,
       imageGPS,
       capturedTimestamp,
       resolvedStation,
@@ -503,6 +505,7 @@ const ActivityCheckin = () => {
       stationTflId: string; 
       checkinType: 'gps' | 'image' | 'manual';
       imageUrl?: string;
+      thumbUrl?: string;
       imageGPS?: { lat: number; lng: number } | null;
       capturedTimestamp?: Date | null;
       resolvedStation?: ResolvedStation;
@@ -541,6 +544,7 @@ const ActivityCheckin = () => {
           exif_gps_present: !!imageGPS,
           gps_source: gpsSource,
           verification_image_url: imageUrl || null,
+          verification_thumb_url: thumbUrl || null,
           
           // Geofence data
           geofence_distance_m: Math.round(distanceMeters || 0),
@@ -572,9 +576,10 @@ const ActivityCheckin = () => {
       if (recordVisitResult.error) {
         // Check for duplicate visit error
         if (recordVisitResult.error.code === 'duplicate_visit' || recordVisitResult.error.code === 'duplicate_visit_race') {
+          const stationName = stations.find(s => s.id === recordVisitResult.error.station_id)?.name || 'this station';
           toast({
-            title: "Already Checked In",
-            description: recordVisitResult.error.message,
+            title: "Already checked in",
+            description: `Already checked in to ${stationName} for this activity.`,
             variant: "destructive",
           });
           return;
@@ -672,11 +677,11 @@ const ActivityCheckin = () => {
         const stationName = resolvedStation?.name || 'this station';
         
         // Friendly duplicate error with CTA
-        setVerificationError(`You already checked in at ${stationName} for this activity.`);
+        setVerificationError(`Already checked in to ${stationName} for this activity.`);
         
         toast({
           title: "Already checked in",
-          description: `You already checked in at ${stationName} for this activity.`,
+          description: `Already checked in to ${stationName} for this activity.`,
           variant: "destructive",
           duration: 6000, // Keep visible longer for user to see the action
           action: (
