@@ -72,8 +72,39 @@ AI_VERIFICATION_ENABLED=true
 - [ ] Network errors handled gracefully
 - [ ] Production environment configured
 
+## A3 Metadata Fields & Fallback Logic
+
+The `station_visits` table includes A3 metadata fields with automatic fallback behavior:
+
+### Timestamp Fields
+- **`captured_at`**: Actual photo capture time from EXIF data, falls back to `visited_at` if EXIF unavailable
+- **`exif_time_present`**: Boolean flag indicating whether EXIF timestamp was found in uploaded photo
+
+### GPS & Location Fields  
+- **`visit_lat`/`visit_lon`**: GPS coordinates from device location API
+- **`gps_source`**: Source of coordinates (`device`, `exif`, `manual`, or `estimated`)
+- **`exif_gps_present`**: Boolean flag indicating whether EXIF GPS data was found
+- **`geofence_distance_m`**: Distance in meters from expected station location for validation
+
+### Verification & Status Fields
+- **`status`**: Visit status (`verified`, `pending`, `rejected`)  
+- **`pending_reason`**: Reason for pending status (`ocr_failed`, `geofence_failed`, `offline`, `manual_review`)
+- **`verification_method`**: How verification was performed (`ai`, `manual`, `simulation`)
+- **`verifier_version`**: Version of verification system that processed the visit
+
+### Media & Sequencing
+- **`verification_image_url`**: Full-size verification photo URL
+- **`thumb_url`**: Thumbnail version for fast loading
+- **`seq_actual`**: Actual chronological visit sequence (may differ from planned route order)
+
+### Fallback Behavior
+1. **Missing EXIF**: `captured_at` = `visited_at`, flags set to `false`
+2. **No GPS**: Uses device location with `gps_source` = `device`
+3. **Offline Mode**: Saves as pending with `pending_reason` = `offline`
+4. **AI Unavailable**: Status = `pending` with appropriate reason code
+
 ## Billing & Quotas
 
 - Monitor OpenAI usage at https://platform.openai.com/usage
-- Set appropriate rate limits and budgets
+- Set appropriate rate limits and budgets  
 - Consider implementing usage tracking for cost control
