@@ -17,6 +17,18 @@ npm test src/lib/__tests__/backend-geofence.test.ts
 # Run checkin pipeline tests
 npm test src/lib/__tests__/checkin-pipeline.test.ts
 
+# Run status decision matrix tests
+npm test src/lib/__tests__/status-decision-matrix.test.ts
+
+# Run duplicate guard tests
+npm test src/lib/__tests__/duplicate-guard.test.ts
+
+# Run sequence assignment tests
+npm test src/lib/__tests__/sequence-assignment.test.ts
+
+# Run simulation & flag compliance tests
+npm test src/lib/__tests__/simulation-flag-compliance.test.ts
+
 # Run UI/UX polish tests
 npm test src/lib/__tests__/modal-dismissal-timing.test.ts
 npm test src/lib/__tests__/toast-copy-snapshot.test.ts  
@@ -58,7 +70,8 @@ npx playwright test --headed
 2. Test client-server distance calculation matching
 3. Test detection of client tampering attempts
 
-### Telemetry
-1. Check console logs for geofence validation results
-2. Verify structured logging includes GPS source and distance
-3. Test pass/fail/skip scenarios are logged correctly
+### Simulation & Feature Flags
+1. Test simulation mode bypassing geofence failures
+2. Test AI disabled flag forcing pending status
+3. Verify GPS metadata suppression in simulation mode
+4. Test priority order: simulation > connectivity > AI flags

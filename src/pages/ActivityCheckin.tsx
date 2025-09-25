@@ -564,10 +564,10 @@ const ActivityCheckin = () => {
           ai_station_text: verificationResult?.ai_station_text || null,
           ai_confidence: verificationResult?.confidence || null,
           
-          // Context flags
+          // Context flags - respect environment variables (A3.6.2)
           simulation_mode: simulationModeEffective,
-          ai_enabled: true, // Default to enabled
-          has_connectivity: true, // Default to connected
+          ai_enabled: import.meta.env.VITE_AI_VERIFICATION_ENABLED !== 'false',
+          has_connectivity: navigator.onLine !== false, // Check actual connectivity
           checkin_type: checkinType,
           verifier_version: '1.0'
         }

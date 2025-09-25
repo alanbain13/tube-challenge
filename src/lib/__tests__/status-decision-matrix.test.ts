@@ -46,11 +46,11 @@ function deriveVisitStatus(inputs: StatusDecisionInputs): StatusDecision {
     };
   }
   
-  // AI disabled - manual verification
+  // AI disabled - force pending status (A3.6.2 requirement)
   if (!aiEnabled) {
     return {
-      status: 'verified', // Manual check-ins are trusted
-      pending_reason: null,
+      status: 'pending',
+      pending_reason: 'ai_disabled',
       verification_method: 'manual'
     };
   }

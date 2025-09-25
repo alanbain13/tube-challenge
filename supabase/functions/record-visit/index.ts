@@ -58,11 +58,11 @@ function deriveVisitStatus(inputs: StatusDecisionInputs): StatusDecision {
     };
   }
   
-  // AI disabled - manual verification
+  // AI disabled - force pending status (A3.6.2 requirement)
   if (!aiEnabled) {
     return {
-      status: 'verified', // Manual check-ins are trusted
-      pending_reason: null,
+      status: 'pending',
+      pending_reason: 'ai_disabled',
       verification_method: 'manual'
     };
   }
@@ -294,7 +294,9 @@ serve(async (req) => {
       decision: statusDecision
     });
 
-    // Prepare visit record
+    // Prepare visit record with simulation-aware GPS handling
+    const simulationMode = visitData.simulation_mode || false;
+    
     const visitRecord = {
       id: crypto.randomUUID(),
       activity_id: visitData.activity_id,
@@ -308,22 +310,22 @@ serve(async (req) => {
       verification_method: statusDecision.verification_method,
       verifier_version: visitData.verifier_version || '1.0',
       
-      // Location data
-      latitude: visitData.latitude,
-      longitude: visitData.longitude,
-      visit_lat: visitData.visit_lat,
-      visit_lon: visitData.visit_lon,
+      // Location data - suppress GPS coordinates in simulation mode (A3.6.2)
+      latitude: simulationMode ? null : visitData.latitude,
+      longitude: simulationMode ? null : visitData.longitude,
+      visit_lat: simulationMode ? null : visitData.visit_lat,
+      visit_lon: simulationMode ? null : visitData.visit_lon,
       
       // Timestamps
       visited_at: new Date().toISOString(),
       captured_at: visitData.captured_at || new Date().toISOString(),
       created_at: new Date().toISOString(),
       
-      // EXIF and GPS metadata
+      // EXIF and GPS metadata - handle simulation mode (A3.6.2)
       exif_time_present: visitData.exif_time_present || false,
       exif_gps_present: visitData.exif_gps_present || false,
-      gps_source: visitData.gps_source || 'none',
-      geofence_distance_m: visitData.geofence_distance_m,
+      gps_source: simulationMode ? 'none' : (visitData.gps_source || 'none'),
+      geofence_distance_m: simulationMode ? null : visitData.geofence_distance_m,
       
       // AI and verification metadata
       ai_verification_result: visitData.ai_verification_result,
