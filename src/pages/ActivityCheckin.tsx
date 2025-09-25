@@ -14,10 +14,10 @@ import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { calculateDistance, extractImageGPS, extractImageTimestamp } from "@/lib/utils";
+import { getGeofenceRadiusMeters, validateGeofence } from "@/config/geofence";
 
 
 // Configuration
-const GEOFENCE_RADIUS_METERS = parseInt(import.meta.env.VITE_GEOFENCE_RADIUS_METERS || '500', 10);
 const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
 
 // Interface for derived activity state (free-order mode)
@@ -122,7 +122,7 @@ const ActivityCheckin = () => {
   useEffect(() => {
     console.log(`🧭 ActivityCheckin: Free-order mode | id=${activityId} user=${user?.id || 'none'}`);
     console.log('🧭 Config:', { 
-      GEOFENCE_RADIUS_METERS, 
+      geofenceRadius: getGeofenceRadiusMeters(), 
       simulationModeEnv,
       simulationModeUser,
       simulationModeEffective
@@ -354,8 +354,8 @@ const ActivityCheckin = () => {
             resolvedStation.coords.lon
           );
 
-          if (distance > GEOFENCE_RADIUS_METERS) {
-            const errorMessage = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
+          if (distance > getGeofenceRadiusMeters()) {
+            const errorMessage = `Outside geofence: you're ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${getGeofenceRadiusMeters()}m). Take photo closer to the station.`;
             
             setGeofenceError({
               message: errorMessage,
@@ -378,8 +378,8 @@ const ActivityCheckin = () => {
             resolvedStation.coords.lon
           );
 
-          if (distance > GEOFENCE_RADIUS_METERS) {
-            const errorMessage = `Photo location is ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
+          if (distance > getGeofenceRadiusMeters()) {
+            const errorMessage = `Photo location is ${Math.round(distance)}m from ${resolvedStation.display_name} (limit ${getGeofenceRadiusMeters()}m). Take photo closer to the station.`;
             
             setGeofenceError({
               message: errorMessage,
@@ -497,6 +497,7 @@ const ActivityCheckin = () => {
       imageGPS,
       capturedTimestamp,
       resolvedStation,
+      geofenceResult,
       verificationResult
     }: { 
       stationTflId: string; 
@@ -505,13 +506,21 @@ const ActivityCheckin = () => {
       imageGPS?: { lat: number; lng: number } | null;
       capturedTimestamp?: Date | null;
       resolvedStation?: ResolvedStation;
+      geofenceResult?: any;
       verificationResult?: any;
     }) => {
       if (!user || !activity) throw new Error("Missing data");
 
-      // Determine GPS source and coordinates
-      const gpsSource = imageGPS ? 'exif' : (location ? 'device' : 'unavailable');
-      const finalCoords = imageGPS || (location ? { lat: location.lat, lng: location.lng } : null);
+      // Use geofence result if available, otherwise determine GPS source and coordinates
+      const gpsSource = geofenceResult?.gpsSource || (imageGPS ? 'exif' : (location ? 'device' : 'none'));
+      const finalCoords = geofenceResult?.coords || imageGPS || (location ? { lat: location.lat, lng: location.lng } : null);
+      const distanceMeters = geofenceResult?.distance || (finalCoords && resolvedStation ? 
+        calculateDistance(
+          finalCoords.lat, 
+          finalCoords.lng, 
+          resolvedStation.coords.lat,
+          resolvedStation.coords.lon
+        ) : null);
       
       const visitData = {
         user_id: user.id,
@@ -521,7 +530,7 @@ const ActivityCheckin = () => {
         longitude: simulationModeEffective ? null : finalCoords?.lng || null,
         checkin_type: checkinType,
         verification_image_url: imageUrl || null,
-        status: 'verified', // Free-order mode always creates verified check-ins
+        status: verificationResult?.pending ? 'pending' : 'verified',
         verification_method: 'ai_image',
         ai_verification_result: verificationResult || null,
         ai_station_text: verificationResult?.ai_station_text || null,
@@ -536,13 +545,7 @@ const ActivityCheckin = () => {
         exif_gps_present: !!imageGPS,
         gps_source: gpsSource,
         verifier_version: '1.0',
-        geofence_distance_m: finalCoords && resolvedStation ? 
-          calculateDistance(
-            finalCoords.lat, 
-            finalCoords.lng, 
-            resolvedStation.coords.lat,
-            resolvedStation.coords.lon
-          ) : null,
+        geofence_distance_m: Math.round(distanceMeters || 0),
       };
 
       console.log('🧭 Free-Order Checkin: insert payload =', visitData);
@@ -759,7 +762,7 @@ const ActivityCheckin = () => {
           ai_confidence: geofenceError.ocrResult.confidence,
           geofence_failed: true,
           geofence_distance_m: geofenceError.distance || 0,
-          geofence_radius_m: GEOFENCE_RADIUS_METERS,
+          geofence_radius_m: getGeofenceRadiusMeters(),
           verification_note: `Geofence failed: ${geofenceError.code}`
         }
       });
