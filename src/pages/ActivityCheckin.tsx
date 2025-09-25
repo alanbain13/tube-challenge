@@ -522,46 +522,84 @@ const ActivityCheckin = () => {
           resolvedStation.coords.lon
         ) : null);
       
-      const visitData = {
-        user_id: user.id,
-        activity_id: activity.id,
-        station_tfl_id: stationTflId,
-        latitude: simulationModeEffective ? null : finalCoords?.lat || null,
-        longitude: simulationModeEffective ? null : finalCoords?.lng || null,
-        checkin_type: checkinType,
-        verification_image_url: imageUrl || null,
-        status: verificationResult?.pending ? 'pending' : 'verified',
-        verification_method: 'ai_image',
-        ai_verification_result: verificationResult || null,
-        ai_station_text: verificationResult?.ai_station_text || null,
-        ai_confidence: verificationResult?.confidence || null,
-        visit_lat: simulationModeEffective ? null : finalCoords?.lat || null,
-        visit_lon: simulationModeEffective ? null : finalCoords?.lng || null,
-        visited_at: new Date().toISOString(),
-        is_simulation: simulationModeEffective,
-        // A3 metadata fields
-        captured_at: capturedTimestamp?.toISOString() || new Date().toISOString(),
-        exif_time_present: !!capturedTimestamp,
-        exif_gps_present: !!imageGPS,
-        gps_source: gpsSource,
-        verifier_version: '1.0',
-        geofence_distance_m: Math.round(distanceMeters || 0),
-      };
+      // Use the record-visit RPC instead of direct insert
+      const recordVisitResult = await supabase.functions.invoke('record-visit', {
+        body: {
+          activity_id: activity.id,
+          station_tfl_id: stationTflId,
+          user_id: user.id,
+          
+          // Location data
+          latitude: simulationModeEffective ? null : finalCoords?.lat || null,
+          longitude: simulationModeEffective ? null : finalCoords?.lng || null,
+          visit_lat: simulationModeEffective ? null : finalCoords?.lat || null,
+          visit_lon: simulationModeEffective ? null : finalCoords?.lng || null,
+          
+          // EXIF and image data
+          captured_at: capturedTimestamp?.toISOString() || new Date().toISOString(),
+          exif_time_present: !!capturedTimestamp,
+          exif_gps_present: !!imageGPS,
+          gps_source: gpsSource,
+          verification_image_url: imageUrl || null,
+          
+          // Geofence data
+          geofence_distance_m: Math.round(distanceMeters || 0),
+          geofence_result: geofenceResult ? {
+            withinGeofence: geofenceResult.withinGeofence,
+            distance: geofenceResult.distance,
+            gpsSource: geofenceResult.gpsSource
+          } : undefined,
+          
+          // OCR/AI data
+          ocr_result: verificationResult?.pending ? undefined : {
+            success: !verificationResult?.pending,
+            confidence: verificationResult?.confidence || 0,
+            station_text_raw: verificationResult?.ai_station_text
+          },
+          ai_verification_result: verificationResult || null,
+          ai_station_text: verificationResult?.ai_station_text || null,
+          ai_confidence: verificationResult?.confidence || null,
+          
+          // Context flags
+          simulation_mode: simulationModeEffective,
+          ai_enabled: true, // Default to enabled
+          has_connectivity: true, // Default to connected
+          checkin_type: checkinType,
+          verifier_version: '1.0'
+        }
+      });
 
-      console.log('🧭 Free-Order Checkin: insert payload =', visitData);
-
-      const { data, error } = await supabase
-        .from("station_visits")
-        .insert(visitData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('🧭 Free-Order Checkin: insert error =', error);
-        throw error;
+      if (recordVisitResult.error) {
+        // Check for duplicate visit error
+        if (recordVisitResult.error.code === 'duplicate_visit' || recordVisitResult.error.code === 'duplicate_visit_race') {
+          toast({
+            title: "Already Checked In",
+            description: recordVisitResult.error.message,
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        throw new Error(recordVisitResult.error.message || 'Failed to record visit');
       }
 
-      return data;
+      if (!recordVisitResult.data?.success) {
+        throw new Error('Failed to record visit - no success response');
+      }
+
+      console.log('🎯 Visit recorded via RPC:', {
+        visit_id: recordVisitResult.data.visit_id,
+        seq_actual: recordVisitResult.data.seq_actual,
+        status: recordVisitResult.data.status
+      });
+
+      return {
+        id: recordVisitResult.data.visit_id,
+        station_tfl_id: stationTflId,
+        visited_at: new Date().toISOString(),
+        status: recordVisitResult.data.status,
+        seq_actual: recordVisitResult.data.seq_actual
+      };
     },
     onSuccess: async (data, variables) => {
       const sequence = (activityState?.actual_visits?.length || 0) + 1;

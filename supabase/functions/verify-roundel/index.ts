@@ -320,7 +320,8 @@ serve(async (req) => {
     console.error('🧠 AI: Verification error:', error);
     
     // Handle network/timeout errors gracefully
-    if (error.name === 'TypeError' || error.message.includes('fetch')) {
+    if ((error instanceof Error && error.name === 'TypeError') || 
+        (error instanceof Error && error.message.includes('fetch'))) {
       return new Response(
         JSON.stringify({
           success: false,
