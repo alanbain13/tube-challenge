@@ -240,10 +240,25 @@ const ActivityCheckin = () => {
     return !isActivityComplete && !hasPendingUpload;
   };
 
-  // 3-Step Validation Pipeline for Free-Order Check-ins
+  // 4-Step Validation Pipeline for Free-Order Check-ins
   const runValidationPipeline = async (imageData: string) => {
     try {
       setIsVerifying(true);
+      
+      // STEP 0: EXIF Extraction (parallel processing)
+      console.log('🧭 Free-Order Checkin: Step 0 - EXIF extraction');
+      
+      const [imageGPS, capturedTimestamp] = await Promise.all([
+        extractImageGPS(imageData),
+        extractImageTimestamp(imageData)
+      ]);
+      
+      console.log('🧭 EXIF Results:', {
+        hasGPS: !!imageGPS,
+        hasTimestamp: !!capturedTimestamp,
+        gps: imageGPS,
+        timestamp: capturedTimestamp
+      });
       
       // STEP 1: OCR Validation
       console.log('🧭 Free-Order Checkin: Step 1 - OCR validation');
@@ -314,9 +329,7 @@ const ActivityCheckin = () => {
       } else {
         console.log('🧭 Free-Order Checkin: Step 3 - EXIF GPS geofencing validation');
         
-        // Try to extract GPS from image EXIF data first
-        const imageGPS = await extractImageGPS(imageData);
-        
+        // Use pre-extracted GPS data from Step 0
         if (!imageGPS) {
           console.log('🧭 Free-Order Checkin: No EXIF GPS found in image - using device GPS as fallback');
           
@@ -398,6 +411,9 @@ const ActivityCheckin = () => {
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
         imageUrl,
+        imageGPS,
+        capturedTimestamp,
+        resolvedStation, // Pass station coordinates for geofence calculation
         verificationResult: {
           success: true,
           pending: false,
@@ -478,21 +494,31 @@ const ActivityCheckin = () => {
       stationTflId, 
       checkinType, 
       imageUrl,
+      imageGPS,
+      capturedTimestamp,
+      resolvedStation,
       verificationResult
     }: { 
       stationTflId: string; 
       checkinType: 'gps' | 'image' | 'manual';
       imageUrl?: string;
+      imageGPS?: { lat: number; lng: number } | null;
+      capturedTimestamp?: Date | null;
+      resolvedStation?: ResolvedStation;
       verificationResult?: any;
     }) => {
       if (!user || !activity) throw new Error("Missing data");
 
+      // Determine GPS source and coordinates
+      const gpsSource = imageGPS ? 'exif' : (location ? 'device' : 'unavailable');
+      const finalCoords = imageGPS || (location ? { lat: location.lat, lng: location.lng } : null);
+      
       const visitData = {
         user_id: user.id,
         activity_id: activity.id,
         station_tfl_id: stationTflId,
-        latitude: simulationModeEffective ? null : (location?.lat || null),
-        longitude: simulationModeEffective ? null : (location?.lng || null),
+        latitude: simulationModeEffective ? null : finalCoords?.lat || null,
+        longitude: simulationModeEffective ? null : finalCoords?.lng || null,
         checkin_type: checkinType,
         verification_image_url: imageUrl || null,
         status: 'verified', // Free-order mode always creates verified check-ins
@@ -500,10 +526,23 @@ const ActivityCheckin = () => {
         ai_verification_result: verificationResult || null,
         ai_station_text: verificationResult?.ai_station_text || null,
         ai_confidence: verificationResult?.confidence || null,
-        visit_lat: simulationModeEffective ? null : (location?.lat || null),
-        visit_lon: simulationModeEffective ? null : (location?.lng || null),
+        visit_lat: simulationModeEffective ? null : finalCoords?.lat || null,
+        visit_lon: simulationModeEffective ? null : finalCoords?.lng || null,
         visited_at: new Date().toISOString(),
         is_simulation: simulationModeEffective,
+        // A3 metadata fields
+        captured_at: capturedTimestamp?.toISOString() || new Date().toISOString(),
+        exif_time_present: !!capturedTimestamp,
+        exif_gps_present: !!imageGPS,
+        gps_source: gpsSource,
+        verifier_version: '1.0',
+        geofence_distance_m: finalCoords && resolvedStation ? 
+          calculateDistance(
+            finalCoords.lat, 
+            finalCoords.lng, 
+            resolvedStation.coords.lat,
+            resolvedStation.coords.lon
+          ) : null,
       };
 
       console.log('🧭 Free-Order Checkin: insert payload =', visitData);
