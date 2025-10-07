@@ -6,7 +6,7 @@ export const useImageUpload = () => {
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const uploadImage = async (imageData: string, fileName: string, bucket: string = 'verification'): Promise<string | null> => {
+  const uploadImage = async (imageData: string, fileName: string, bucket: string = 'verification'): Promise<{ imageUrl: string; thumbUrl: string } | null> => {
     try {
       setIsUploading(true);
 
@@ -20,7 +20,7 @@ export const useImageUpload = () => {
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: 'image/jpeg' });
 
-      // Upload to Supabase storage
+      // Upload full image to Supabase storage
       const { data, error } = await supabase.storage
         .from(bucket)
         .upload(fileName, blob, {
@@ -38,12 +38,74 @@ export const useImageUpload = () => {
         return null;
       }
 
-      // Get public URL
+      // Get public URL for full image
       const { data: urlData } = supabase.storage
         .from(bucket)
         .getPublicUrl(data.path);
 
-      return urlData.publicUrl;
+      // Generate thumbnail filename
+      const thumbFileName = fileName.replace('.jpg', '-thumb.jpg');
+      
+      // Create thumbnail (resize to 150x150)
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      const thumbUrl = await new Promise<string>((resolve, reject) => {
+        img.onload = async () => {
+          // Calculate thumbnail dimensions (maintaining aspect ratio)
+          const maxSize = 150;
+          const ratio = Math.min(maxSize / img.width, maxSize / img.height);
+          const width = img.width * ratio;
+          const height = img.height * ratio;
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // Convert to blob
+          canvas.toBlob(async (thumbBlob) => {
+            if (!thumbBlob) {
+              reject(new Error('Failed to create thumbnail'));
+              return;
+            }
+            
+            // Upload thumbnail
+            const { data: thumbData, error: thumbError } = await supabase.storage
+              .from(bucket)
+              .upload(thumbFileName, thumbBlob, {
+                cacheControl: '3600',
+                upsert: false
+              });
+
+            if (thumbError) {
+              console.warn('Thumbnail upload failed, using full image:', thumbError);
+              resolve(urlData.publicUrl); // Fallback to full image
+              return;
+            }
+
+            // Get public URL for thumbnail
+            const { data: thumbUrlData } = supabase.storage
+              .from(bucket)
+              .getPublicUrl(thumbData.path);
+              
+            resolve(thumbUrlData.publicUrl);
+          }, 'image/jpeg', 0.7);
+        };
+        
+        img.onerror = () => {
+          console.warn('Failed to load image for thumbnail creation');
+          resolve(urlData.publicUrl); // Fallback to full image
+        };
+        
+        img.src = imageData;
+      });
+
+      return {
+        imageUrl: urlData.publicUrl,
+        thumbUrl
+      };
 
     } catch (error: any) {
       console.error('Image upload error:', error);
