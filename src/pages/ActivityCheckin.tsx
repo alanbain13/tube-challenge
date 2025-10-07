@@ -112,6 +112,8 @@ const ActivityCheckin = () => {
       setVerificationError(null);
       setSuggestions(null);
       setGeofenceError(null);
+      setPreviewMetadata(null);
+      setLastVisitMetadata(null);
     };
   }, []);
 
@@ -542,8 +544,8 @@ const ActivityCheckin = () => {
         duration: 5000, // Keep toast visible longer for user actions
         action: (
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => navigate(`/activities/${activityId}`)}
             >
@@ -558,6 +560,8 @@ const ActivityCheckin = () => {
                 setVerificationError(null);
                 setSuggestions(null);
                 setGeofenceError(null);
+                setPreviewMetadata(null);
+                setLastVisitMetadata(null);
               }}
             >
               Check Another
@@ -941,7 +945,9 @@ const ActivityCheckin = () => {
     setVerificationError(null);
     setSuggestions(null);
     setGeofenceError(null);
-    
+    setPreviewMetadata(null);
+    setLastVisitMetadata(null);
+
     // Ensure image preview unmounts completely
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -1007,6 +1013,8 @@ const ActivityCheckin = () => {
     setCapturedImage(null);
     setVerificationError(null);
     setSuggestions(null);
+    setPreviewMetadata(null);
+    setLastVisitMetadata(null);
   };
 
   if (loading || activityLoading) {
@@ -1194,36 +1202,78 @@ const ActivityCheckin = () => {
             )}
 
             {/* Captured Image Preview */}
-            {capturedImage && (
-              <div className="space-y-4">
-                <img 
-                  src={capturedImage} 
-                  alt="Captured roundel" 
-                  className="w-full rounded-lg"
-                />
-                
-                 <div className="flex gap-2">
-                   <Button
-                     onClick={handleImageCheckin}
-                     disabled={isVerifying || checkinMutation.isPending}
-                     className="flex-1"
-                   >
-                     {isVerifying || checkinMutation.isPending ? (
-                       <>
-                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                         Verifying...
-                       </>
-                     ) : (
-                       <>
-                         <CheckCircle className="h-4 w-4 mr-2" />
-                         Check In
-                       </>
-                     )}
-                   </Button>
-                   <Button variant="outline" onClick={handleRetakePhoto}>
-                     Retake
-                   </Button>
-                 </div>
+              {capturedImage && (
+                <div className="space-y-4">
+                  <img
+                    src={capturedImage}
+                    alt="Captured roundel"
+                    className="w-full rounded-lg"
+                  />
+
+                  {(lastVisitMetadata ?? previewMetadata) && (() => {
+                    const metadataForPreview = lastVisitMetadata ?? previewMetadata;
+                    if (!metadataForPreview) return null;
+                    const capturedDate = new Date(metadataForPreview.capturedAt);
+                    const hasValidDate = !Number.isNaN(capturedDate.getTime());
+                    const gpsLabel =
+                      metadataForPreview.gpsSource === 'exif'
+                        ? 'EXIF GPS'
+                        : metadataForPreview.gpsSource === 'device'
+                        ? 'Device GPS'
+                        : null;
+
+                    if (!hasValidDate && !gpsLabel) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                        {hasValidDate && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span>
+                              Captured {capturedDate.toLocaleString()} (
+                              {metadataForPreview.exifTimePresent ? 'EXIF time' : 'Device time'}
+                              )
+                            </span>
+                          </div>
+                        )}
+                        {gpsLabel && (
+                          <div className="mt-1 flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>
+                              {gpsLabel}
+                              {metadataForPreview.geofenceDistance != null &&
+                                ` · ${Math.round(metadataForPreview.geofenceDistance)}m from station`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleImageCheckin}
+                        disabled={isVerifying || checkinMutation.isPending}
+                        className="flex-1"
+                      >
+                        {isVerifying || checkinMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Verifying...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Check In
+                          </>
+                        )}
+                      </Button>
+                      <Button variant="outline" onClick={handleRetakePhoto}>
+                        Retake
+                      </Button>
+                    </div>
 
                 {/* Error Display */}
                 {verificationError && (
