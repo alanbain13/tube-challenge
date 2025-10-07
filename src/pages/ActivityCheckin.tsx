@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,11 @@ import { getGeofenceRadiusMeters, validateGeofence } from "@/config/geofence";
 
 
 // Configuration
+const envGeofenceRadius = Number(import.meta.env.VITE_GEOFENCE_RADIUS_METERS);
+const GEOFENCE_RADIUS_METERS = Number.isFinite(envGeofenceRadius) && envGeofenceRadius > 0
+  ? envGeofenceRadius
+  : 750;
+const VERIFIER_VERSION = "free-order-v1";
 const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
 
 // Interface for derived activity state (free-order mode)
@@ -55,6 +61,17 @@ interface OCRResult {
   confidence: number;
 }
 
+type VisitMetadata = {
+  capturedAt: string;
+  visitedAt: string;
+  exifTimePresent: boolean;
+  exifGpsPresent: boolean;
+  gpsSource: 'exif' | 'device' | 'none';
+  geofenceDistance: number | null;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 // Helper functions
 
 const ActivityCheckin = () => {
@@ -74,16 +91,17 @@ const ActivityCheckin = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string}> | null>(null);
-  const [geofenceError, setGeofenceError] = useState<{ 
-    message: string; 
-    code: string; 
-    resolvedStation?: ResolvedStation; 
+  const [geofenceError, setGeofenceError] = useState<{
+    message: string;
+    code: string;
+    resolvedStation?: ResolvedStation;
     distance?: number;
     ocrResult?: OCRResult;
   } | null>(null);
-  
+
   // Enhanced features
   const { uploadImage, isUploading } = useImageUpload();
+  const [lastVisitMetadata, setLastVisitMetadata] = useState<VisitMetadata | null>(null);
   
 
   // Clean up component state on unmount
@@ -244,6 +262,30 @@ const ActivityCheckin = () => {
   const runValidationPipeline = async (imageData: string) => {
     try {
       setIsVerifying(true);
+
+      const visitTimestamp = new Date();
+      let capturedAtDate: Date = visitTimestamp;
+      let exifTimePresent = false;
+      let exifGpsPresent = false;
+      let geofenceDistance: number | null = null;
+      let gpsSource: 'exif' | 'device' | 'none' = 'none';
+      let resolvedLatitude: number | null = null;
+      let resolvedLongitude: number | null = null;
+      const commitMetadataSnapshot = () => {
+        const metadata: VisitMetadata = {
+          capturedAt: capturedAtDate.toISOString(),
+          visitedAt: visitTimestamp.toISOString(),
+          exifTimePresent,
+          exifGpsPresent,
+          gpsSource,
+          geofenceDistance,
+          latitude: resolvedLatitude,
+          longitude: resolvedLongitude,
+        };
+        setLastVisitMetadata(metadata);
+        return metadata;
+      };
+
       
       // STEP 0: EXIF Extraction (parallel processing)
       console.log('🧭 Free-Order Checkin: Step 0 - EXIF extraction');
@@ -313,7 +355,7 @@ const ActivityCheckin = () => {
 
       const resolvedStation = resolverResult as ResolvedStation;
       console.log(`🎯 Resolved ${resolvedStation.display_name} -> ${resolvedStation.station_id}`);
-      
+
       // Check if station check-in is allowed (free-order mode)
       const checkinAllowed = isStationCheckinAllowed(resolvedStation.station_id);
       if (!checkinAllowed.allowed) {
@@ -324,9 +366,55 @@ const ActivityCheckin = () => {
       console.log('🧭 Free-Order Checkin: Step 2 SUCCESS');
 
       // STEP 3: Geofencing using EXIF GPS from image (skip if simulation mode)
+      console.log('🧭 Free-Order Checkin: Step 3 - EXIF extraction & geofencing');
+
+      const [imageGPS, imageTimestamp] = await Promise.all([
+        extractImageGPS(imageData).catch((error) => {
+          console.warn('🧭 Free-Order Checkin: EXIF GPS parse failed', error);
+          return null;
+        }),
+        extractImageTimestamp(imageData).catch((error) => {
+          console.warn('🧭 Free-Order Checkin: EXIF timestamp parse failed', error);
+          return null;
+        })
+      ]);
+
+      if (imageTimestamp instanceof Date) {
+        capturedAtDate = imageTimestamp;
+        exifTimePresent = true;
+      }
+
+      if (imageGPS) {
+        exifGpsPresent = true;
+        resolvedLatitude = imageGPS.lat;
+        resolvedLongitude = imageGPS.lng;
+      }
+
       if (simulationModeEffective) {
         console.log('🧭 Free-Order Checkin: Step 3 - Geofencing SKIPPED (simulation mode)');
+        if (imageGPS) {
+          gpsSource = 'exif';
+        } else if (location) {
+          gpsSource = 'device';
+          resolvedLatitude = location.lat;
+          resolvedLongitude = location.lng;
+        } else {
+          gpsSource = 'none';
+        }
       } else {
+        if (imageGPS) {
+          gpsSource = 'exif';
+          geofenceDistance = calculateDistance(
+            imageGPS.lat,
+            imageGPS.lng,
+            resolvedStation.coords.lat,
+            resolvedStation.coords.lon
+          );
+
+          if (geofenceDistance > GEOFENCE_RADIUS_METERS) {
+            const errorMessage = `Photo location is ${Math.round(geofenceDistance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
+
+            commitMetadataSnapshot();
         console.log('🧭 Free-Order Checkin: Step 3 - EXIF GPS geofencing validation');
         
         // Use pre-extracted GPS data from Step 0
@@ -338,22 +426,50 @@ const ActivityCheckin = () => {
             
             setGeofenceError({
               message: errorMessage,
+              code: 'photo_too_far',
+              resolvedStation,
+              distance: Math.round(geofenceDistance),
+              ocrResult: normalizedOCR
+            });
+
+            throw new Error(errorMessage);
+          }
+        } else {
+          console.log('🧭 Free-Order Checkin: No EXIF GPS found in image - using device GPS as fallback');
+
+          if (!location) {
+            gpsSource = 'none';
+            const errorMessage = 'Location unavailable — no GPS in photo and device location denied. You can save this check-in as Pending.';
+
+            commitMetadataSnapshot();
+          if (distance > getGeofenceRadiusMeters()) {
+            const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
+            
+            setGeofenceError({
+              message: errorMessage,
               code: 'gps_unavailable',
               resolvedStation,
               ocrResult: normalizedOCR
             });
-            
+
             throw new Error(errorMessage);
           }
-          
-          // Use device GPS as fallback
-          const distance = calculateDistance(
+
+          gpsSource = 'device';
+          resolvedLatitude = location.lat;
+          resolvedLongitude = location.lng;
+
+          geofenceDistance = calculateDistance(
             location.lat,
             location.lng,
             resolvedStation.coords.lat,
             resolvedStation.coords.lon
           );
 
+          if (geofenceDistance > GEOFENCE_RADIUS_METERS) {
+            const errorMessage = `Outside geofence: you're ${Math.round(geofenceDistance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
+
+            commitMetadataSnapshot();
           if (distance > getGeofenceRadiusMeters()) {
             const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
             
@@ -361,34 +477,10 @@ const ActivityCheckin = () => {
               message: errorMessage,
               code: 'out_of_range',
               resolvedStation,
-              distance: Math.round(distance),
+              distance: Math.round(geofenceDistance),
               ocrResult: normalizedOCR
             });
-            
-            throw new Error(errorMessage);
-          }
-        } else {
-          console.log('🧭 Free-Order Checkin: Using EXIF GPS from image');
-          
-          // Calculate distance using image GPS
-          const distance = calculateDistance(
-            imageGPS.lat,
-            imageGPS.lng,
-            resolvedStation.coords.lat,
-            resolvedStation.coords.lon
-          );
 
-          if (distance > getGeofenceRadiusMeters()) {
-            const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
-            
-            setGeofenceError({
-              message: errorMessage,
-              code: 'photo_too_far',
-              resolvedStation,
-              distance: Math.round(distance),
-              ocrResult: normalizedOCR
-            });
-            
             throw new Error(errorMessage);
           }
         }
@@ -403,10 +495,14 @@ const ActivityCheckin = () => {
       const fileName = `${user?.id}/${activityId}/${Date.now()}-roundel.jpg`;
       const uploadResult = await uploadImage(imageData, fileName);
       
+      if (!imageUrl) {
+        commitMetadataSnapshot();
       if (!uploadResult) {
         throw new Error('Failed to upload verification image');
       }
-      
+
+      const metadata = commitMetadataSnapshot();
+
       await checkinMutation.mutateAsync({
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
@@ -423,7 +519,15 @@ const ActivityCheckin = () => {
           verification_method: 'ai_image',
           ai_station_text: normalizedOCR.station_text_raw,
           ai_confidence: normalizedOCR.confidence,
-        }
+        },
+        capturedAt: metadata.capturedAt,
+        visitedAt: metadata.visitedAt,
+        exifTimePresent: metadata.exifTimePresent,
+        exifGpsPresent: metadata.exifGpsPresent,
+        gpsSource: metadata.gpsSource,
+        geofenceDistance: metadata.geofenceDistance,
+        latitude: metadata.latitude,
+        longitude: metadata.longitude
       });
 
       console.log('🧭 Free-Order Checkin: Step 4 SUCCESS');
@@ -472,7 +576,7 @@ const ActivityCheckin = () => {
       setTimeout(() => {
         console.log('🧭 Navigating back to activity detail...');
         navigate(`/activities/${activityId}`);
-      }, 250); // Fast modal dismissal for better UX
+         }, 250); // Fast modal dismissal for better UX
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -490,11 +594,61 @@ const ActivityCheckin = () => {
   };
 
   // Checkin mutation
+  type CheckinMutationArgs = {
+    stationTflId: string;
+    checkinType: 'gps' | 'image' | 'manual';
+    imageUrl?: string;
+    verificationResult?: any;
+  } & VisitMetadata;
+
   const checkinMutation = useMutation({
-    mutationFn: async ({ 
-      stationTflId, 
-      checkinType, 
+    mutationFn: async ({
+      stationTflId,
+      checkinType,
       imageUrl,
+      verificationResult,
+      capturedAt,
+      visitedAt,
+      exifTimePresent,
+      exifGpsPresent,
+      gpsSource,
+      geofenceDistance,
+      latitude,
+      longitude
+    }: CheckinMutationArgs) => {
+      if (!user || !activity) throw new Error("Missing data");
+
+      const seqActual = (activityState?.actual_visits?.length || 0) + 1;
+
+      const visitData: Database['public']['Tables']['station_visits']['Insert'] = {
+        user_id: user.id,
+        activity_id: activity.id,
+        station_tfl_id: stationTflId,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        checkin_type: checkinType,
+        verification_image_url: imageUrl || null,
+        status: 'verified', // Free-order mode always creates verified check-ins
+        verification_method: 'ai_image',
+        ai_verification_result: verificationResult || null,
+        ai_station_text: verificationResult?.ai_station_text || null,
+        ai_confidence: verificationResult?.confidence || null,
+        visit_lat: latitude ?? null,
+        visit_lon: longitude ?? null,
+        visited_at: visitedAt,
+        is_simulation: simulationModeEffective,
+        captured_at: capturedAt,
+        exif_time_present: exifTimePresent,
+        exif_gps_present: exifGpsPresent,
+        gps_source: gpsSource,
+        geofence_distance_m: geofenceDistance ?? null,
+        seq_actual: seqActual,
+        pending_reason: null,
+        verifier_version: VERIFIER_VERSION,
+        thumb_url: null,
+      };
+
+      console.log('🧭 Free-Order Checkin: insert payload =', visitData);
       thumbUrl,
       imageGPS,
       capturedTimestamp,
@@ -644,9 +798,6 @@ const ActivityCheckin = () => {
         console.log('🔍 derive_activity_state result:', testState);
       }
 
-      // Small delay to ensure DB transaction is fully committed
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       // Invalidate queries for immediate UI updates (all required keys)
       console.log('🔄 Starting cache invalidation...');
       await Promise.all([
@@ -765,6 +916,25 @@ const ActivityCheckin = () => {
     }
   };
 
+  const getFallbackMetadata = (): VisitMetadata => {
+    if (lastVisitMetadata) return lastVisitMetadata;
+
+    const nowIso = new Date().toISOString();
+    const defaultLat = simulationModeEffective ? null : (location?.lat ?? null);
+    const defaultLon = simulationModeEffective ? null : (location?.lng ?? null);
+
+    return {
+      capturedAt: nowIso,
+      visitedAt: nowIso,
+      exifTimePresent: false,
+      exifGpsPresent: false,
+      gpsSource: defaultLat != null && defaultLon != null ? 'device' : 'none',
+      geofenceDistance: null,
+      latitude: defaultLat,
+      longitude: defaultLon,
+    };
+  };
+
   // Helper functions to clear image state and ensure unmounting
   const handleRetakePhoto = () => {
     setCapturedImage(null);
@@ -780,17 +950,29 @@ const ActivityCheckin = () => {
 
   const handleSuggestionSelect = (suggestionTflId: string) => {
     if (capturedImage) {
+      const metadata = getFallbackMetadata();
+
       checkinMutation.mutate({
         stationTflId: suggestionTflId,
         checkinType: 'image',
         imageUrl: capturedImage,
-        verificationResult: { success: true, user_selected: true }
+        verificationResult: { success: true, user_selected: true },
+        capturedAt: metadata.capturedAt,
+        visitedAt: metadata.visitedAt,
+        exifTimePresent: metadata.exifTimePresent,
+        exifGpsPresent: metadata.exifGpsPresent,
+        gpsSource: metadata.gpsSource,
+        geofenceDistance: metadata.geofenceDistance,
+        latitude: metadata.latitude,
+        longitude: metadata.longitude,
       });
     }
   };
 
   const handleSaveAsPending = () => {
     if (capturedImage && geofenceError?.resolvedStation && geofenceError?.ocrResult) {
+      const metadata = getFallbackMetadata();
+
       checkinMutation.mutate({
         stationTflId: geofenceError.resolvedStation.station_id,
         checkinType: 'image',
@@ -807,7 +989,15 @@ const ActivityCheckin = () => {
           geofence_distance_m: geofenceError.distance || 0,
           geofence_radius_m: getGeofenceRadiusMeters(),
           verification_note: `Geofence failed: ${geofenceError.code}`
-        }
+        },
+        capturedAt: metadata.capturedAt,
+        visitedAt: metadata.visitedAt,
+        exifTimePresent: metadata.exifTimePresent,
+        exifGpsPresent: metadata.exifGpsPresent,
+        gpsSource: metadata.gpsSource,
+        geofenceDistance: metadata.geofenceDistance,
+        latitude: metadata.latitude,
+        longitude: metadata.longitude,
       });
     }
   };
