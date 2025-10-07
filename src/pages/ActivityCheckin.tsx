@@ -15,6 +15,7 @@ import { DevPanel, useSimulationMode } from "@/components/DevPanel";
 import { SimulationBanner } from "@/components/SimulationBanner";
 import { useImageUpload } from "@/hooks/useImageUpload";
 import { calculateDistance, extractImageGPS, extractImageTimestamp } from "@/lib/utils";
+import { getGeofenceRadiusMeters, validateGeofence } from "@/config/geofence";
 
 
 // Configuration
@@ -139,7 +140,7 @@ const ActivityCheckin = () => {
   useEffect(() => {
     console.log(`🧭 ActivityCheckin: Free-order mode | id=${activityId} user=${user?.id || 'none'}`);
     console.log('🧭 Config:', { 
-      GEOFENCE_RADIUS_METERS, 
+      geofenceRadius: getGeofenceRadiusMeters(), 
       simulationModeEnv,
       simulationModeUser,
       simulationModeEffective
@@ -163,11 +164,11 @@ const ActivityCheckin = () => {
         },
         (error) => {
           console.warn("Location access denied:", error);
-          toast({
-            title: "Location access denied",
-            description: "GPS checkin will not be available.",
-            variant: "destructive",
-          });
+        toast({
+          title: "Location access denied",
+          description: "GPS check-in will not be available.",
+          variant: "destructive",
+        });
         }
       );
     }
@@ -229,7 +230,7 @@ const ActivityCheckin = () => {
       const stationName = stations.find(s => s.id === stationTflId)?.name || stationTflId;
       return { 
         allowed: false,
-        reason: `Already checked in at ${stationName} for this activity.`
+        reason: `Already checked in to ${stationName} for this activity.`
       };
     }
 
@@ -257,7 +258,7 @@ const ActivityCheckin = () => {
     return !isActivityComplete && !hasPendingUpload;
   };
 
-  // 3-Step Validation Pipeline for Free-Order Check-ins
+  // 4-Step Validation Pipeline for Free-Order Check-ins
   const runValidationPipeline = async (imageData: string) => {
     try {
       setIsVerifying(true);
@@ -285,6 +286,22 @@ const ActivityCheckin = () => {
         return metadata;
       };
 
+      
+      // STEP 0: EXIF Extraction (parallel processing)
+      console.log('🧭 Free-Order Checkin: Step 0 - EXIF extraction');
+      
+      const [imageGPS, capturedTimestamp] = await Promise.all([
+        extractImageGPS(imageData),
+        extractImageTimestamp(imageData)
+      ]);
+      
+      console.log('🧭 EXIF Results:', {
+        hasGPS: !!imageGPS,
+        hasTimestamp: !!capturedTimestamp,
+        gps: imageGPS,
+        timestamp: capturedTimestamp
+      });
+      
       // STEP 1: OCR Validation
       console.log('🧭 Free-Order Checkin: Step 1 - OCR validation');
       
@@ -398,6 +415,15 @@ const ActivityCheckin = () => {
             const errorMessage = `Photo location is ${Math.round(geofenceDistance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
 
             commitMetadataSnapshot();
+        console.log('🧭 Free-Order Checkin: Step 3 - EXIF GPS geofencing validation');
+        
+        // Use pre-extracted GPS data from Step 0
+        if (!imageGPS) {
+          console.log('🧭 Free-Order Checkin: No EXIF GPS found in image - using device GPS as fallback');
+          
+          if (!location) {
+            const errorMessage = "You're offline. Your check-in is saved as pending and will sync automatically.";
+            
             setGeofenceError({
               message: errorMessage,
               code: 'photo_too_far',
@@ -416,6 +442,9 @@ const ActivityCheckin = () => {
             const errorMessage = 'Location unavailable — no GPS in photo and device location denied. You can save this check-in as Pending.';
 
             commitMetadataSnapshot();
+          if (distance > getGeofenceRadiusMeters()) {
+            const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
+            
             setGeofenceError({
               message: errorMessage,
               code: 'gps_unavailable',
@@ -441,6 +470,9 @@ const ActivityCheckin = () => {
             const errorMessage = `Outside geofence: you're ${Math.round(geofenceDistance)}m from ${resolvedStation.display_name} (limit ${GEOFENCE_RADIUS_METERS}m). Take photo closer to the station.`;
 
             commitMetadataSnapshot();
+          if (distance > getGeofenceRadiusMeters()) {
+            const errorMessage = `We couldn't confirm you're near ${resolvedStation.display_name}. Save as pending or retake a photo near the station.`;
+            
             setGeofenceError({
               message: errorMessage,
               code: 'out_of_range',
@@ -459,12 +491,13 @@ const ActivityCheckin = () => {
       // STEP 4: Upload Image and Persist Visit
       console.log('🧭 Free-Order Checkin: Step 4 - Upload image and persist visit');
       
-      // Upload image to storage
+      // Upload image to storage (both full image and thumbnail)
       const fileName = `${user?.id}/${activityId}/${Date.now()}-roundel.jpg`;
-      const imageUrl = await uploadImage(imageData, fileName);
+      const uploadResult = await uploadImage(imageData, fileName);
       
       if (!imageUrl) {
         commitMetadataSnapshot();
+      if (!uploadResult) {
         throw new Error('Failed to upload verification image');
       }
 
@@ -473,7 +506,11 @@ const ActivityCheckin = () => {
       await checkinMutation.mutateAsync({
         stationTflId: resolvedStation.station_id,
         checkinType: 'image',
-        imageUrl,
+        imageUrl: uploadResult.imageUrl,
+        thumbUrl: uploadResult.thumbUrl,
+        imageGPS,
+        capturedTimestamp,
+        resolvedStation, // Pass station coordinates for geofence calculation
         verificationResult: {
           success: true,
           pending: false,
@@ -539,7 +576,7 @@ const ActivityCheckin = () => {
       setTimeout(() => {
         console.log('🧭 Navigating back to activity detail...');
         navigate(`/activities/${activityId}`);
-      }, 200);
+         }, 250); // Fast modal dismissal for better UX
 
     } catch (error: any) {
       console.error('🧭 Free-Order Checkin: Pipeline failed -', error.message);
@@ -612,19 +649,116 @@ const ActivityCheckin = () => {
       };
 
       console.log('🧭 Free-Order Checkin: insert payload =', visitData);
+      thumbUrl,
+      imageGPS,
+      capturedTimestamp,
+      resolvedStation,
+      geofenceResult,
+      verificationResult
+    }: { 
+      stationTflId: string; 
+      checkinType: 'gps' | 'image' | 'manual';
+      imageUrl?: string;
+      thumbUrl?: string;
+      imageGPS?: { lat: number; lng: number } | null;
+      capturedTimestamp?: Date | null;
+      resolvedStation?: ResolvedStation;
+      geofenceResult?: any;
+      verificationResult?: any;
+    }) => {
+      if (!user || !activity) throw new Error("Missing data");
 
-      const { data, error } = await supabase
-        .from("station_visits")
-        .insert(visitData)
-        .select()
-        .single();
+      // Use geofence result if available, otherwise determine GPS source and coordinates
+      const gpsSource = geofenceResult?.gpsSource || (imageGPS ? 'exif' : (location ? 'device' : 'none'));
+      const finalCoords = geofenceResult?.coords || imageGPS || (location ? { lat: location.lat, lng: location.lng } : null);
+      const distanceMeters = geofenceResult?.distance || (finalCoords && resolvedStation ? 
+        calculateDistance(
+          finalCoords.lat, 
+          finalCoords.lng, 
+          resolvedStation.coords.lat,
+          resolvedStation.coords.lon
+        ) : null);
+      
+      // Use the record-visit RPC instead of direct insert
+      const recordVisitResult = await supabase.functions.invoke('record-visit', {
+        body: {
+          activity_id: activity.id,
+          station_tfl_id: stationTflId,
+          user_id: user.id,
+          
+          // Location data
+          latitude: simulationModeEffective ? null : finalCoords?.lat || null,
+          longitude: simulationModeEffective ? null : finalCoords?.lng || null,
+          visit_lat: simulationModeEffective ? null : finalCoords?.lat || null,
+          visit_lon: simulationModeEffective ? null : finalCoords?.lng || null,
+          
+          // EXIF and image data
+          captured_at: capturedTimestamp?.toISOString() || new Date().toISOString(),
+          exif_time_present: !!capturedTimestamp,
+          exif_gps_present: !!imageGPS,
+          gps_source: gpsSource,
+          verification_image_url: imageUrl || null,
+          verification_thumb_url: thumbUrl || null,
+          
+          // Geofence data
+          geofence_distance_m: Math.round(distanceMeters || 0),
+          geofence_result: geofenceResult ? {
+            withinGeofence: geofenceResult.withinGeofence,
+            distance: geofenceResult.distance,
+            gpsSource: geofenceResult.gpsSource
+          } : undefined,
+          
+          // OCR/AI data
+          ocr_result: verificationResult?.pending ? undefined : {
+            success: !verificationResult?.pending,
+            confidence: verificationResult?.confidence || 0,
+            station_text_raw: verificationResult?.ai_station_text
+          },
+          ai_verification_result: verificationResult || null,
+          ai_station_text: verificationResult?.ai_station_text || null,
+          ai_confidence: verificationResult?.confidence || null,
+          
+          // Context flags - respect environment variables (A3.6.2)
+          simulation_mode: simulationModeEffective,
+          ai_enabled: import.meta.env.VITE_AI_VERIFICATION_ENABLED !== 'false',
+          has_connectivity: navigator.onLine !== false, // Check actual connectivity
+          checkin_type: checkinType,
+          verifier_version: '1.0'
+        }
+      });
 
-      if (error) {
-        console.error('🧭 Free-Order Checkin: insert error =', error);
-        throw error;
+      if (recordVisitResult.error) {
+        // Check for duplicate visit error
+        if (recordVisitResult.error.code === 'duplicate_visit' || recordVisitResult.error.code === 'duplicate_visit_race') {
+          const stationName = stations.find(s => s.id === recordVisitResult.error.station_id)?.name || 'this station';
+          toast({
+            title: "Already checked in",
+            description: `Already checked in to ${stationName} for this activity.`,
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        throw new Error(recordVisitResult.error.message || 'Failed to record visit');
       }
 
-      return data;
+      if (!recordVisitResult.data?.success) {
+        throw new Error('Failed to record visit - no success response');
+      }
+
+      console.log('🎯 Visit recorded via RPC:', {
+        visit_id: recordVisitResult.data.visit_id,
+        seq_actual: recordVisitResult.data.seq_actual,
+        status: recordVisitResult.data.status
+      });
+
+      return {
+        id: recordVisitResult.data.visit_id,
+        station_tfl_id: stationTflId,
+        visited_at: new Date().toISOString(),
+        status: recordVisitResult.data.status,
+        seq_actual: recordVisitResult.data.seq_actual
+      };
     },
     onSuccess: async (data, variables) => {
       const sequence = (activityState?.actual_visits?.length || 0) + 1;
@@ -694,11 +828,11 @@ const ActivityCheckin = () => {
         const stationName = resolvedStation?.name || 'this station';
         
         // Friendly duplicate error with CTA
-        setVerificationError(`You already checked in at ${stationName} for this activity.`);
+        setVerificationError(`Already checked in to ${stationName} for this activity.`);
         
         toast({
           title: "Already checked in",
-          description: `You already checked in at ${stationName} for this activity.`,
+          description: `Already checked in to ${stationName} for this activity.`,
           variant: "destructive",
           duration: 6000, // Keep visible longer for user to see the action
           action: (
@@ -853,7 +987,7 @@ const ActivityCheckin = () => {
           ai_confidence: geofenceError.ocrResult.confidence,
           geofence_failed: true,
           geofence_distance_m: geofenceError.distance || 0,
-          geofence_radius_m: GEOFENCE_RADIUS_METERS,
+          geofence_radius_m: getGeofenceRadiusMeters(),
           verification_note: `Geofence failed: ${geofenceError.code}`
         },
         capturedAt: metadata.capturedAt,
