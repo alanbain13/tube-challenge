@@ -290,6 +290,11 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       return;
     }
 
+    if (!mapboxToken) {
+      console.log('[MiniMapSnapshot] Not loading yet, waiting for Mapbox token');
+      return;
+    }
+
     console.log('[MiniMapSnapshot] Starting snapshot load process', { type, id, mapboxToken: !!mapboxToken });
 
     const loadSnapshot = async () => {
