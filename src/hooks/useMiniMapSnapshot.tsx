@@ -147,13 +147,29 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
     remainingStations = [],
     lastVisitAt,
     updatedAt,
-    mapboxToken
+    mapboxToken: mapboxTokenProp
   } = options;
 
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldLoad, setShouldLoad] = useState(false);
+  const [mapboxToken, setMapboxToken] = useState<string | undefined>(mapboxTokenProp);
+
+  // Read token from localStorage on mount
+  useEffect(() => {
+    if (mapboxTokenProp) {
+      setMapboxToken(mapboxTokenProp);
+    } else {
+      const token = localStorage.getItem('mapboxToken');
+      if (token) {
+        console.log('[MiniMapSnapshot] Mapbox token loaded from localStorage');
+        setMapboxToken(token);
+      } else {
+        console.error('[MiniMapSnapshot] Mapbox token not found in localStorage. Please add your token with: localStorage.setItem("mapboxToken", "your_token_here")');
+      }
+    }
+  }, [mapboxTokenProp]);
 
   // Generate cache key
   const getCacheKey = (): string => {

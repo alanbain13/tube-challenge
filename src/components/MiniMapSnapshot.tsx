@@ -1,6 +1,5 @@
 import { useMiniMapSnapshot } from '@/hooks/useMiniMapSnapshot';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useEffect, useState } from 'react';
 
 interface MiniMapSnapshotProps {
   type: 'route' | 'activity';
@@ -13,23 +12,7 @@ interface MiniMapSnapshotProps {
 }
 
 export const MiniMapSnapshot = (props: MiniMapSnapshotProps) => {
-  const [mapboxToken, setMapboxToken] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    // Try to get Mapbox token from localStorage
-    const token = localStorage.getItem('mapboxToken');
-    if (token) {
-      console.log('[MiniMapSnapshot] Mapbox token found in localStorage');
-      setMapboxToken(token);
-    } else {
-      console.error('[MiniMapSnapshot] Mapbox token not found in localStorage. Please add your token with: localStorage.setItem("mapboxToken", "your_token_here")');
-    }
-  }, []);
-
-  const { snapshotUrl, isLoading, containerRef } = useMiniMapSnapshot({
-    ...props,
-    mapboxToken
-  });
+  const { snapshotUrl, isLoading, containerRef } = useMiniMapSnapshot(props);
 
   return (
     <div 
