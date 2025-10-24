@@ -168,7 +168,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       console.log('[MiniMapSnapshot] Checking localStorage...');
       console.log('[MiniMapSnapshot] All localStorage keys:', Object.keys(localStorage));
       
-      const token = localStorage.getItem('mapboxToken');
+      const token = localStorage.getItem('mapbox_token');
       console.log('[MiniMapSnapshot] Retrieved token:', token ? `${token.substring(0, 20)}...` : 'null/undefined');
       console.log('[MiniMapSnapshot] Token type:', typeof token);
       
