@@ -15,12 +15,12 @@ export const ActivityTileMiniMap = ({ activityId, updatedAt }: ActivityTileMiniM
     );
   }
 
-  const visitedStations = activityState.visited.map(v => ({
+  const visitedStations = (activityState.visited || []).map(v => ({
     station_tfl_id: v.station_tfl_id,
     seq_actual: v.seq_actual || 0
   }));
 
-  const remainingStations = activityState.remaining.map(r => ({
+  const remainingStations = (activityState.remaining || []).map(r => ({
     station_tfl_id: r.station_tfl_id,
     seq_planned: r.seq_planned || 0
   }));
