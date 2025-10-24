@@ -11,6 +11,7 @@ import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
+import { MiniMapSnapshot } from "@/components/MiniMapSnapshot";
 
 const Routes = () => {
   const { user, loading } = useAuth();
@@ -226,21 +227,32 @@ const Routes = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {routes.map((route: any) => (
-                <Card key={route.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>{route.name}</span>
-                      <Badge variant="outline">
-                        {route.route_stations?.length || 0} stations
-                      </Badge>
-                    </CardTitle>
-                    <CardDescription>
-                      {route.description || "No description"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
+              {routes.map((route: any) => {
+                const stationSequence = route.route_stations
+                  ?.sort((a: any, b: any) => a.sequence_number - b.sequence_number)
+                  .map((rs: any) => rs.station_tfl_id) || [];
+                
+                return (
+                  <Card key={route.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span>{route.name}</span>
+                        <Badge variant="outline">
+                          {route.route_stations?.length || 0} stations
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        {route.description || "No description"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <MiniMapSnapshot
+                        type="route"
+                        id={route.id}
+                        stationSequence={stationSequence}
+                        updatedAt={route.updated_at}
+                      />
+                      <div className="space-y-3 mt-4">
                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                          <MapPin className="w-4 h-4" />
                          <span>
@@ -296,10 +308,11 @@ const Routes = () => {
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
-                      </div>
-                  </CardContent>
-                </Card>
-              ))}
+                       </div>
+                   </CardContent>
+                 </Card>
+                );
+              })}
             </div>
           )}
         </main>

@@ -11,6 +11,7 @@ import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
+import { ActivityTileMiniMap } from "@/components/ActivityTileMiniMap";
 
 const Activities = () => {
   const { user, loading } = useAuth();
@@ -280,7 +281,11 @@ const Activities = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-3">
+                      <ActivityTileMiniMap 
+                        activityId={activity.id}
+                        updatedAt={activity.updated_at}
+                      />
+                      <div className="space-y-3 mt-4">
                         {!activity.start_station_tfl_id && !activity.end_station_tfl_id && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <MapPin className="w-4 h-4" />
