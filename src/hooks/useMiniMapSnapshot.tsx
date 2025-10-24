@@ -172,9 +172,11 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
   // Generate snapshot
   const generateSnapshot = async (): Promise<string | null> => {
     if (!mapboxToken) {
-      console.warn('Mapbox token not available for snapshot generation');
+      console.error('[MiniMapSnapshot] Mapbox token not available. Please set mapboxToken in localStorage with: localStorage.setItem("mapboxToken", "your_token_here")');
       return null;
     }
+
+    console.log('[MiniMapSnapshot] Generating snapshot for:', { type, id, visitedCount: visitedStations?.length, remainingCount: remainingStations?.length });
 
     try {
       // Create offscreen container
@@ -268,13 +270,15 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       const canvas = map.getCanvas();
       const dataUrl = canvas.toDataURL('image/png');
 
+      console.log('[MiniMapSnapshot] Successfully generated snapshot');
+
       // Cleanup
       map.remove();
       document.body.removeChild(offscreenContainer);
 
       return dataUrl;
     } catch (error) {
-      console.error('Error generating mini-map snapshot:', error);
+      console.error('[MiniMapSnapshot] Error generating mini-map snapshot:', error);
       return null;
     }
   };
@@ -288,6 +292,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
 
       // Check in-memory cache first
       if (snapshotCache.has(cacheKey)) {
+        console.log('[MiniMapSnapshot] Using cached snapshot from memory');
         setSnapshotUrl(snapshotCache.get(cacheKey)!);
         setIsLoading(false);
         return;
@@ -296,6 +301,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       // Check IndexedDB
       const cachedUrl = await loadFromIndexedDB(cacheKey);
       if (cachedUrl) {
+        console.log('[MiniMapSnapshot] Using cached snapshot from IndexedDB');
         snapshotCache.set(cacheKey, cachedUrl);
         setSnapshotUrl(cachedUrl);
         setIsLoading(false);
@@ -303,11 +309,14 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       }
 
       // Generate new snapshot
+      console.log('[MiniMapSnapshot] No cached snapshot found, generating new one');
       const newUrl = await generateSnapshot();
       if (newUrl) {
         snapshotCache.set(cacheKey, newUrl);
         await saveToIndexedDB(cacheKey, newUrl);
         setSnapshotUrl(newUrl);
+      } else {
+        console.error('[MiniMapSnapshot] Failed to generate snapshot');
       }
       setIsLoading(false);
     };

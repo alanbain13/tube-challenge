@@ -19,7 +19,10 @@ export const MiniMapSnapshot = (props: MiniMapSnapshotProps) => {
     // Try to get Mapbox token from localStorage
     const token = localStorage.getItem('mapboxToken');
     if (token) {
+      console.log('[MiniMapSnapshot] Mapbox token found in localStorage');
       setMapboxToken(token);
+    } else {
+      console.error('[MiniMapSnapshot] Mapbox token not found in localStorage. Please add your token with: localStorage.setItem("mapboxToken", "your_token_here")');
     }
   }, []);
 
