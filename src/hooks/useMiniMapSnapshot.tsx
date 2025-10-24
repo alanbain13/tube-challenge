@@ -158,15 +158,26 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
 
   // Read token from localStorage on mount
   useEffect(() => {
+    console.log('[MiniMapSnapshot] Token check - mapboxTokenProp:', mapboxTokenProp ? 'exists' : 'undefined');
+    
     if (mapboxTokenProp) {
+      console.log('[MiniMapSnapshot] Using token from prop');
       setMapboxToken(mapboxTokenProp);
     } else {
+      // Debug: Check all localStorage keys
+      console.log('[MiniMapSnapshot] Checking localStorage...');
+      console.log('[MiniMapSnapshot] All localStorage keys:', Object.keys(localStorage));
+      
       const token = localStorage.getItem('mapboxToken');
-      if (token) {
-        console.log('[MiniMapSnapshot] Mapbox token loaded from localStorage');
+      console.log('[MiniMapSnapshot] Retrieved token:', token ? `${token.substring(0, 20)}...` : 'null/undefined');
+      console.log('[MiniMapSnapshot] Token type:', typeof token);
+      
+      if (token && token !== 'undefined' && token !== 'null') {
+        console.log('[MiniMapSnapshot] ✅ Valid token loaded from localStorage');
         setMapboxToken(token);
       } else {
-        console.error('[MiniMapSnapshot] Mapbox token not found in localStorage. Please add your token with: localStorage.setItem("mapboxToken", "your_token_here")');
+        console.error('[MiniMapSnapshot] ❌ No valid token found. Current value:', token);
+        console.error('[MiniMapSnapshot] Please set token with: localStorage.setItem("mapboxToken", "pk.your_actual_token_here")');
       }
     }
   }, [mapboxTokenProp]);
