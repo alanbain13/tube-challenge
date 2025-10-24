@@ -153,7 +153,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isIntersecting = useRef(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   // Generate cache key
   const getCacheKey = (): string => {
@@ -285,10 +285,16 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
 
   // Load or generate snapshot
   useEffect(() => {
-    if (!isIntersecting.current) return;
+    if (!shouldLoad) {
+      console.log('[MiniMapSnapshot] Not loading yet, waiting for intersection');
+      return;
+    }
+
+    console.log('[MiniMapSnapshot] Starting snapshot load process', { type, id, mapboxToken: !!mapboxToken });
 
     const loadSnapshot = async () => {
       const cacheKey = getCacheKey();
+      console.log('[MiniMapSnapshot] Cache key:', cacheKey);
 
       // Check in-memory cache first
       if (snapshotCache.has(cacheKey)) {
@@ -312,6 +318,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       console.log('[MiniMapSnapshot] No cached snapshot found, generating new one');
       const newUrl = await generateSnapshot();
       if (newUrl) {
+        console.log('[MiniMapSnapshot] Snapshot generated successfully');
         snapshotCache.set(cacheKey, newUrl);
         await saveToIndexedDB(cacheKey, newUrl);
         setSnapshotUrl(newUrl);
@@ -322,29 +329,37 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
     };
 
     loadSnapshot();
-  }, [isIntersecting.current, id, JSON.stringify(visitedStations), JSON.stringify(remainingStations), lastVisitAt, updatedAt, mapboxToken]);
+  }, [shouldLoad, id, JSON.stringify(visitedStations), JSON.stringify(remainingStations), lastVisitAt, updatedAt, mapboxToken]);
 
   // Intersection Observer for lazy loading
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      console.log('[MiniMapSnapshot] No container ref yet');
+      return;
+    }
+
+    console.log('[MiniMapSnapshot] Setting up IntersectionObserver');
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && !isIntersecting.current) {
-            isIntersecting.current = true;
-            // Trigger load by changing state
-            setIsLoading(true);
+          console.log('[MiniMapSnapshot] Intersection change:', { isIntersecting: entry.isIntersecting, target: entry.target });
+          if (entry.isIntersecting && !shouldLoad) {
+            console.log('[MiniMapSnapshot] Container is visible, triggering load');
+            setShouldLoad(true);
           }
         });
       },
-      { rootMargin: '50px' }
+      { rootMargin: '100px' }
     );
 
     observer.observe(containerRef.current);
 
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      console.log('[MiniMapSnapshot] Cleaning up IntersectionObserver');
+      observer.disconnect();
+    };
+  }, [shouldLoad]);
 
   return {
     snapshotUrl,

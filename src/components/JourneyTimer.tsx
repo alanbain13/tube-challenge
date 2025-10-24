@@ -73,7 +73,7 @@ export function JourneyTimer() {
         return null;
       }
 
-      return data?.[0] as Activity | null;
+      return (data && data.length > 0) ? (data[0] as Activity) : null;
     },
     enabled: !!user,
     refetchInterval: 30000, // Refetch every 30 seconds
