@@ -1,4 +1,5 @@
 import { MiniMapSnapshot } from './MiniMapSnapshot';
+import { RoundelThumbnailStrip } from './RoundelThumbnailStrip';
 import { useActivityState } from '@/hooks/useActivityState';
 
 interface ActivityTileMiniMapProps {
@@ -26,12 +27,15 @@ export const ActivityTileMiniMap = ({ activityId, updatedAt }: ActivityTileMiniM
   }));
 
   return (
-    <MiniMapSnapshot
-      type="activity"
-      id={activityId}
-      visitedStations={visitedStations}
-      remainingStations={remainingStations}
-      lastVisitAt={updatedAt}
-    />
+    <div>
+      <MiniMapSnapshot
+        type="activity"
+        id={activityId}
+        visitedStations={visitedStations}
+        remainingStations={remainingStations}
+        lastVisitAt={updatedAt}
+      />
+      <RoundelThumbnailStrip type="activity" id={activityId} />
+    </div>
   );
 };
