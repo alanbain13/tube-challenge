@@ -1,5 +1,5 @@
 import { MiniMapSnapshot } from './MiniMapSnapshot';
-import { RoundelThumbnailStrip } from './RoundelThumbnailStrip';
+import { RoundelGallery } from './RoundelGallery';
 import { useActivityState } from '@/hooks/useActivityState';
 
 interface ActivityTileMiniMapProps {
@@ -35,7 +35,7 @@ export const ActivityTileMiniMap = ({ activityId, updatedAt }: ActivityTileMiniM
         remainingStations={remainingStations}
         lastVisitAt={updatedAt}
       />
-      <RoundelThumbnailStrip type="activity" id={activityId} />
+      <RoundelGallery type="activity" id={activityId} />
     </div>
   );
 };

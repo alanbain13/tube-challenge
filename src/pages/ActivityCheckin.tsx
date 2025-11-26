@@ -81,6 +81,7 @@ const ActivityCheckin = () => {
     distance?: number;
     ocrResult?: OCRResult;
   } | null>(null);
+  const [capturedTimestamp, setCapturedTimestamp] = useState<Date | null>(null);
   
   // Enhanced features
   const { uploadImage, isUploading } = useImageUpload();
@@ -816,12 +817,18 @@ const ActivityCheckin = () => {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setCapturedImage(e.target?.result as string);
+      reader.onload = async (e) => {
+        const imageData = e.target?.result as string;
+        setCapturedImage(imageData);
+        
+        // Extract EXIF timestamp immediately when image is loaded
+        const exifTimestamp = await extractImageTimestamp(imageData);
+        setCapturedTimestamp(exifTimestamp);
+        console.log('📸 Image loaded, EXIF timestamp:', exifTimestamp || 'not found, will use current time');
       };
       reader.readAsDataURL(file);
     }
@@ -836,6 +843,7 @@ const ActivityCheckin = () => {
   // Helper functions to clear image state and ensure unmounting
   const handleRetakePhoto = () => {
     setCapturedImage(null);
+    setCapturedTimestamp(null);
     setVerificationError(null);
     setSuggestions(null);
     setGeofenceError(null);
@@ -851,6 +859,9 @@ const ActivityCheckin = () => {
     
     setIsVerifying(true);
     try {
+      // Extract GPS from EXIF if available
+      const imageGPS = await extractImageGPS(capturedImage);
+      
       // Upload image first
       const fileName = `${user.id}/${activityId}/${Date.now()}-roundel.jpg`;
       const uploadResult = await uploadImage(capturedImage, fileName);
@@ -859,12 +870,14 @@ const ActivityCheckin = () => {
         throw new Error('Failed to upload image');
       }
       
-      // Now call mutation with uploaded URLs
+      // Now call mutation with uploaded URLs and stored EXIF timestamp
       checkinMutation.mutate({
         stationTflId: suggestionTflId,
         checkinType: 'image',
         imageUrl: uploadResult.imageUrl,
         thumbUrl: uploadResult.thumbUrl,
+        imageGPS,
+        capturedTimestamp,
         verificationResult: { success: true, user_selected: true }
       });
     } catch (error) {
