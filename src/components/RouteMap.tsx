@@ -697,7 +697,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const getStationName = (stationId: string) => {
-    return stations.find(s => s.id === stationId)?.name || stationId;
+    return stations.find(s => s.id === stationId)?.displayName || stationId;
   };
 
   // Always show the map container - handle loading states within
