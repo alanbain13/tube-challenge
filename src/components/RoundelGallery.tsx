@@ -31,9 +31,10 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [generatedThumbs, setGeneratedThumbs] = useState<Map<string, string>>(new Map());
 
-  const { data: galleryItems = [] } = useQuery<GalleryItem[]>({
+  const { data: galleryItems = [], isLoading: isLoadingGallery } = useQuery<GalleryItem[]>({
     queryKey: ['roundel-gallery', type, id],
     queryFn: async () => {
+      console.log('[RoundelGallery] Fetching gallery items', { type, id, stationsLoaded: stations.length });
       if (type === 'activity') {
         // For activities: query station_visits
         const { data, error } = await supabase
@@ -44,6 +45,8 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
           .order('captured_at', { ascending: false });
 
         if (error) throw error;
+
+        console.log('[RoundelGallery] Activity visits fetched:', data?.length || 0);
 
         return (data || []).map(visit => ({
           id: visit.id,
@@ -87,7 +90,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
         }));
       }
     },
-    enabled: !!id && stations.length > 0,
+    enabled: !!id,  // Remove stations dependency - let query run and show loading state
     staleTime: 30000
   });
 
@@ -125,6 +128,17 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
   const placeholderCount = Math.max(0, 3 - galleryItems.length);
   const placeholders = Array(placeholderCount).fill(null);
 
+  console.log('[RoundelGallery] Render state:', {
+    type,
+    id,
+    stationsLoaded: stations.length,
+    isLoadingGallery,
+    totalItems: galleryItems.length,
+    displayThumbs: displayThumbs.length,
+    placeholders: placeholderCount,
+    generatedCount: generatedThumbs.size
+  });
+
   const openLightbox = (index: number) => {
     setCurrentIndex(index);
     setLightboxOpen(true);
@@ -157,8 +171,9 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
   return (
     <>
       <div className="flex items-center gap-1.5 mt-2">
-        {displayThumbs.map((item, idx) => {
+      {displayThumbs.map((item, idx) => {
           const displayUrl = item.thumbUrl || generatedThumbs.get(item.id);
+          console.log('[RoundelGallery] Rendering thumb', { idx, stationName: item.stationName, hasThumb: !!item.thumbUrl, hasGenerated: generatedThumbs.has(item.id), needsGen: item.needsGeneration });
           
           return (
             <div 
