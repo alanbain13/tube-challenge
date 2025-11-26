@@ -112,7 +112,8 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
               setGeneratedThumbs(prev => new Map(prev).set(item.id, generated));
             }
           } catch (error) {
-            console.error('[Gallery.Thumb] Generation failed:', item.id, error);
+            console.warn('[Gallery.Thumb] Generation failed, will use placeholder:', item.id, error);
+            // Don't retry - just leave it to show the placeholder
           }
         }
       }
