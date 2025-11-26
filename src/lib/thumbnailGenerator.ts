@@ -1,9 +1,9 @@
 /**
  * Generate client-side thumbnails from full images
- * Max width: 320px, maintains aspect ratio
+ * Max width: 160px, maintains aspect ratio
  */
 
-const MAX_THUMB_WIDTH = 320;
+const MAX_THUMB_WIDTH = 160;
 
 export async function generateThumbnail(imageUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -40,7 +40,7 @@ export async function generateThumbnail(imageUrl: string): Promise<string> {
         
         // Draw and compress
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
         
         console.log('[Tile.Thumb.Generated] Created thumbnail:', {
           originalSize: `${img.width}x${img.height}`,
