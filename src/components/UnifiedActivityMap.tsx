@@ -65,7 +65,7 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
 
   const getStationName = (stationId: string) => {
     const station = stations.find((s) => s.id === stationId);
-    return station ? station.name : stationId;
+    return station ? station.displayName : stationId;
   };
 
 

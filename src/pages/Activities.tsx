@@ -29,7 +29,7 @@ const Activities = () => {
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
     const station = stations.find(s => s.id === tflId);
-    return station ? station.name : tflId;
+    return station ? station.displayName : tflId;
   };
 
   // Helper function to get unified activity state

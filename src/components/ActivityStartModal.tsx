@@ -68,7 +68,7 @@ const ActivityStartModal: React.FC<ActivityStartModalProps> = ({ open, onOpenCha
 
   const getStationName = (tflId: string) => {
     const station = stations.find(s => s.id === tflId);
-    return station ? station.name : tflId;
+    return station ? station.displayName : tflId;
   };
 
   const createActivity = async (data: {
