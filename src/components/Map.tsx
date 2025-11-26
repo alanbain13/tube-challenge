@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 interface Station {
   id: string;
   name: string;
+  displayName: string; // Unique display name with line disambiguation
   zone: string;
   lines: Array<{ name: string; nightopened?: number }>;
   coordinates: [number, number];
@@ -123,7 +124,7 @@ const buildPopupHTML = (station: Station, isVisited: boolean) => {
   return `
     <article style="font-family: ui-sans-serif, system-ui, -apple-system; font-size: 12px;">
       <header style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h1 style="font-weight:600; font-size: 14px; margin:0;">${station.name}</h1>
+        <h1 style="font-weight:600; font-size: 14px; margin:0;">${station.displayName}</h1>
         <span style="border:1px solid ${statusBorder};background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:9999px;font-size:11px;white-space:nowrap;">${statusText}</span>
       </header>
       <div style="opacity:.7; margin:6px 0;">Zone ${station.zone}</div>
@@ -372,6 +373,7 @@ const isVisited = visitsRef.current.some(visit =>
       properties: {
         id: station.id,
         name: station.name,
+        displayName: station.displayName,
         zone: station.zone,
         lines: station.lines?.map(l => l.name) || [],
         visited: isVisited
@@ -514,7 +516,7 @@ const toggleStationVisit = async (station: Station) => {
       nextVisits = current.filter(v => v.id !== existingVisit.id);
       toast({
         title: "Visit removed",
-        description: `Removed visit to ${station.name}`
+        description: `Removed visit to ${station.displayName}`
       });
     } else {
       // Add visit using mapping to DB station UUID if available; otherwise fallback to TfL ID only
@@ -558,7 +560,7 @@ const toggleStationVisit = async (station: Station) => {
         nextVisits = [...current, added];
         toast({
           title: 'Station visited!',
-          description: `Added ${station.name} to your visited stations`,
+          description: `Added ${station.displayName} to your visited stations`,
         });
       }
     }

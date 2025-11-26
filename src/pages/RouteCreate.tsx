@@ -245,7 +245,7 @@ const RouteCreate = () => {
 
   const getStationName = (stationId: string) => {
     const station = stations.find((s) => s.id === stationId);
-    return station ? station.name : stationId;
+    return station ? station.displayName : stationId;
   };
 
   const handleStationAdd = (stationId: string) => {
@@ -384,7 +384,7 @@ const RouteCreate = () => {
                               <SelectContent>
                                  {stations.map((station) => (
                                    <SelectItem key={station.id} value={station.id}>
-                                     {station.name}
+                                     {station.displayName}
                                    </SelectItem>
                                  ))}
                               </SelectContent>
@@ -409,7 +409,7 @@ const RouteCreate = () => {
                               <SelectContent>
                                  {stations.map((station) => (
                                    <SelectItem key={station.id} value={station.id}>
-                                     {station.name}
+                                     {station.displayName}
                                    </SelectItem>
                                  ))}
                               </SelectContent>

@@ -58,7 +58,7 @@ const ActivityDetail = () => {
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
     const station = stations.find(s => s.id === tflId);
-    return station ? station.name : tflId;
+    return station ? station.displayName : tflId;
   };
 
   // Auth guard and navigation logging
@@ -194,7 +194,7 @@ const ActivityDetail = () => {
 
       toast({
         title: "Journey completed",
-        description: "Activity finished" + (lastVisited ? ` at ${lastVisited.display_name}` : "")
+        description: "Activity finished" + (lastVisited ? ` at ${getStationName(lastVisited.station_tfl_id)}` : "")
       });
 
       refetchActivityState();
@@ -436,7 +436,7 @@ const ActivityDetail = () => {
                           {visit.sequence}
                         </div>
                         <div>
-                          <div className="font-medium">{visit.display_name}</div>
+                          <div className="font-medium">{getStationName(visit.station_tfl_id)}</div>
                           <div className="text-xs text-muted-foreground">
                             Visited {new Date(visit.visited_at).toLocaleTimeString()}
                           </div>
@@ -466,7 +466,7 @@ const ActivityDetail = () => {
                             {station.sequence}
                           </div>
                           <div>
-                            <div className="font-medium">{station.display_name}</div>
+                            <div className="font-medium">{getStationName(station.station_tfl_id)}</div>
                           </div>
                         </div>
                         <Badge variant={station.status === 'verified' ? 'default' : 'outline'} className={station.status === 'verified' ? 'bg-red-500 text-white' : 'bg-blue-100 text-blue-700 border-blue-300'}>

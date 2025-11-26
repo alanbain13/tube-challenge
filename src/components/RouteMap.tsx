@@ -468,7 +468,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       const visitStatus = getStationVisitStatus(station.id);
       const isSelected = selectedStations.includes(station.id) || activityStations.includes(station.id);
       
-      console.log(`🗺️ Updating station ${station.name}: sequence=${sequenceNumber}, selected=${isSelected}`);
+      console.log(`🗺️ Updating station ${station.displayName}: sequence=${sequenceNumber}, selected=${isSelected}`);
       
       return {
         type: 'Feature' as const,
