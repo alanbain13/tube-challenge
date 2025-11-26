@@ -171,7 +171,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
 
   return (
     <>
-      <div className="flex items-center gap-1.5 mt-2">
+      <div className="grid grid-cols-3 gap-2 mt-2">
       {displayThumbs.map((item, idx) => {
           const displayUrl = item.thumbUrl || generatedThumbs.get(item.id);
           console.log('[RoundelGallery] Rendering thumb', { idx, stationName: item.stationName, hasThumb: !!item.thumbUrl, hasGenerated: generatedThumbs.has(item.id), needsGen: item.needsGeneration });
@@ -179,7 +179,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
           return (
             <div 
               key={item.id}
-              className="relative w-10 h-10 rounded-md border border-border/50 overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+              className="relative aspect-square rounded-md border border-border/50 overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary transition-all"
               onClick={() => openLightbox(idx)}
             >
               {displayUrl ? (
@@ -193,7 +193,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
                   <img 
                     src={roundelFilled}
                     alt={item.stationName}
-                    className="w-5 h-5 opacity-30"
+                    className="w-1/3 h-1/3 opacity-30"
                   />
                 </div>
               )}
@@ -211,12 +211,12 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
         {placeholders.map((_, idx) => (
           <div 
             key={`placeholder-${idx}`}
-            className="relative w-10 h-10 rounded-md border border-border/30 bg-muted/30 flex items-center justify-center"
+            className="relative aspect-square rounded-md border border-border/30 bg-muted/30 flex items-center justify-center"
           >
             <img 
               src={roundelFilled}
               alt="No photo yet"
-              className="w-4 h-4 opacity-20"
+              className="w-1/3 h-1/3 opacity-20"
             />
           </div>
         ))}
