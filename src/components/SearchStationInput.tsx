@@ -50,7 +50,7 @@ const SearchStationInput: React.FC<SearchStationInputProps> = ({
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               {selectedStation ? (
-                <span>{selectedStation.name}</span>
+                <span>{selectedStation.displayName}</span>
               ) : (
                 <span className="text-muted-foreground">{placeholder}</span>
               )}
@@ -77,12 +77,12 @@ const SearchStationInput: React.FC<SearchStationInputProps> = ({
                   >
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
-                      <div>
-                        <div className="font-medium">{station.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          Zone {station.zone} • {station.lines.map(l => l.name).join(', ')}
-                        </div>
-                      </div>
+              <div>
+                <div className="font-medium">{station.displayName}</div>
+                <div className="text-sm text-muted-foreground">
+                  Zone {station.zone} • {station.lines.map(l => l.name).join(', ')}
+                </div>
+              </div>
                     </div>
                     {selectedStation?.id === station.id && (
                       <Check className="h-4 w-4" />
