@@ -184,15 +184,16 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
 
   // Generate cache key
   const getCacheKey = (): string => {
+    const SNAPSHOT_VERSION = 'v2-color';
     if (type === 'activity') {
       const visitedCount = visitedStations.length;
       const plannedCount = visitedStations.length + remainingStations.length;
       const lastVisit = lastVisitAt || '0';
-      return `activity:${id}:${lastVisit}:${visitedCount}:${plannedCount}`;
+      return `activity:${id}:${SNAPSHOT_VERSION}:${lastVisit}:${visitedCount}:${plannedCount}`;
     } else {
       const sequenceLength = stationSequence?.length || 0;
       const updated = updatedAt || '0';
-      return `route:${id}:${updated}:${sequenceLength}`;
+      return `route:${id}:${SNAPSHOT_VERSION}:${updated}:${sequenceLength}`;
     }
   };
 
@@ -226,7 +227,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       mapboxgl.accessToken = mapboxToken;
       const map = new mapboxgl.Map({
         container: offscreenContainer,
-        style: 'mapbox://styles/mapbox/light-v11',
+        style: 'mapbox://styles/mapbox/streets-v12',
         center: [-0.1276, 51.5074], // London center
         zoom: 10,
         preserveDrawingBuffer: true
@@ -249,8 +250,8 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
                 source: 'mini-route',
                 filter: ['==', ['get', 'type'], 'visited'],
                 paint: {
-                  'line-color': '#9ca3af', // light grey
-                  'line-width': 2
+                  'line-color': '#ef4444', // red for visited
+                  'line-width': 3
                 }
               });
             }
@@ -264,8 +265,8 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
                 ['==', ['get', 'type'], 'planned'] : 
                 ['==', ['get', 'type'], 'route'],
               paint: {
-                'line-color': '#9ca3af', // light grey
-                'line-width': 2,
+                'line-color': type === 'route' ? '#8b5cf6' : '#3b82f6', // purple for routes, blue for planned
+                'line-width': 3,
                 'line-dasharray': [2, 2]
               }
             });
