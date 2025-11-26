@@ -667,6 +667,25 @@ const ActivityCheckin = () => {
       await queryClient.refetchQueries({ queryKey: ["activity_state", activityId] });
       
       console.log('✅ Query invalidations and refetch complete');
+
+      // Clear UI state
+      setCapturedImage(null);
+      setVerificationError(null);
+      setSuggestions(null);
+      setGeofenceError(null);
+
+      // Show success toast
+      const stationName = stations.find(s => s.id === data.station_tfl_id)?.displayName || data.station_tfl_id;
+      toast({
+        title: "✅ Check-in successful",
+        description: `Checked in at ${stationName} (#${data.seq_actual})`,
+        duration: 5000,
+      });
+
+      // Navigate back to activity detail
+      setTimeout(() => {
+        navigate(`/activities/${activityId}`);
+      }, 250);
     },
     onError: (error: any, variables) => {
       console.error("🧭 Free-Order Checkin: mutation failed -", error);
@@ -827,14 +846,35 @@ const ActivityCheckin = () => {
     }
   };
 
-  const handleSuggestionSelect = (suggestionTflId: string) => {
-    if (capturedImage) {
+  const handleSuggestionSelect = async (suggestionTflId: string) => {
+    if (!capturedImage || !user) return;
+    
+    setIsVerifying(true);
+    try {
+      // Upload image first
+      const fileName = `${user.id}/${activityId}/${Date.now()}-roundel.jpg`;
+      const uploadResult = await uploadImage(capturedImage, fileName);
+      
+      if (!uploadResult) {
+        throw new Error('Failed to upload image');
+      }
+      
+      // Now call mutation with uploaded URLs
       checkinMutation.mutate({
         stationTflId: suggestionTflId,
         checkinType: 'image',
-        imageUrl: capturedImage,
+        imageUrl: uploadResult.imageUrl,
+        thumbUrl: uploadResult.thumbUrl,
         verificationResult: { success: true, user_selected: true }
       });
+    } catch (error) {
+      console.error('Suggestion select failed:', error);
+      toast({
+        title: "Check-in failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive"
+      });
+      setIsVerifying(false);
     }
   };
 
