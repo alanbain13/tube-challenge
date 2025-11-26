@@ -3,7 +3,9 @@ import { Station } from "@/hooks/useStations";
 export interface ResolvedStation {
   station_id: string;        // Our primary key (TfL ID from stations data)
   tfl_id: string;           // TfL ID for reference
-  display_name: string;     // Clean display name (e.g., "Euston")
+  display_name: string;     // Unique display name with line disambiguation (e.g., "Paddington (Bakerloo, District)")
+  base_name: string;        // Base station name without disambiguation
+  lines: string[];          // List of line names
   coords: { lat: number; lon: number };
   source: "ocr" | "gps" | "manual";
   matching_rule: string;    // Which rule matched for logs
@@ -147,7 +149,9 @@ export function resolveStation(
   const result = {
     station_id: winner.station.id,
     tfl_id: winner.station.id, // In our data structure, id IS the TfL ID
-    display_name: winner.station.name,
+    display_name: winner.station.displayName || winner.station.name,
+    base_name: winner.station.name,
+    lines: winner.station.lines.map(l => l.name),
     coords: {
       lat: winner.station.coordinates[1],
       lon: winner.station.coordinates[0]

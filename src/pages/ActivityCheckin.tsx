@@ -73,7 +73,7 @@ const ActivityCheckin = () => {
   const [isCamera, setIsCamera] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string}> | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{tfl_id: string, name: string, displayName: string, lines: string[]}> | null>(null);
   const [geofenceError, setGeofenceError] = useState<{ 
     message: string; 
     code: string; 
@@ -305,7 +305,12 @@ const ActivityCheckin = () => {
         if (resolverResult.suggestions && resolverResult.suggestions.length > 0) {
           const suggestionNames = resolverResult.suggestions.slice(0, 3).map(s => s.name).join(', ');
           errorMessage += ` Did you mean: ${suggestionNames}?`;
-          setSuggestions(resolverResult.suggestions.slice(0, 3).map(s => ({ tfl_id: s.id, name: s.name })));
+          setSuggestions(resolverResult.suggestions.slice(0, 3).map(s => ({ 
+            tfl_id: s.id, 
+            name: s.name,
+            displayName: s.displayName || s.name,
+            lines: s.lines.map(l => l.name)
+          })));
         }
         
         throw new Error(errorMessage);
@@ -1098,9 +1103,14 @@ const ActivityCheckin = () => {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => handleSuggestionSelect(suggestion.tfl_id)}
-                                  className="text-xs"
+                                  className="text-xs flex flex-col items-start h-auto py-2"
                                 >
-                                  {suggestion.name}
+                                  <span className="font-medium">{suggestion.displayName}</span>
+                                  {suggestion.lines.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {suggestion.lines.join(', ')}
+                                    </span>
+                                  )}
                                 </Button>
                               ))}
                             </div>

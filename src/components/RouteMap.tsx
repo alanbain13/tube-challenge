@@ -272,14 +272,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
           
           return {
             type: 'Feature' as const,
-            properties: {
-              id: station.id,
-              name: station.name,
-              zone: station.zone,
-              sequence: sequenceNumber,
-              isSelected: isSelected,
-              visitStatus: visitStatus
-            },
+          properties: {
+            id: station.id,
+            name: station.displayName, // Use displayName for map labels
+            zone: station.zone,
+            sequence: sequenceNumber,
+            isSelected: isSelected,
+            visitStatus: visitStatus
+          },
             geometry: {
               type: 'Point' as const,
               coordinates: station.coordinates
@@ -474,7 +474,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         type: 'Feature' as const,
         properties: {
           id: station.id,
-          name: station.name,
+          name: station.displayName, // Use displayName for map labels
           zone: station.zone,
           sequence: sequenceNumber,
           isSelected: isSelected,
