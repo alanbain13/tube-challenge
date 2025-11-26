@@ -259,7 +259,7 @@ const Routes = () => {
                            {getStationName(route.start_station_tfl_id)} → {getStationName(route.end_station_tfl_id)}
                          </span>
                        </div>
-                      {route.estimated_duration_minutes && (
+                      {!!route.estimated_duration_minutes && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />
                           <span>{route.estimated_duration_minutes} minutes</span>
@@ -269,7 +269,7 @@ const Routes = () => {
                         Created {new Date(route.created_at).toLocaleDateString()}
                       </div>
                     </div>
-                     <div className="flex gap-2 mt-4">
+                     <div className="flex flex-wrap gap-2 mt-4">
                         <Button
                           size="sm"
                           variant="outline"

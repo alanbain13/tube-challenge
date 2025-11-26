@@ -292,7 +292,7 @@ const Activities = () => {
                             <span>No route defined</span>
                           </div>
                         )}
-                        {activity.distance_km && (
+                        {!!activity.distance_km && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{Number(activity.distance_km).toFixed(1)} km</span>
                           </div>
@@ -301,7 +301,7 @@ const Activities = () => {
                           {activity.status === 'active' ? 'Updated' : 'Created'} {new Date(activity.started_at).toLocaleDateString()}
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-4">
+                      <div className="flex flex-wrap gap-2 mt-4">
                         <Button
                           size="sm"
                           variant="outline"
