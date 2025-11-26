@@ -708,10 +708,10 @@ const ActivityCheckin = () => {
           description: "Please allow camera access or try uploading a photo instead.",
           variant: "destructive"
         });
-      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      } else if (error.message.includes('network') || error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
         toast({
-          title: "Connection issue",
-          description: "Please check your internet connection and try again.",
+          title: "Connection problem",
+          description: "Check your internet connection and try again.",
           variant: "destructive"
         });
       } else if (error.message.includes('geofence')) {
@@ -720,11 +720,29 @@ const ActivityCheckin = () => {
           description: "You don't appear to be at this station. Photo saved as pending for review.",
           variant: "destructive"
         });
+      } else if (error.message.includes('constraint') || error.message.includes('violates')) {
+        // Database constraint errors
+        toast({
+          title: "Unable to save check-in",
+          description: "There was an issue recording your visit. Please try again.",
+          variant: "destructive"
+        });
+      } else if (error.message.includes('Edge Function') || error.message.includes('non-2xx')) {
+        // Edge function errors
+        toast({
+          title: "Service temporarily unavailable",
+          description: "Please try again in a moment.",
+          variant: "destructive"
+        });
       } else {
         // Generic fallback with helpful message
+        const friendlyMessage = error.message?.length > 100 
+          ? "Something went wrong. Please try again." 
+          : error.message || "Unable to complete check-in. Please try again.";
+          
         toast({
           title: "Check-in unsuccessful",
-          description: error.message || "Something went wrong. Please try again or contact support if this continues.",
+          description: friendlyMessage,
           variant: "destructive"
         });
       }
