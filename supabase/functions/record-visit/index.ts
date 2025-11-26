@@ -333,11 +333,6 @@ serve(async (req) => {
       ai_confidence: visitData.ai_confidence,
       verification_image_url: visitData.verification_image_url,
       
-      // Resolver metadata (Implementation Rule 4)
-      ocr_text: visitData.ocr_result?.station_text_raw,
-      resolver_rule: visitData.resolver_rule,
-      resolver_score: visitData.resolver_score,
-      
       // Context
       checkin_type: visitData.checkin_type || 'image',
       is_simulation: visitData.simulation_mode || false

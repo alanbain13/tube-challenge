@@ -668,22 +668,29 @@ const ActivityCheckin = () => {
       
       // Detect offline state
       if (!navigator.onLine) {
+        toast({
+          title: "You're offline",
+          description: "Check-in will be saved when you're back online.",
+          variant: "destructive"
+        });
         return;
       }
       
       // Handle duplicate check-in gracefully
-      if (error.message.includes('duplicate key value') || error.message.includes('uniq_visits_user_activity_station')) {
+      if (error.message.includes('duplicate key value') || 
+          error.message.includes('uniq_visits_user_activity_station') ||
+          error.message.includes('Already checked in')) {
         const resolvedStation = stations.find(s => s.id === variables.stationTflId);
         const stationName = resolvedStation?.name || 'this station';
         
         // Friendly duplicate error with CTA
-        setVerificationError(`Already checked in to ${stationName} for this activity.`);
+        setVerificationError(`You've already checked in to ${stationName}`);
         
         toast({
           title: "Already checked in",
-          description: `Already checked in to ${stationName} for this activity.`,
+          description: `You've already checked in to ${stationName} for this activity.`,
           variant: "destructive",
-          duration: 6000, // Keep visible longer for user to see the action
+          duration: 6000,
           action: (
             <Button 
               variant="outline" 
@@ -695,10 +702,29 @@ const ActivityCheckin = () => {
             </Button>
           )
         });
-      } else {
+      } else if (error.message.includes('Camera') || error.message.includes('camera')) {
         toast({
-          title: "Check-in failed",
-          description: error.message || "An unexpected error occurred",
+          title: "Camera issue",
+          description: "Please allow camera access or try uploading a photo instead.",
+          variant: "destructive"
+        });
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        toast({
+          title: "Connection issue",
+          description: "Please check your internet connection and try again.",
+          variant: "destructive"
+        });
+      } else if (error.message.includes('geofence')) {
+        toast({
+          title: "Location mismatch",
+          description: "You don't appear to be at this station. Photo saved as pending for review.",
+          variant: "destructive"
+        });
+      } else {
+        // Generic fallback with helpful message
+        toast({
+          title: "Check-in unsuccessful",
+          description: error.message || "Something went wrong. Please try again or contact support if this continues.",
           variant: "destructive"
         });
       }
