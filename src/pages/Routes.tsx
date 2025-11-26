@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { MiniMapSnapshot } from "@/components/MiniMapSnapshot";
-import { RoundelThumbnailStrip } from "@/components/RoundelThumbnailStrip";
 
 const Routes = () => {
   const { user, loading } = useAuth();
@@ -247,15 +246,12 @@ const Routes = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div>
-                        <MiniMapSnapshot
-                          type="route"
-                          id={route.id}
-                          stationSequence={stationSequence}
-                          updatedAt={route.updated_at}
-                        />
-                        <RoundelThumbnailStrip type="route" id={route.id} />
-                      </div>
+                      <MiniMapSnapshot
+                        type="route"
+                        id={route.id}
+                        stationSequence={stationSequence}
+                        updatedAt={route.updated_at}
+                      />
                       <div className="space-y-3 mt-4">
                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                          <MapPin className="w-4 h-4" />
