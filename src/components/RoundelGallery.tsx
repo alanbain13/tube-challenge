@@ -30,6 +30,8 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [generatedThumbs, setGeneratedThumbs] = useState<Map<string, string>>(new Map());
+  const [fullImageUrls, setFullImageUrls] = useState<Map<string, string>>(new Map());
+  const [loadingFullImage, setLoadingFullImage] = useState(false);
 
   const { data: galleryItems = [], isLoading: isLoadingGallery } = useQuery<GalleryItem[]>({
     queryKey: ['roundel-gallery', type, id],
@@ -39,7 +41,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
         // For activities: query station_visits
         const { data, error } = await supabase
           .from('station_visits')
-          .select('id, station_tfl_id, thumb_url, verification_image_url, captured_at')
+          .select('id, station_tfl_id, thumb_url, captured_at')
           .eq('activity_id', id)
           .in('status', ['verified', 'pending'])
           .order('captured_at', { ascending: false });
@@ -51,11 +53,11 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
         return (data || []).map(visit => ({
           id: visit.id,
           thumbUrl: visit.thumb_url,
-          fullImageUrl: visit.verification_image_url,
+          fullImageUrl: null, // Will be loaded on demand
           stationName: stations.find(s => s.id === visit.station_tfl_id)?.displayName || visit.station_tfl_id,
           capturedAt: visit.captured_at,
           stationTflId: visit.station_tfl_id,
-          needsGeneration: !visit.thumb_url && !!visit.verification_image_url
+          needsGeneration: !visit.thumb_url // Will fetch image when needed
         }));
       } else {
         // For routes: get linked activities and their photos
@@ -72,7 +74,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
         
         const { data: visits, error: visitsError } = await supabase
           .from('station_visits')
-          .select('id, station_tfl_id, thumb_url, verification_image_url, captured_at')
+          .select('id, station_tfl_id, thumb_url, captured_at')
           .in('activity_id', activityIds)
           .in('status', ['verified', 'pending'])
           .order('captured_at', { ascending: false });
@@ -82,11 +84,11 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
         return (visits || []).map(visit => ({
           id: visit.id,
           thumbUrl: visit.thumb_url,
-          fullImageUrl: visit.verification_image_url,
+          fullImageUrl: null, // Will be loaded on demand
           stationName: stations.find(s => s.id === visit.station_tfl_id)?.displayName || visit.station_tfl_id,
           capturedAt: visit.captured_at,
           stationTflId: visit.station_tfl_id,
-          needsGeneration: !visit.thumb_url && !!visit.verification_image_url
+          needsGeneration: !visit.thumb_url // Will fetch image when needed
         }));
       }
     },
@@ -94,7 +96,34 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
     staleTime: 30000
   });
 
-  // Generate missing thumbnails in parallel
+  // Lazy load full image URL only when needed
+  const loadFullImageUrl = async (visitId: string): Promise<string | null> => {
+    if (fullImageUrls.has(visitId)) {
+      return fullImageUrls.get(visitId) || null;
+    }
+
+    console.log('[RoundelGallery] Lazy loading full image for visit:', visitId);
+    
+    const { data, error } = await supabase
+      .from('station_visits')
+      .select('verification_image_url')
+      .eq('id', visitId)
+      .single();
+
+    if (error) {
+      console.error('[RoundelGallery] Failed to load full image:', error);
+      return null;
+    }
+
+    if (data?.verification_image_url) {
+      setFullImageUrls(prev => new Map(prev).set(visitId, data.verification_image_url));
+      return data.verification_image_url;
+    }
+
+    return null;
+  };
+
+  // Generate missing thumbnails in parallel (lazy loading images as needed)
   useEffect(() => {
     const generateMissingThumbnails = async () => {
       const itemsNeedingGeneration = galleryItems.filter(item => 
@@ -114,9 +143,12 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
             return { id: item.id, dataUrl: cached, name: item.stationName };
           }
 
-          // Generate if not cached
-          if (item.fullImageUrl) {
-            const generated = await generateThumbnail(item.fullImageUrl);
+          // Lazy load the full image URL
+          const fullImageUrl = await loadFullImageUrl(item.id);
+          
+          // Generate if we got the URL
+          if (fullImageUrl) {
+            const generated = await generateThumbnail(fullImageUrl);
             await saveThumbnailToCache(item.id, generated);
             return { id: item.id, dataUrl: generated, name: item.stationName };
           }
@@ -173,6 +205,19 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
     setCurrentIndex((prev) => (prev < galleryItems.length - 1 ? prev + 1 : 0));
   };
 
+  // Load full image when lightbox opens
+  useEffect(() => {
+    if (lightboxOpen && galleryItems[currentIndex]) {
+      const currentItem = galleryItems[currentIndex];
+      if (!fullImageUrls.has(currentItem.id)) {
+        setLoadingFullImage(true);
+        loadFullImageUrl(currentItem.id).finally(() => {
+          setLoadingFullImage(false);
+        });
+      }
+    }
+  }, [lightboxOpen, currentIndex, galleryItems]);
+
   // Keyboard navigation
   useEffect(() => {
     if (!lightboxOpen) return;
@@ -188,6 +233,7 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
   }, [lightboxOpen, galleryItems.length]);
 
   const currentItem = galleryItems[currentIndex];
+  const displayFullImage = currentItem ? fullImageUrls.get(currentItem.id) : null;
 
   return (
     <>
@@ -244,12 +290,24 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
             </Button>
 
             {/* Full-size image */}
-            {currentItem?.fullImageUrl && (
+            {loadingFullImage ? (
+              <div className="w-full h-[80vh] flex items-center justify-center">
+                <div className="text-white text-center">
+                  <p className="text-lg">Loading image...</p>
+                </div>
+              </div>
+            ) : displayFullImage ? (
               <img 
-                src={currentItem.fullImageUrl} 
+                src={displayFullImage} 
                 alt={currentItem.stationName}
                 className="w-full h-auto max-h-[80vh] object-contain"
               />
+            ) : (
+              <div className="w-full h-[80vh] flex items-center justify-center">
+                <div className="text-white/50 text-center">
+                  <p>Image not available</p>
+                </div>
+              </div>
             )}
             
             {/* Navigation arrows */}
