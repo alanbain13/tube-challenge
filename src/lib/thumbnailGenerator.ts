@@ -7,8 +7,13 @@ const MAX_THUMB_WIDTH = 320;
 
 export async function generateThumbnail(imageUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Handle data URIs without crossOrigin
+    const isDataUri = imageUrl.startsWith('data:');
+    
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (!isDataUri) {
+      img.crossOrigin = 'anonymous';
+    }
     
     img.onload = () => {
       try {
