@@ -94,29 +94,49 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
     staleTime: 30000
   });
 
-  // Generate missing thumbnails asynchronously
+  // Generate missing thumbnails in parallel
   useEffect(() => {
     const generateMissingThumbnails = async () => {
-      for (const item of galleryItems) {
-        if (item.needsGeneration && !generatedThumbs.has(item.id)) {
-          try {
-            const cached = await getThumbnailFromCache(item.id);
-            if (cached) {
-              setGeneratedThumbs(prev => new Map(prev).set(item.id, cached));
-              continue;
-            }
+      const itemsNeedingGeneration = galleryItems.filter(item => 
+        item.needsGeneration && !generatedThumbs.has(item.id)
+      );
 
-            if (item.fullImageUrl) {
-              const generated = await generateThumbnail(item.fullImageUrl);
-              await saveThumbnailToCache(item.id, generated);
-              setGeneratedThumbs(prev => new Map(prev).set(item.id, generated));
-            }
-          } catch (error) {
-            console.warn('[Gallery.Thumb] Generation failed, will use placeholder:', item.id, error);
-            // Don't retry - just leave it to show the placeholder
+      if (itemsNeedingGeneration.length === 0) return;
+
+      console.log('[RoundelGallery] Generating', itemsNeedingGeneration.length, 'thumbnails in parallel');
+
+      // Process all thumbnails in parallel
+      const results = await Promise.allSettled(
+        itemsNeedingGeneration.map(async (item) => {
+          // Check cache first
+          const cached = await getThumbnailFromCache(item.id);
+          if (cached) {
+            return { id: item.id, dataUrl: cached, name: item.stationName };
           }
-        }
-      }
+
+          // Generate if not cached
+          if (item.fullImageUrl) {
+            const generated = await generateThumbnail(item.fullImageUrl);
+            await saveThumbnailToCache(item.id, generated);
+            return { id: item.id, dataUrl: generated, name: item.stationName };
+          }
+          throw new Error('No image URL');
+        })
+      );
+
+      // Update state with all successful results at once
+      setGeneratedThumbs(prev => {
+        const newMap = new Map(prev);
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            newMap.set(result.value.id, result.value.dataUrl);
+            console.log('[Gallery.Thumb] Cached:', result.value.name);
+          } else {
+            console.warn('[Gallery.Thumb] Failed:', result.reason);
+          }
+        });
+        return newMap;
+      });
     };
 
     if (galleryItems.length > 0) {
@@ -207,19 +227,6 @@ export const RoundelGallery = ({ type, id }: RoundelGalleryProps) => {
             </div>
           );
         })}
-        
-        {placeholders.map((_, idx) => (
-          <div 
-            key={`placeholder-${idx}`}
-            className="relative aspect-square rounded-md border border-border/30 bg-muted/30 flex items-center justify-center"
-          >
-            <img 
-              src={roundelFilled}
-              alt="No photo yet"
-              className="w-1/3 h-1/3 opacity-20"
-            />
-          </div>
-        ))}
       </div>
 
       {/* Lightbox Dialog */}
