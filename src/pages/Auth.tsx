@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const [email, setEmail] = useState('');
@@ -14,6 +16,38 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Handle auth callback (email verification, password reset)
+  useEffect(() => {
+    const handleAuthCallback = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      
+      if (type === 'recovery') {
+        // User clicked password reset link - show success message
+        toast({
+          title: "Password reset link verified",
+          description: "You can now update your password below."
+        });
+        // Clear the hash
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+      
+      if (accessToken) {
+        // Email verification successful - clear hash and show message
+        window.history.replaceState({}, document.title, window.location.pathname);
+        toast({
+          title: "Email verified!",
+          description: "You can now sign in to your account."
+        });
+      }
+    };
+    
+    handleAuthCallback();
+  }, [toast]);
 
   useEffect(() => {
     if (user) {
@@ -39,6 +73,37 @@ export default function Auth() {
     setLoading(true);
     
     await signUp(email, password, displayName);
+    
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({
+        title: "Email required",
+        description: "Please enter your email address first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Check your email",
+        description: "Password reset link has been sent to your email."
+      });
+    }
     
     setLoading(false);
   };
@@ -73,7 +138,18 @@ export default function Auth() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="signin-password">Password</Label>
+                    <Button 
+                      variant="link" 
+                      type="button" 
+                      onClick={handleForgotPassword}
+                      className="p-0 h-auto text-sm"
+                      disabled={loading}
+                    >
+                      Forgot password?
+                    </Button>
+                  </div>
                   <Input
                     id="signin-password"
                     type="password"

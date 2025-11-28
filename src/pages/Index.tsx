@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ProfileSetup from "@/components/ProfileSetup";
 const Index = () => {
-  const { user, profile, loading, signOut } = useAuth();
+  const { user, profile, loading, profileLoading, signOut } = useAuth();
   const { stations } = useStations();
   const navigate = useNavigate();
 
@@ -156,6 +156,15 @@ const Index = () => {
 
   if (!user) {
     return null;
+  }
+
+  // Show loading state while profile is being fetched
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
+        <p className="text-lg">Loading profile...</p>
+      </div>
+    );
   }
 
   // Show profile setup if user hasn't completed their profile
