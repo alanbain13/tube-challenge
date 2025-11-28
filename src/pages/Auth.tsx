@@ -72,7 +72,35 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     
-    await signUp(email, password, displayName);
+    // Call Supabase directly to check the response
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+        data: { display_name: displayName }
+      }
+    });
+    
+    if (error) {
+      toast({
+        title: "Sign up failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else if (data?.user?.identities?.length === 0) {
+      // User already exists - Supabase returns empty identities array
+      toast({
+        title: "Account already exists",
+        description: "This email is already registered. Please sign in instead, or use 'Forgot password' if you need to reset your password.",
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Check your email",
+        description: "Please check your email for a confirmation link to complete your registration."
+      });
+    }
     
     setLoading(false);
   };

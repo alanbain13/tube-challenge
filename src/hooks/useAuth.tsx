@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -35,19 +35,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
   const { toast } = useToast();
+  const fetchingRef = useRef(false);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, retryCount = 0) => {
+    if (fetchingRef.current && retryCount === 0) return; // Prevent duplicate initial calls
+    fetchingRef.current = true;
+    
     setProfileLoading(true);
-    const { data, error } = await (supabase as any)
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    
+    try {
+      const { data, error } = await (supabase as any)
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-    if (!error && data) {
-      setProfile(data);
+      if (error) {
+        console.error('Profile fetch error:', error.code, error.message);
+        
+        // PGRST116 = "No rows returned" - user genuinely has no profile
+        if (error.code === 'PGRST116') {
+          setProfile(null);
+          setProfileLoading(false);
+          fetchingRef.current = false;
+          return;
+        }
+        
+        // For other errors (network, timeout), retry up to 2 times
+        if (retryCount < 2) {
+          console.log(`Retrying profile fetch (attempt ${retryCount + 2})...`);
+          setTimeout(() => fetchProfile(userId, retryCount + 1), 500);
+          return;
+        }
+        
+        // After retries exhausted, log but don't leave user stuck
+        console.error('Profile fetch failed after retries');
+      }
+      
+      // Set profile (even if null after error, to avoid infinite loading)
+      setProfile(data ?? null);
+    } catch (err) {
+      console.error('Unexpected profile fetch error:', err);
+      setProfile(null);
     }
+    
     setProfileLoading(false);
+    if (retryCount === 0) {
+      fetchingRef.current = false;
+    }
   };
 
   const refreshProfile = async () => {
@@ -66,9 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Fetch profile when user signs in
         if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-          }, 0);
+          fetchProfile(session.user.id);
         } else {
           setProfile(null);
           setProfileLoading(false);
