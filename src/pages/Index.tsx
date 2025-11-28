@@ -146,7 +146,7 @@ const Index = () => {
   const isLoadingAny = visitsLoading || stationsLoading || activitiesLoading;
 
   // Safe early returns after all hooks are declared
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
         <p className="text-lg">Loading...</p>
@@ -154,17 +154,9 @@ const Index = () => {
     );
   }
 
+  // CRITICAL: Always check for user first before any profile checks
   if (!user) {
     return null;
-  }
-
-  // Show loading state while profile is being fetched
-  if (profileLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
-        <p className="text-lg">Loading profile...</p>
-      </div>
-    );
   }
 
   // Show profile setup if user hasn't completed their profile (requires both name and avatar)
@@ -176,9 +168,18 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
       <div className="container mx-auto px-4 py-8">
         <header className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Public Transport Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, {profile.display_name || user.email}!</p>
+          <div className="flex items-center gap-4">
+            {profile.avatar_url && (
+              <img 
+                src={profile.avatar_url} 
+                alt={profile.display_name || 'Profile'} 
+                className="w-12 h-12 rounded-full border-2 border-primary"
+              />
+            )}
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Public Transport Dashboard</h1>
+              <p className="text-muted-foreground">Welcome back, {profile.display_name || user.email}!</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate('/routes/create')}>Create Route</Button>
