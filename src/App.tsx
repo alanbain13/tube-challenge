@@ -17,6 +17,8 @@ import ActivityMap from "@/pages/ActivityMap";
 import RoutesPage from "@/pages/Routes";
 import ActivitiesPage from "@/pages/Activities";
 import ActivityDetail from "@/pages/ActivityDetail";
+import ProfileSettings from "@/pages/ProfileSettings";
+import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +44,8 @@ const App = () => (
             <Route path="/activities/:id" element={<ActivityDetail />} />
             <Route path="/activities/:id/edit" element={<ActivityEdit />} />
             <Route path="/activities/:id/map" element={<ActivityMap />} />
+            <Route path="/settings" element={<ProfileSettings />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
