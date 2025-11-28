@@ -173,8 +173,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Clear states first to prevent showing profile screen during sign out
+    setUser(null);
+    setSession(null);
     setProfile(null);
+    setProfileLoading(false);
+    
+    await supabase.auth.signOut();
+    
     toast({
       title: "Signed out",
       description: "You have been signed out successfully."
