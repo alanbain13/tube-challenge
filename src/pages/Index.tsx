@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -7,10 +7,13 @@ import { useStations } from "@/hooks/useStations";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ProfileSetup from "@/components/ProfileSetup";
+import { Tutorial } from "@/components/Tutorial";
+
 const Index = () => {
   const { user, profile, loading, profileLoading, signOut } = useAuth();
   const { stations } = useStations();
   const navigate = useNavigate();
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -159,6 +162,23 @@ const Index = () => {
     return null;
   }
 
+  // Check if user has seen the tutorial
+  useEffect(() => {
+    if (profile) {
+      const hasSeenTutorial = localStorage.getItem(`tutorial_seen_${user?.id}`);
+      if (!hasSeenTutorial) {
+        setShowTutorial(true);
+      }
+    }
+  }, [profile, user]);
+
+  const handleTutorialComplete = () => {
+    if (user?.id) {
+      localStorage.setItem(`tutorial_seen_${user.id}`, 'true');
+    }
+    setShowTutorial(false);
+  };
+
   // Show profile setup if user hasn't completed their profile (requires both name and avatar)
   if (!profile || !profile.display_name || !profile.avatar_url) {
     return <ProfileSetup userId={user.id} onComplete={() => window.location.reload()} />;
@@ -182,9 +202,9 @@ const Index = () => {
             </div>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/settings')}>Settings</Button>
             <Button variant="outline" onClick={() => navigate('/routes/create')}>Create Route</Button>
-            <Button variant="outline" onClick={() => navigate('/map')}>Open Map</Button>
-            <Button variant="outline" onClick={signOut}>Sign Out</Button>
+            <Button onClick={() => navigate('/activities/new')}>New Activity</Button>
           </div>
         </header>
 
@@ -354,6 +374,7 @@ const Index = () => {
         </Card>
       </main>
       </div>
+      <Tutorial open={showTutorial} onComplete={handleTutorialComplete} />
     </div>
   );
 };

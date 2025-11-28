@@ -7,6 +7,7 @@ interface Profile {
   id: string;
   user_id: string;
   display_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   home_station: string | null;
   created_at: string;
