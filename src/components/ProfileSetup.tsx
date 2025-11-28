@@ -104,7 +104,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
         display_name: displayName.trim(),
         home_station: homeStation.trim() || null,
         avatar_url: selectedAvatar
-      });
+      }, { onConflict: 'user_id' });
 
     if (error) {
       toast({
