@@ -78,7 +78,8 @@ export default function Auth() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { display_name: displayName }
+        // Store display_name in metadata for profile trigger, but ProfileSetup will still be shown for avatar selection
+        data: { display_name: displayName || null }
       }
     });
     

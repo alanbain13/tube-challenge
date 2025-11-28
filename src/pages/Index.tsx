@@ -167,8 +167,8 @@ const Index = () => {
     );
   }
 
-  // Show profile setup if user hasn't completed their profile
-  if (!profile || !profile.display_name) {
+  // Show profile setup if user hasn't completed their profile (requires both name and avatar)
+  if (!profile || !profile.display_name || !profile.avatar_url) {
     return <ProfileSetup userId={user.id} onComplete={() => window.location.reload()} />;
   }
 
