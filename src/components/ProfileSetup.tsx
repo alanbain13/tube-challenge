@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,30 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
   const [selectedAvatar, setSelectedAvatar] = useState(PLACEHOLDER_AVATARS[0]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  
+  // Load existing profile data if available
+  useEffect(() => {
+    const loadProfile = async () => {
+      const { data, error } = await (supabase as any)
+        .from('profiles')
+        .select('display_name, home_station, avatar_url')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (data) {
+        setDisplayName(data.display_name || '');
+        setHomeStation(data.home_station || '');
+        if (data.avatar_url) {
+          setSelectedAvatar(data.avatar_url);
+        }
+      }
+      setLoading(false);
+    };
+    
+    loadProfile();
+  }, [userId]);
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -99,6 +122,14 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
 
     setSaving(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
+        <p className="text-lg">Loading profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center p-4">
