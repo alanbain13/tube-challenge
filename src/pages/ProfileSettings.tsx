@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import SearchStationInput from '@/components/SearchStationInput';
 import { useStations } from '@/hooks/useStations';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 
 export default function ProfileSettings() {
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -19,6 +20,7 @@ export default function ProfileSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   
   // Profile fields
   const [displayName, setDisplayName] = useState('');
@@ -148,6 +150,40 @@ export default function ProfileSettings() {
     }
   };
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user!.id}/${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(fileName, file);
+
+    if (uploadError) {
+      toast({
+        title: "Upload failed",
+        description: uploadError.message,
+        variant: "destructive"
+      });
+    } else {
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+      
+      setSelectedAvatar(data.publicUrl);
+      toast({
+        title: "Avatar uploaded",
+        description: "Your avatar has been uploaded successfully."
+      });
+    }
+
+    setUploading(false);
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
@@ -224,18 +260,43 @@ export default function ProfileSettings() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Avatar URL</Label>
-                    <Input
-                      id="avatar-url"
-                      type="url"
-                      value={selectedAvatar}
-                      onChange={(e) => setSelectedAvatar(e.target.value)}
-                      placeholder="https://example.com/avatar.jpg"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Enter a URL to your avatar image, or upload one to a service like Imgur
-                    </p>
+                  <div className="space-y-4">
+                    <Label>Profile Picture</Label>
+                    <div className="flex items-center gap-4">
+                      <Avatar className="w-20 h-20">
+                        <AvatarImage src={selectedAvatar} />
+                        <AvatarFallback>
+                          {displayName.slice(0, 2).toUpperCase() || 'TC'}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleAvatarUpload}
+                          className="hidden"
+                          id="avatar-upload-settings"
+                        />
+                        <Label htmlFor="avatar-upload-settings" className="cursor-pointer">
+                          <Button 
+                            type="button"
+                            variant="outline" 
+                            size="sm" 
+                            disabled={uploading}
+                            asChild
+                          >
+                            <span>
+                              <Upload className="h-4 w-4 mr-2" />
+                              {uploading ? 'Uploading...' : 'Upload New Avatar'}
+                            </span>
+                          </Button>
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          JPG, PNG or GIF (max 5MB)
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex gap-4">
