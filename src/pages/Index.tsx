@@ -148,6 +148,16 @@ const Index = () => {
 
   const isLoadingAny = visitsLoading || stationsLoading || activitiesLoading;
 
+  // Check if user has seen the tutorial - MUST be before early returns
+  useEffect(() => {
+    if (profile && user) {
+      const hasSeenTutorial = localStorage.getItem(`tutorial_seen_${user.id}`);
+      if (!hasSeenTutorial) {
+        setShowTutorial(true);
+      }
+    }
+  }, [profile, user]);
+
   // Safe early returns after all hooks are declared
   if (loading || profileLoading) {
     return (
@@ -161,16 +171,6 @@ const Index = () => {
   if (!user) {
     return null;
   }
-
-  // Check if user has seen the tutorial
-  useEffect(() => {
-    if (profile) {
-      const hasSeenTutorial = localStorage.getItem(`tutorial_seen_${user?.id}`);
-      if (!hasSeenTutorial) {
-        setShowTutorial(true);
-      }
-    }
-  }, [profile, user]);
 
   const handleTutorialComplete = () => {
     if (user?.id) {
