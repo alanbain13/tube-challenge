@@ -177,6 +177,48 @@ export type Database = {
           },
         ]
       }
+      metro_systems: {
+        Row: {
+          city: string
+          code: string
+          country: string
+          created_at: string
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          line_count: number | null
+          name: string
+          station_count: number | null
+          updated_at: string
+        }
+        Insert: {
+          city: string
+          code: string
+          country: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          line_count?: number | null
+          name: string
+          station_count?: number | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string
+          code?: string
+          country?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          line_count?: number | null
+          name?: string
+          station_count?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -477,6 +519,7 @@ export type Database = {
           latitude: number
           lines: string[]
           longitude: number
+          metro_system_id: string | null
           name: string
           tfl_id: string
           updated_at: string
@@ -488,6 +531,7 @@ export type Database = {
           latitude: number
           lines: string[]
           longitude: number
+          metro_system_id?: string | null
           name: string
           tfl_id: string
           updated_at?: string
@@ -499,12 +543,21 @@ export type Database = {
           latitude?: number
           lines?: string[]
           longitude?: number
+          metro_system_id?: string | null
           name?: string
           tfl_id?: string
           updated_at?: string
           zone?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "stations_metro_system_id_fkey"
+            columns: ["metro_system_id"]
+            isOneToOne: false
+            referencedRelation: "metro_systems"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
