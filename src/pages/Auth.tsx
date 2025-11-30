@@ -70,6 +70,16 @@ export default function Auth() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!displayName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter your name",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setLoading(true);
     
     // Call Supabase directly to check the response
@@ -78,8 +88,8 @@ export default function Auth() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        // Store display_name in metadata for profile trigger, but ProfileSetup will still be shown for avatar selection
-        data: { display_name: displayName || null }
+        // Store display_name (real name) in metadata
+        data: { display_name: displayName.trim() }
       }
     });
     
@@ -260,14 +270,16 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-name">Display Name</Label>
+                  <Label htmlFor="signup-name">Your Name *</Label>
                   <Input
                     id="signup-name"
                     type="text"
-                    placeholder="Your name"
+                    placeholder="John Doe"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
+                    required
                   />
+                  <p className="text-xs text-muted-foreground">Your real name</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>

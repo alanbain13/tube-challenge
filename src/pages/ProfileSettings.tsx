@@ -231,29 +231,32 @@ export default function ProfileSettings() {
               <CardContent>
                 <form onSubmit={handleProfileUpdate} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="display-name">Display Name *</Label>
+                    <Label htmlFor="display-name">Your Name *</Label>
                     <Input
                       id="display-name"
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Your display name"
+                      placeholder="John Doe"
                       required
                     />
+                    <p className="text-sm text-muted-foreground">
+                      Your real name
+                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="username">Display Name (Username)</Label>
                     <Input
                       id="username"
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                      placeholder="your_username"
+                      placeholder="johndoe123"
                       pattern="[a-z0-9_-]+"
                     />
                     <p className="text-sm text-muted-foreground">
-                      Lowercase letters, numbers, hyphens and underscores only
+                      Your unique identifier - lowercase letters, numbers, hyphens and underscores only
                     </p>
                   </div>
 
