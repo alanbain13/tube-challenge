@@ -3,31 +3,142 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Clock } from "lucide-react";
+import { Trophy, Users, Clock, MapPin } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+interface Challenge {
+  id: string;
+  name: string;
+  description: string | null;
+  challenge_type: string;
+  station_tfl_ids: string[];
+  estimated_duration_minutes: number | null;
+  is_official: boolean;
+  metro_system_id: string;
+}
+
+interface ChallengeAttempt {
+  id: string;
+  duration_minutes: number;
+  completed_at: string;
+  user_id: string;
+}
 
 export default function Challenges() {
-  const availableChallenges = [
-    {
-      id: "1",
-      name: "Complete All Lines",
-      description: "Visit every station on all London Underground lines",
-      type: "Full Network",
-      stations: 272,
-      participants: 1243,
-      recordTime: "18h 35m",
-      recordHolder: "SpeedRunner_UK"
+  const navigate = useNavigate();
+
+  const { data: challenges = [], isLoading, refetch } = useQuery({
+    queryKey: ["challenges"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("challenges")
+        .select("*")
+        .eq("is_official", true)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      // Auto-seed if no challenges exist
+      if (!data || data.length === 0) {
+        await seedChallenges();
+        // Refetch after seeding
+        const { data: newData, error: refetchError } = await supabase
+          .from("challenges")
+          .select("*")
+          .eq("is_official", true)
+          .order("created_at", { ascending: true });
+        
+        if (refetchError) throw refetchError;
+        return newData as Challenge[];
+      }
+
+      return data as Challenge[];
     },
-    {
-      id: "2",
-      name: "Circle Line Challenge",
-      description: "Complete the entire Circle Line in one journey",
-      type: "Single Line",
-      stations: 36,
-      participants: 5621,
-      recordTime: "1h 47m",
-      recordHolder: "TubeExplorer"
-    },
-  ];
+  });
+
+  const seedChallenges = async () => {
+    try {
+      // Get London Underground metro system ID
+      const { data: metroSystem } = await supabase
+        .from('metro_systems')
+        .select('id')
+        .eq('code', 'london')
+        .single();
+
+      if (!metroSystem) return;
+
+      // Get all London stations
+      const { data: allStations } = await supabase
+        .from('stations')
+        .select('tfl_id')
+        .eq('metro_system_id', metroSystem.id)
+        .limit(272);
+
+      // Get Circle Line stations
+      const { data: circleStations } = await supabase
+        .from('stations')
+        .select('tfl_id')
+        .eq('metro_system_id', metroSystem.id)
+        .contains('lines', ['Circle'])
+        .limit(36);
+
+      const challengesToInsert = [
+        {
+          name: 'Complete All Lines',
+          description: 'Visit every station on all London Underground lines',
+          metro_system_id: metroSystem.id,
+          challenge_type: 'Full Network',
+          is_official: true,
+          station_tfl_ids: allStations?.map(s => s.tfl_id) || [],
+          estimated_duration_minutes: 1115,
+        },
+        {
+          name: 'Circle Line Challenge',
+          description: 'Complete the entire Circle Line in one journey',
+          metro_system_id: metroSystem.id,
+          challenge_type: 'Single Line',
+          is_official: true,
+          station_tfl_ids: circleStations?.map(s => s.tfl_id) || [],
+          estimated_duration_minutes: 107,
+        },
+      ];
+
+      await supabase.from('challenges').insert(challengesToInsert);
+    } catch (error) {
+      console.error('Error seeding challenges:', error);
+    }
+  };
+
+  const getChallengeAttempts = (challengeId: string) => {
+    return useQuery({
+      queryKey: ["challenge-attempts", challengeId],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("challenge_attempts")
+          .select("*")
+          .eq("challenge_id", challengeId)
+          .order("duration_minutes", { ascending: true })
+          .limit(10);
+
+        if (error) throw error;
+        return data as ChallengeAttempt[];
+      },
+    });
+  };
+
+  const handleStartChallenge = (challenge: Challenge) => {
+    toast.info("Challenge start feature coming soon!");
+  };
+
+  const formatDuration = (minutes: number | null) => {
+    if (!minutes) return "N/A";
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  };
 
   return (
     <AppLayout>
@@ -44,50 +155,70 @@ export default function Challenges() {
           </TabsList>
 
           <TabsContent value="available" className="mt-6">
-            <div className="grid gap-6">
-              {availableChallenges.map((challenge) => (
-                <Card key={challenge.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-2xl mb-2">{challenge.name}</CardTitle>
-                        <CardDescription>{challenge.description}</CardDescription>
-                      </div>
-                      <Badge variant="secondary">{challenge.type}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 mb-6">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-muted-foreground" />
-                        <div className="text-sm">
-                          <p className="text-muted-foreground">Stations</p>
-                          <p className="font-semibold">{challenge.stations}</p>
+            {isLoading ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading challenges...</p>
+              </div>
+            ) : challenges.length === 0 ? (
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No challenges available yet.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-6">
+                {challenges.map((challenge) => {
+                  const attemptCount = 0; // TODO: Get from attempts query
+                  const bestTime = null; // TODO: Get from attempts query
+                  
+                  return (
+                    <Card key={challenge.id} className="hover:shadow-lg transition-shadow">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-2xl mb-2">{challenge.name}</CardTitle>
+                            <CardDescription>{challenge.description}</CardDescription>
+                          </div>
+                          <Badge variant="secondary">{challenge.challenge_type}</Badge>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-muted-foreground" />
-                        <div className="text-sm">
-                          <p className="text-muted-foreground">Participants</p>
-                          <p className="font-semibold">{challenge.participants.toLocaleString()}</p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <p className="text-muted-foreground">Stations</p>
+                              <p className="font-semibold">{challenge.station_tfl_ids.length}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <p className="text-muted-foreground">Attempts</p>
+                              <p className="font-semibold">{attemptCount}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <p className="text-muted-foreground">Est. Time</p>
+                              <p className="font-semibold">{formatDuration(challenge.estimated_duration_minutes)}</p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <div className="text-sm">
-                          <p className="text-muted-foreground">Record</p>
-                          <p className="font-semibold">{challenge.recordTime}</p>
+                        <div className="flex gap-2">
+                          <Button className="flex-1" onClick={() => handleStartChallenge(challenge)}>
+                            Start Challenge
+                          </Button>
+                          <Button variant="outline">Leaderboard</Button>
                         </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button className="flex-1">Start Challenge</Button>
-                      <Button variant="outline">Leaderboard</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="completed" className="mt-6">
