@@ -59,6 +59,10 @@ export default {
 					orange: 'hsl(var(--action-orange))',
 					pink: 'hsl(var(--action-pink))',
 				},
+				success: 'hsl(var(--success))',
+				'challenge-blue': 'hsl(var(--challenge-blue))',
+				'route-purple': 'hsl(var(--route-purple))',
+				'feed-green': 'hsl(var(--feed-green))',
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',

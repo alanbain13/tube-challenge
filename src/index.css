@@ -18,7 +18,7 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 224 71% 4%;
 
-    --primary: 258 90% 66%;
+    --primary: 231 77% 62%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96.1%;
@@ -35,9 +35,15 @@ All colors MUST be HSL.
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 258 90% 66%;
+    --ring: 231 77% 62%;
 
     --radius: 0.75rem;
+
+    /* Semantic colors */
+    --success: 142 71% 45%;
+    --challenge-blue: 221 83% 53%;
+    --route-purple: 258 90% 66%;
+    --feed-green: 142 71% 45%;
 
     /* Action card colors */
     --action-blue: 221 83% 53%;
@@ -48,12 +54,12 @@ All colors MUST be HSL.
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 224 71% 4%;
-    --sidebar-primary: 258 90% 66%;
+    --sidebar-primary: 231 77% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 14% 95%;
     --sidebar-accent-foreground: 224 71% 4%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 258 90% 66%;
+    --sidebar-ring: 231 77% 62%;
   }
 
   .dark {
