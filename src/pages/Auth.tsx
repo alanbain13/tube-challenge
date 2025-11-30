@@ -118,10 +118,10 @@ export default function Auth() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        // Store both display_name (real name) and username
+        // Swap field mapping: username = real name, display_name = unique ID
         data: { 
-          display_name: displayName.trim(),
-          username: username.trim().toLowerCase()
+          username: displayName.trim(),  // Real name → username field
+          display_name: username.trim()  // Unique ID → display_name field
         }
       }
     });
@@ -320,9 +320,9 @@ export default function Auth() {
                   <Input
                     id="signup-username"
                     type="text"
-                    placeholder="johndoe123"
+                    placeholder="JohnDoe123"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                    onChange={(e) => setUsername(e.target.value)}
                     pattern="[a-zA-Z0-9_-]+"
                     required
                   />
