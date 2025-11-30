@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +46,12 @@ export default function ProfileSettings() {
       setSelectedAvatar(profile.avatar_url || '');
     }
   }, [user, profile, navigate]);
+
+  // Find the station object for the currently selected home station
+  const selectedHomeStation = useMemo(() => {
+    if (!homeStation) return undefined;
+    return stations.find(s => s.name === homeStation);
+  }, [homeStation, stations]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,6 +263,7 @@ export default function ProfileSettings() {
                       stations={stations}
                       onStationSelect={(station) => setHomeStation(station.name)}
                       placeholder="Search for your home station"
+                      selectedStation={selectedHomeStation}
                     />
                   </div>
 
