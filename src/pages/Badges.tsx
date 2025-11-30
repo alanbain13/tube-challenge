@@ -241,7 +241,7 @@ export default function Badges() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold mb-2">Badges</h1>
+          <h1 className="text-4xl font-black mb-2">Badges</h1>
           <p className="text-muted-foreground">Collect badges by completing challenges and achievements</p>
         </div>
 

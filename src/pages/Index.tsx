@@ -320,7 +320,7 @@ const Index = () => {
 
         {/* Recent Activities */}
         <Card className="mb-8">
-          <CardHeader>
+          <CardHeader className="text-center">
             <CardTitle className="text-4xl font-black">Recent Activities</CardTitle>
             <CardDescription>Your latest tube adventures</CardDescription>
           </CardHeader>
@@ -361,8 +361,8 @@ const Index = () => {
         {/* Combined Feed (User + Friends) */}
         {friendsList && friendsList.length > 0 && (
           <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="text-4xl font-black flex items-center gap-2">
+            <CardHeader className="text-center">
+              <CardTitle className="text-4xl font-black flex items-center justify-center gap-2">
                 <Rss className="w-8 h-8" />
                 Activity Feed
               </CardTitle>
@@ -420,7 +420,7 @@ const Index = () => {
         {/* Weekly & Monthly Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="text-center">
               <CardTitle className="text-4xl font-black">This Week</CardTitle>
               <CardDescription>Last 7 days</CardDescription>
             </CardHeader>
@@ -432,7 +432,7 @@ const Index = () => {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader>
+            <CardHeader className="text-center">
               <CardTitle className="text-4xl font-black">This Month</CardTitle>
               <CardDescription>Last 30 days</CardDescription>
             </CardHeader>

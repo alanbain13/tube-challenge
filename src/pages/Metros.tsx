@@ -39,7 +39,7 @@ export default function Metros() {
   return (
     <AppLayout>
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
+        <div className="mb-8 text-center">
           <h1 className="text-4xl font-black mb-2 text-foreground">Metro Systems</h1>
           <p className="text-muted-foreground">Choose a metro system to explore and track your progress</p>
         </div>

@@ -230,12 +230,12 @@ const Routes = () => {
   return (
     <>
       <AppLayout>
-        <header className="flex items-center justify-between mb-6">
+        <header className="mb-6 text-center">
         <div>
-          <h1 className="text-4xl font-black text-foreground">Routes</h1>
+          <h1 className="text-4xl font-black text-foreground mb-2">Routes</h1>
           <p className="text-muted-foreground">Your saved tube routes and challenges</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-center mt-6">
           <Button onClick={() => setShowActivityModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Start Activity

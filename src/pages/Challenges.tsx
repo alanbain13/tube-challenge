@@ -75,8 +75,8 @@ export default function Challenges() {
   return (
     <AppLayout>
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Challenges</h1>
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-black mb-2">Challenges</h1>
           <p className="text-muted-foreground">Test yourself with official and community challenges</p>
         </div>
 

@@ -211,12 +211,12 @@ const Activities = () => {
   return (
     <>
       <AppLayout>
-        <header className="flex items-center justify-between mb-6">
+        <header className="mb-6 text-center">
           <div>
-            <h1 className="text-4xl font-black text-foreground">My Activities</h1>
+            <h1 className="text-4xl font-black text-foreground mb-2">My Activities</h1>
             <p className="text-muted-foreground">Your tube journey activities and challenges</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 justify-center mt-6">
             <Button onClick={() => setShowActivityModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Create Activity
