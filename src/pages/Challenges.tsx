@@ -85,6 +85,22 @@ export default function Challenges() {
         .contains('lines', ['Circle'])
         .limit(36);
 
+      // Get 11 Lines stations (Bakerloo, Central, Circle, District, Piccadilly, Northern, Hammersmith & City, Waterloo & City, Metropolitan, Victoria, Jubilee)
+      const elevenLines = ['Bakerloo', 'Central', 'Circle', 'District', 'Piccadilly', 'Northern', 'Hammersmith & City', 'Waterloo & City', 'Metropolitan', 'Victoria', 'Jubilee'];
+      const { data: elevenLinesStations } = await supabase
+        .from('stations')
+        .select('tfl_id')
+        .eq('metro_system_id', metroSystem.id)
+        .or(elevenLines.map(line => `lines.cs.{${line}}`).join(','));
+
+      // Get Zone 1 stations on the 11 lines
+      const { data: zone1Stations } = await supabase
+        .from('stations')
+        .select('tfl_id')
+        .eq('metro_system_id', metroSystem.id)
+        .eq('zone', '1')
+        .or(elevenLines.map(line => `lines.cs.{${line}}`).join(','));
+
       const challengesToInsert = [
         {
           name: 'Complete All Lines',
@@ -103,6 +119,24 @@ export default function Challenges() {
           is_official: true,
           station_tfl_ids: circleStations?.map(s => s.tfl_id) || [],
           estimated_duration_minutes: 107,
+        },
+        {
+          name: '11 Lines Legend',
+          description: 'Master all 272 stations across the 11 major tube lines',
+          metro_system_id: metroSystem.id,
+          challenge_type: 'Multi-Line',
+          is_official: true,
+          station_tfl_ids: elevenLinesStations?.map(s => s.tfl_id) || [],
+          estimated_duration_minutes: 1050,
+        },
+        {
+          name: 'Zone 1 Champion',
+          description: 'Conquer all 67 stations in Central London (Zone 1)',
+          metro_system_id: metroSystem.id,
+          challenge_type: 'Zone Challenge',
+          is_official: true,
+          station_tfl_ids: zone1Stations?.map(s => s.tfl_id) || [],
+          estimated_duration_minutes: 280,
         },
       ];
 
