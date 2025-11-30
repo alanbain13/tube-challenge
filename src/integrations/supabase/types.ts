@@ -177,6 +177,114 @@ export type Database = {
           },
         ]
       }
+      challenge_attempts: {
+        Row: {
+          activity_id: string
+          challenge_id: string
+          completed_at: string
+          created_at: string
+          duration_minutes: number
+          id: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          challenge_id: string
+          completed_at: string
+          created_at?: string
+          duration_minutes: number
+          id?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          challenge_id?: string
+          completed_at?: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_attempts_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_attempts_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenges: {
+        Row: {
+          challenge_type: string
+          created_at: string
+          created_by_user_id: string | null
+          created_from_route_id: string | null
+          description: string | null
+          difficulty: string | null
+          estimated_duration_minutes: number | null
+          id: string
+          is_official: boolean
+          metro_system_id: string
+          name: string
+          station_tfl_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          challenge_type: string
+          created_at?: string
+          created_by_user_id?: string | null
+          created_from_route_id?: string | null
+          description?: string | null
+          difficulty?: string | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          is_official?: boolean
+          metro_system_id: string
+          name: string
+          station_tfl_ids: string[]
+          updated_at?: string
+        }
+        Update: {
+          challenge_type?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          created_from_route_id?: string | null
+          description?: string | null
+          difficulty?: string | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          is_official?: boolean
+          metro_system_id?: string
+          name?: string
+          station_tfl_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_created_from_route_id_fkey"
+            columns: ["created_from_route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_metro_system_id_fkey"
+            columns: ["metro_system_id"]
+            isOneToOne: false
+            referencedRelation: "metro_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metro_systems: {
         Row: {
           city: string
@@ -301,6 +409,7 @@ export type Database = {
           estimated_duration_minutes: number | null
           id: string
           is_public: boolean
+          metro_system_id: string | null
           name: string
           start_station_tfl_id: string
           updated_at: string
@@ -313,6 +422,7 @@ export type Database = {
           estimated_duration_minutes?: number | null
           id?: string
           is_public?: boolean
+          metro_system_id?: string | null
           name: string
           start_station_tfl_id: string
           updated_at?: string
@@ -325,12 +435,21 @@ export type Database = {
           estimated_duration_minutes?: number | null
           id?: string
           is_public?: boolean
+          metro_system_id?: string | null
           name?: string
           start_station_tfl_id?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "routes_metro_system_id_fkey"
+            columns: ["metro_system_id"]
+            isOneToOne: false
+            referencedRelation: "metro_systems"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       station_id_mapping: {
         Row: {
