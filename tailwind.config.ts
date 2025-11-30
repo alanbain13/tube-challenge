@@ -58,6 +58,7 @@ export default {
 					green: 'hsl(var(--action-green))',
 					orange: 'hsl(var(--action-orange))',
 					pink: 'hsl(var(--action-pink))',
+					red: 'hsl(var(--action-red))',
 				},
 				success: 'hsl(var(--success))',
 				'challenge-blue': 'hsl(var(--challenge-blue))',
@@ -78,6 +79,9 @@ export default {
 				lg: 'var(--radius)',
 				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)'
+			},
+			backgroundImage: {
+				'gradient-hero': 'var(--gradient-hero)',
 			},
 			keyframes: {
 				'accordion-down': {
