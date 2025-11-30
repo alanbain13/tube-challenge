@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import SearchStationInput from '@/components/SearchStationInput';
 import { useStations } from '@/hooks/useStations';
-import { ArrowLeft, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, CheckCircle2, XCircle } from 'lucide-react';
 
 export default function ProfileSettings() {
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -28,6 +28,11 @@ export default function ProfileSettings() {
   const [homeStation, setHomeStation] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('');
   
+  // Display name validation state
+  const [displayNameChecking, setDisplayNameChecking] = useState(false);
+  const [displayNameAvailable, setDisplayNameAvailable] = useState<boolean | null>(null);
+  const [originalDisplayName, setOriginalDisplayName] = useState('');
+  
   // Password fields
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -42,10 +47,52 @@ export default function ProfileSettings() {
     if (profile) {
       setRealName(profile.username || '');  // Real name from username field
       setDisplayName(profile.display_name || '');  // Unique ID from display_name field
+      setOriginalDisplayName(profile.display_name || '');  // Store original for comparison
       setHomeStation(profile.home_station || '');
       setSelectedAvatar(profile.avatar_url || '');
     }
   }, [user, profile, navigate]);
+
+  // Real-time display name uniqueness check with debounce
+  useEffect(() => {
+    const trimmedDisplayName = displayName.trim();
+    
+    // Reset validation state if empty or same as original
+    if (!trimmedDisplayName || trimmedDisplayName === originalDisplayName) {
+      setDisplayNameAvailable(null);
+      setDisplayNameChecking(false);
+      return;
+    }
+
+    // Validate format first
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedDisplayName)) {
+      setDisplayNameAvailable(null);
+      setDisplayNameChecking(false);
+      return;
+    }
+
+    // Debounce the uniqueness check
+    setDisplayNameChecking(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('display_name', trimmedDisplayName)
+          .neq('user_id', user!.id)
+          .maybeSingle();
+
+        setDisplayNameAvailable(!existingProfile);
+      } catch (error) {
+        console.error('Error checking display name:', error);
+        setDisplayNameAvailable(null);
+      } finally {
+        setDisplayNameChecking(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [displayName, user, originalDisplayName]);
 
   // Find the station object for the currently selected home station
   const selectedHomeStation = useMemo(() => {
@@ -277,16 +324,46 @@ export default function ProfileSettings() {
 
                   <div className="space-y-2">
                     <Label htmlFor="display-name">Display Name</Label>
-                    <Input
-                      id="display-name"
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Alan-013"
-                      pattern="[a-zA-Z0-9_-]+"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Your unique username - must be unique, letters (upper/lower), numbers, dashes and underscores only
+                    <div className="relative">
+                      <Input
+                        id="display-name"
+                        type="text"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder="Alan-013"
+                        pattern="[a-zA-Z0-9_-]+"
+                        className={
+                          displayName.trim() && displayName.trim() !== originalDisplayName
+                            ? displayNameAvailable === false
+                              ? 'pr-10 border-destructive focus-visible:ring-destructive'
+                              : displayNameAvailable === true
+                              ? 'pr-10 border-green-500 focus-visible:ring-green-500'
+                              : ''
+                            : ''
+                        }
+                      />
+                      {displayNameChecking && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                      {!displayNameChecking && displayNameAvailable === true && displayName.trim() !== originalDisplayName && (
+                        <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                      )}
+                      {!displayNameChecking && displayNameAvailable === false && (
+                        <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
+                      )}
+                    </div>
+                    <p className={`text-sm ${
+                      displayNameAvailable === false 
+                        ? 'text-destructive' 
+                        : displayNameAvailable === true && displayName.trim() !== originalDisplayName
+                        ? 'text-green-600'
+                        : 'text-muted-foreground'
+                    }`}>
+                      {displayNameAvailable === false 
+                        ? 'This display name is already taken' 
+                        : displayNameAvailable === true && displayName.trim() !== originalDisplayName
+                        ? 'This display name is available'
+                        : 'Your unique username - must be unique, letters (upper/lower), numbers, dashes and underscores only'}
                     </p>
                   </div>
 
@@ -340,7 +417,10 @@ export default function ProfileSettings() {
                   </div>
 
                   <div className="flex gap-4">
-                    <Button type="submit" disabled={loading}>
+                    <Button 
+                      type="submit" 
+                      disabled={loading || displayNameChecking || displayNameAvailable === false}
+                    >
                       {loading ? 'Saving...' : 'Save Changes'}
                     </Button>
                     <Button type="button" variant="outline" onClick={() => navigate('/')}>
