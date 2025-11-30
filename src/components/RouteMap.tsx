@@ -46,14 +46,18 @@ const RouteMap: React.FC<RouteMapProps> = ({
   // Check for existing token
   useEffect(() => {
     console.log('🔧 RouteMap: Checking for existing Mapbox token...');
+    // First check env variable (perpetual), then localStorage (fallback)
+    const envToken = import.meta.env.VITE_MAPBOX_TOKEN;
     const savedToken = localStorage.getItem('mapbox_token');
-    console.log('🔧 RouteMap: Saved token exists:', !!savedToken);
-    if (savedToken) {
+    const token = envToken || savedToken;
+    
+    console.log('🔧 RouteMap: Token source:', envToken ? 'env' : savedToken ? 'localStorage' : 'none');
+    if (token) {
       console.log('🔧 RouteMap: Setting token and marking as valid');
-      setMapboxToken(savedToken);
+      setMapboxToken(token);
       setTokenValid(true);
     } else {
-      console.log('❌ RouteMap: No Mapbox token found in localStorage');
+      console.log('❌ RouteMap: No Mapbox token found');
     }
   }, []);
 

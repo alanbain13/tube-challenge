@@ -47,11 +47,14 @@ const Map = () => {
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapContainerReady, setMapContainerReady] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string>(() => {
-    return localStorage.getItem('mapbox_token') || '';
+    // First check env variable (perpetual), then localStorage (fallback)
+    return import.meta.env.VITE_MAPBOX_TOKEN || localStorage.getItem('mapbox_token') || '';
   });
   const [isTokenSet, setIsTokenSet] = useState<boolean>(() => {
+    const envToken = import.meta.env.VITE_MAPBOX_TOKEN;
     const savedToken = localStorage.getItem('mapbox_token');
-    return Boolean(savedToken && savedToken.startsWith('pk.'));
+    const token = envToken || savedToken;
+    return Boolean(token && token.startsWith('pk.'));
   });
   const { stations, loading: stationsLoading } = useStations();
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
