@@ -1,10 +1,10 @@
 import { AppLayout } from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Award, Trophy, Clock, Medal } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { StatCard } from "@/components/StatCard";
+import { Award, Trophy, Zap, Target } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, isThisMonth } from "date-fns";
 
 interface Achievement {
   id: string;
@@ -63,42 +63,87 @@ export default function Badges() {
     },
   });
 
-  const getRanking = async (challengeId: string, duration: number) => {
-    const { data, error } = await supabase
-      .from("challenge_attempts")
-      .select("duration_minutes")
-      .eq("challenge_id", challengeId)
-      .order("duration_minutes", { ascending: true });
+  const { data: totalChallenges } = useQuery({
+    queryKey: ["total-challenges"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("challenges")
+        .select("*", { count: "exact", head: true })
+        .eq("is_official", true);
 
-    if (error || !data) return null;
-    
-    const rank = data.findIndex(attempt => attempt.duration_minutes === duration) + 1;
-    return { rank, total: data.length };
+      if (error) throw error;
+      return count || 0;
+    },
+  });
+
+  const earnedCount = achievements?.length || 0;
+  const availableCount = (totalChallenges || 0) - earnedCount;
+  const completionPercentage = totalChallenges ? Math.round((earnedCount / totalChallenges) * 100) : 0;
+  const thisMonthCount = achievements?.filter(a => isThisMonth(new Date(a.earned_at))).length || 0;
+
+  const getBadgeEmoji = (challengeName: string) => {
+    const name = challengeName.toLowerCase();
+    if (name.includes("all lines") || name.includes("complete all")) return "🏆";
+    if (name.includes("circle")) return "🥇";
+    if (name.includes("speed") || name.includes("fast")) return "⚡";
+    if (name.includes("district")) return "🎯";
+    if (name.includes("northern")) return "⭐";
+    return "🏅";
   };
 
-  const getBadgeIcon = (type: string) => {
-    switch (type) {
-      case "challenge_complete":
-        return Trophy;
-      case "speed_record":
-        return Medal;
-      default:
-        return Award;
-    }
-  };
-
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  const getBadgeDescription = (challengeName: string) => {
+    const name = challengeName.toLowerCase();
+    if (name.includes("all lines")) return "Completed all London Underground stations";
+    if (name.includes("circle")) return "Completed the Circle Line challenge";
+    return `Completed the ${challengeName}`;
   };
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold mb-2">Badges</h1>
-          <p className="text-muted-foreground">Your earned achievements and completed challenges</p>
+          <p className="text-muted-foreground">Collect badges by completing challenges and achievements</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <StatCard
+            icon={Award}
+            label="Earned"
+            value={earnedCount}
+            iconColor="text-blue-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Target}
+            label="Available"
+            value={availableCount}
+            iconColor="text-gray-400"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Trophy}
+            label="Completion"
+            value={`${completionPercentage}%`}
+            iconColor="text-purple-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Zap}
+            label="This Month"
+            value={thisMonthCount}
+            iconColor="text-green-500"
+            loading={isLoading}
+          />
+        </div>
+
+        {/* Badges Section */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold flex items-center gap-2">
+            <Award className="w-6 h-6 text-orange-500" />
+            Your Badges
+          </h2>
         </div>
 
         {isLoading ? (
@@ -113,57 +158,29 @@ export default function Badges() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {achievements.map((achievement) => {
-              const Icon = getBadgeIcon(achievement.type);
               const relatedAttempt = challengeAttempts?.find(
                 (attempt) => attempt.challenge_id === achievement.meta?.challenge_id
               );
+              const emoji = getBadgeEmoji(achievement.name);
+              const description = getBadgeDescription(achievement.name);
 
               return (
-                <Card key={achievement.id} className="overflow-hidden">
-                  <CardHeader className="bg-gradient-to-br from-primary/10 to-accent/10 pb-8">
-                    <div className="flex justify-center mb-4">
-                      <div className="p-6 rounded-full bg-background shadow-lg">
-                        <Icon className="w-12 h-12 text-primary" />
-                      </div>
+                <Card key={achievement.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <CardContent className="pt-8 pb-6 text-center space-y-4">
+                    <div className="text-7xl mb-4">
+                      {emoji}
                     </div>
-                    <CardTitle className="text-center text-xl">
+                    <h3 className="font-bold text-lg">
                       {achievement.name}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-6 space-y-4">
-                    {relatedAttempt && (
-                      <>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Challenge:</span>
-                          <span className="font-medium">{relatedAttempt.challenge.name}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            Time:
-                          </span>
-                          <span className="font-medium">
-                            {formatDuration(relatedAttempt.duration_minutes)}
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Earned:</span>
-                      <span className="font-medium">
-                        {format(new Date(achievement.earned_at), "MMM d, yyyy")}
-                      </span>
-                    </div>
-                    {achievement.type === "challenge_complete" && (
-                      <div className="pt-2">
-                        <Badge variant="secondary" className="w-full justify-center">
-                          <Trophy className="w-3 h-3 mr-1" />
-                          Challenge Complete
-                        </Badge>
-                      </div>
-                    )}
+                    </h3>
+                    <p className="text-sm text-muted-foreground px-2">
+                      {description}
+                    </p>
+                    <p className="text-xs text-muted-foreground pt-2">
+                      Earned {format(new Date(achievement.earned_at), "MMM d, yyyy")}
+                    </p>
                   </CardContent>
                 </Card>
               );
