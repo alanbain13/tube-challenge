@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2 } from "lucide-react";
+import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2, Share2, Lock, Globe, Train } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
@@ -68,6 +68,48 @@ const Routes = () => {
     },
     enabled: !!user,
   });
+
+  // Determine route difficulty based on station count
+  const getDifficulty = (stationCount: number): { label: string; variant: "default" | "secondary" | "destructive" } => {
+    if (stationCount <= 5) return { label: "Easy", variant: "default" };
+    if (stationCount <= 15) return { label: "Medium", variant: "secondary" };
+    return { label: "Hard", variant: "destructive" };
+  };
+
+  const handleTogglePublish = async (routeId: string, currentPublicStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("routes")
+        .update({ is_public: !currentPublicStatus })
+        .eq("id", routeId);
+
+      if (error) throw error;
+
+      if (!currentPublicStatus) {
+        // Copy share link when publishing
+        const shareUrl = `${window.location.origin}/routes/${routeId}/view`;
+        await navigator.clipboard.writeText(shareUrl);
+        
+        toast({
+          title: "Route published",
+          description: "Share link copied to clipboard!"
+        });
+      } else {
+        toast({
+          title: "Route made private",
+          description: "Your route is now private"
+        });
+      }
+
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error updating route",
+        description: "Please try again",
+        variant: "destructive"
+      });
+    }
+  };
 
   const handleDeleteRoute = async () => {
     if (!deleteModal.routeId) return;
@@ -210,36 +252,53 @@ const Routes = () => {
             <div className="flex items-center justify-center py-12">
               <p className="text-lg text-muted-foreground">Loading routes...</p>
             </div>
-          ) : routes.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="max-w-md mx-auto">
-                <h2 className="text-xl font-semibold mb-4">No routes yet</h2>
-                <p className="text-muted-foreground mb-6">
-                  Create your first route to start planning your tube adventures
-                </p>
-                <Button onClick={() => navigate("/routes/create")}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Route
-                </Button>
-              </div>
-            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* CTA Card to create new route */}
+              <Card className="border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => navigate("/routes/create")}>
+                <CardContent className="flex flex-col items-center justify-center h-full min-h-[280px] text-center p-6">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Plus className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Create a New Route</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Plan your next tube adventure and share it with friends
+                  </p>
+                </CardContent>
+              </Card>
               {routes.map((route: any) => {
                 const stationSequence = route.route_stations
                   ?.sort((a: any, b: any) => a.sequence_number - b.sequence_number)
                   .map((rs: any) => rs.station_tfl_id) || [];
+                const stationCount = route.route_stations?.length || 0;
+                const difficulty = getDifficulty(stationCount);
                 
                 return (
                   <Card key={route.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span>{route.name}</span>
-                        <Badge variant="outline">
-                          {route.route_stations?.length || 0} stations
-                        </Badge>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant={difficulty.variant}>{difficulty.label}</Badge>
+                          <Badge variant={route.is_public ? "default" : "outline"}>
+                            {route.is_public ? (
+                              <>
+                                <Globe className="w-3 h-3 mr-1" />
+                                Published
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="w-3 h-3 mr-1" />
+                                Private
+                              </>
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Train className="w-5 h-5 text-primary" />
+                        <span className="line-clamp-1">{route.name}</span>
                       </CardTitle>
-                      <CardDescription>
+                      <CardDescription className="line-clamp-2">
                         {route.description || "No description"}
                       </CardDescription>
                     </CardHeader>
@@ -251,9 +310,14 @@ const Routes = () => {
                         updatedAt={route.updated_at}
                       />
                       <div className="space-y-3 mt-4">
+                       <div className="flex items-center gap-2 text-sm">
+                         <Badge variant="outline" className="font-normal">
+                           <MapPin className="w-3 h-3 mr-1" />
+                           {stationCount} stations
+                         </Badge>
+                       </div>
                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                         <MapPin className="w-4 h-4" />
-                         <span>
+                         <span className="truncate">
                            {getStationName(route.start_station_tfl_id)} → {getStationName(route.end_station_tfl_id)}
                          </span>
                        </div>
@@ -267,15 +331,14 @@ const Routes = () => {
                         Created {new Date(route.created_at).toLocaleDateString()}
                       </div>
                     </div>
-                     <div className="flex flex-wrap gap-2 mt-4">
+                      <div className="grid grid-cols-2 gap-2 mt-4">
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/routes/${route.id}/view`)}
+                          onClick={() => createRouteActivity(route)}
                           className="flex items-center gap-1"
                         >
-                          <Eye className="w-4 h-4" />
-                          View
+                          <Play className="w-4 h-4" />
+                          Start Route
                         </Button>
                         <Button
                           size="sm"
@@ -288,11 +351,12 @@ const Routes = () => {
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => createRouteActivity(route)}
+                          variant="outline"
+                          onClick={() => handleTogglePublish(route.id, route.is_public)}
                           className="flex items-center gap-1"
                         >
-                          <Play className="w-4 h-4" />
-                          Start Activity
+                          <Share2 className="w-4 h-4" />
+                          {route.is_public ? "Unpublish" : "Share"}
                         </Button>
                         <Button
                           size="sm"
@@ -305,6 +369,7 @@ const Routes = () => {
                           className="flex items-center gap-1 text-destructive hover:text-destructive"
                         >
                           <Trash2 className="w-4 h-4" />
+                          Delete
                         </Button>
                        </div>
                    </CardContent>
