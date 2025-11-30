@@ -52,6 +52,13 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				action: {
+					blue: 'hsl(var(--action-blue))',
+					purple: 'hsl(var(--action-purple))',
+					green: 'hsl(var(--action-green))',
+					orange: 'hsl(var(--action-orange))',
+					pink: 'hsl(var(--action-pink))',
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
