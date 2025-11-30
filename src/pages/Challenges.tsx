@@ -30,7 +30,7 @@ interface ChallengeAttempt {
 export default function Challenges() {
   const navigate = useNavigate();
 
-  const { data: challenges = [], isLoading, refetch } = useQuery({
+  const { data: challenges = [], isLoading } = useQuery({
     queryKey: ["challenges"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -40,111 +40,9 @@ export default function Challenges() {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-
-      // Auto-seed if no challenges exist
-      if (!data || data.length === 0) {
-        await seedChallenges();
-        // Refetch after seeding
-        const { data: newData, error: refetchError } = await supabase
-          .from("challenges")
-          .select("*")
-          .eq("is_official", true)
-          .order("created_at", { ascending: true });
-        
-        if (refetchError) throw refetchError;
-        return newData as Challenge[];
-      }
-
       return data as Challenge[];
     },
   });
-
-  const seedChallenges = async () => {
-    try {
-      // Get London Underground metro system ID
-      const { data: metroSystem } = await supabase
-        .from('metro_systems')
-        .select('id')
-        .eq('code', 'london')
-        .single();
-
-      if (!metroSystem) return;
-
-      // Get all London stations
-      const { data: allStations } = await supabase
-        .from('stations')
-        .select('tfl_id')
-        .eq('metro_system_id', metroSystem.id)
-        .limit(272);
-
-      // Get Circle Line stations
-      const { data: circleStations } = await supabase
-        .from('stations')
-        .select('tfl_id')
-        .eq('metro_system_id', metroSystem.id)
-        .contains('lines', ['Circle'])
-        .limit(36);
-
-      // Get 11 Lines stations (Bakerloo, Central, Circle, District, Piccadilly, Northern, Hammersmith & City, Waterloo & City, Metropolitan, Victoria, Jubilee)
-      const elevenLines = ['Bakerloo', 'Central', 'Circle', 'District', 'Piccadilly', 'Northern', 'Hammersmith & City', 'Waterloo & City', 'Metropolitan', 'Victoria', 'Jubilee'];
-      const { data: elevenLinesStations } = await supabase
-        .from('stations')
-        .select('tfl_id')
-        .eq('metro_system_id', metroSystem.id)
-        .or(elevenLines.map(line => `lines.cs.{${line}}`).join(','));
-
-      // Get Zone 1 stations on the 11 lines
-      const { data: zone1Stations } = await supabase
-        .from('stations')
-        .select('tfl_id')
-        .eq('metro_system_id', metroSystem.id)
-        .eq('zone', '1')
-        .or(elevenLines.map(line => `lines.cs.{${line}}`).join(','));
-
-      const challengesToInsert = [
-        {
-          name: 'Complete All Lines',
-          description: 'Visit every station on all London Underground lines',
-          metro_system_id: metroSystem.id,
-          challenge_type: 'Full Network',
-          is_official: true,
-          station_tfl_ids: allStations?.map(s => s.tfl_id) || [],
-          estimated_duration_minutes: 1115,
-        },
-        {
-          name: 'Circle Line Challenge',
-          description: 'Complete the entire Circle Line in one journey',
-          metro_system_id: metroSystem.id,
-          challenge_type: 'Single Line',
-          is_official: true,
-          station_tfl_ids: circleStations?.map(s => s.tfl_id) || [],
-          estimated_duration_minutes: 107,
-        },
-        {
-          name: '11 Lines Legend',
-          description: 'Master all 272 stations across the 11 major tube lines',
-          metro_system_id: metroSystem.id,
-          challenge_type: 'Multi-Line',
-          is_official: true,
-          station_tfl_ids: elevenLinesStations?.map(s => s.tfl_id) || [],
-          estimated_duration_minutes: 1050,
-        },
-        {
-          name: 'Zone 1 Champion',
-          description: 'Conquer all 67 stations in Central London (Zone 1)',
-          metro_system_id: metroSystem.id,
-          challenge_type: 'Zone Challenge',
-          is_official: true,
-          station_tfl_ids: zone1Stations?.map(s => s.tfl_id) || [],
-          estimated_duration_minutes: 280,
-        },
-      ];
-
-      await supabase.from('challenges').insert(challengesToInsert);
-    } catch (error) {
-      console.error('Error seeding challenges:', error);
-    }
-  };
 
   const getChallengeAttempts = (challengeId: string) => {
     return useQuery({
