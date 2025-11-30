@@ -238,25 +238,26 @@ export default function ProfileSettings() {
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="John Doe"
+                      pattern="[a-zA-Z\s]+"
                       required
                     />
                     <p className="text-sm text-muted-foreground">
-                      Your real name
+                      Your real name - letters and spaces only
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="username">Display Name (Username)</Label>
+                    <Label htmlFor="username">Display Name</Label>
                     <Input
                       id="username"
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value.toLowerCase())}
                       placeholder="johndoe123"
-                      pattern="[a-z0-9_-]+"
+                      pattern="[a-zA-Z0-9_-]+"
                     />
                     <p className="text-sm text-muted-foreground">
-                      Your unique identifier - lowercase letters, numbers, hyphens and underscores only
+                      Your unique username - letters, numbers, dashes and underscores only (no spaces)
                     </p>
                   </div>
 
