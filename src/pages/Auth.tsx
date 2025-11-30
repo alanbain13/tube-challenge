@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,9 +15,18 @@ export default function Auth() {
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formKey, setFormKey] = useState(Date.now()); // Force form remount
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Refs to directly access and clear DOM inputs
+  const signinEmailRef = useRef<HTMLInputElement>(null);
+  const signinPasswordRef = useRef<HTMLInputElement>(null);
+  const signupNameRef = useRef<HTMLInputElement>(null);
+  const signupUsernameRef = useRef<HTMLInputElement>(null);
+  const signupEmailRef = useRef<HTMLInputElement>(null);
+  const signupPasswordRef = useRef<HTMLInputElement>(null);
 
   // Handle auth callback (email verification, password reset)
   useEffect(() => {
@@ -56,18 +65,32 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
-  // Clear form state on mount and when page becomes visible
+  // Aggressively clear form state to prevent browser autofill
   useEffect(() => {
     const clearForm = () => {
+      // Clear React state
       setEmail('');
       setPassword('');
       setDisplayName('');
       setUsername('');
+      
+      // Force form remount
+      setFormKey(Date.now());
+      
+      // Directly clear DOM inputs after a delay to override autofill
+      setTimeout(() => {
+        if (signinEmailRef.current) signinEmailRef.current.value = '';
+        if (signinPasswordRef.current) signinPasswordRef.current.value = '';
+        if (signupNameRef.current) signupNameRef.current.value = '';
+        if (signupUsernameRef.current) signupUsernameRef.current.value = '';
+        if (signupEmailRef.current) signupEmailRef.current.value = '';
+        if (signupPasswordRef.current) signupPasswordRef.current.value = '';
+      }, 100);
     };
     
     clearForm();
     
-    // Also clear when page becomes visible (e.g., after navigating back)
+    // Also clear when page becomes visible (after navigating back)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         clearForm();
@@ -248,7 +271,7 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs key={formKey} defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -298,6 +321,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="signin-email">Email</Label>
                   <Input
+                    ref={signinEmailRef}
                     id="signin-email"
                     name="email"
                     type="email"
@@ -322,6 +346,7 @@ export default function Auth() {
                     </Button>
                   </div>
                   <Input
+                    ref={signinPasswordRef}
                     id="signin-password"
                     name="password"
                     type="password"
@@ -347,6 +372,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Your Name *</Label>
                   <Input
+                    ref={signupNameRef}
                     id="signup-name"
                     name="name"
                     type="text"
@@ -362,6 +388,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="signup-username">Display Name *</Label>
                   <Input
+                    ref={signupUsernameRef}
                     id="signup-username"
                     name="username"
                     type="text"
@@ -377,6 +404,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
+                    ref={signupEmailRef}
                     id="signup-email"
                     name="signup-email"
                     type="email"
@@ -390,6 +418,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
                   <Input
+                    ref={signupPasswordRef}
                     id="signup-password"
                     name="signup-password"
                     type="password"
