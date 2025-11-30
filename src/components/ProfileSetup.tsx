@@ -20,7 +20,8 @@ const PLACEHOLDER_AVATARS = [
 ];
 
 export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) {
-  const [displayName, setDisplayName] = useState('');
+  const [realName, setRealName] = useState('');  // Real name (stored in username field)
+  const [displayName, setDisplayName] = useState('');  // Unique ID (stored in display_name field)
   const [homeStation, setHomeStation] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(PLACEHOLDER_AVATARS[0]);
   const [uploading, setUploading] = useState(false);
@@ -33,12 +34,13 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
     const loadProfile = async () => {
       const { data, error } = await (supabase as any)
         .from('profiles')
-        .select('display_name, home_station, avatar_url')
+        .select('username, display_name, home_station, avatar_url')
         .eq('user_id', userId)
         .maybeSingle();
       
       if (data) {
-        setDisplayName(data.display_name || '');
+        setRealName(data.username || '');  // Real name from username field
+        setDisplayName(data.display_name || '');  // Unique ID from display_name field
         setHomeStation(data.home_station || '');
         if (data.avatar_url) {
           setSelectedAvatar(data.avatar_url);
@@ -85,10 +87,30 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
   };
 
   const handleSave = async () => {
-    if (!displayName.trim()) {
+    if (!realName.trim()) {
       toast({
-        title: "Display name required",
-        description: "Please enter a display name.",
+        title: "Name required",
+        description: "Please enter your name.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate real name (only letters and spaces)
+    if (!/^[a-zA-Z\s]+$/.test(realName.trim())) {
+      toast({
+        title: "Invalid Name",
+        description: "Your name can only contain letters and spaces",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate display name if provided
+    if (displayName && !/^[a-zA-Z0-9_-]+$/.test(displayName.trim())) {
+      toast({
+        title: "Invalid Display Name",
+        description: "Display name can only contain letters, numbers, dashes and underscores (no spaces)",
         variant: "destructive"
       });
       return;
@@ -101,7 +123,8 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
       .from('profiles')
       .upsert({
         user_id: userId,
-        display_name: displayName.trim(),
+        username: realName.trim(),  // Real name → username field
+        display_name: displayName.trim() || null,  // Unique ID → display_name field
         home_station: homeStation.trim() || null,
         avatar_url: selectedAvatar
       }, { onConflict: 'user_id' });
@@ -148,7 +171,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
               <Avatar className="w-24 h-24">
                 <AvatarImage src={selectedAvatar} />
                 <AvatarFallback>
-                  {displayName.slice(0, 2).toUpperCase() || 'TC'}
+                  {realName.slice(0, 2).toUpperCase() || 'TC'}
                 </AvatarFallback>
               </Avatar>
             </div>
@@ -187,16 +210,35 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
             </div>
           </div>
 
-          {/* Display Name */}
+          {/* Your Name */}
           <div className="space-y-2">
-            <Label htmlFor="display-name">Display Name *</Label>
+            <Label htmlFor="real-name">Your Name *</Label>
             <Input
-              id="display-name"
-              placeholder="How others will see you"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              id="real-name"
+              placeholder="Alan Bainbridge"
+              value={realName}
+              onChange={(e) => setRealName(e.target.value)}
+              pattern="[a-zA-Z\s]+"
               required
             />
+            <p className="text-sm text-muted-foreground">
+              Your real name - letters and spaces only
+            </p>
+          </div>
+
+          {/* Display Name */}
+          <div className="space-y-2">
+            <Label htmlFor="display-name">Display Name (Optional)</Label>
+            <Input
+              id="display-name"
+              placeholder="Alan-013"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              pattern="[a-zA-Z0-9_-]+"
+            />
+            <p className="text-sm text-muted-foreground">
+              Your unique username - letters, numbers, dashes and underscores only
+            </p>
           </div>
 
           {/* Home Station */}
@@ -216,7 +258,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
           <Button 
             onClick={handleSave} 
             className="w-full" 
-            disabled={saving || !displayName.trim()}
+            disabled={saving || !realName.trim()}
           >
             {saving ? 'Saving...' : 'Complete Profile'}
           </Button>

@@ -23,8 +23,8 @@ export default function ProfileSettings() {
   const [uploading, setUploading] = useState(false);
   
   // Profile fields
-  const [displayName, setDisplayName] = useState('');
-  const [username, setUsername] = useState('');
+  const [realName, setRealName] = useState('');  // Real name (from username field)
+  const [displayName, setDisplayName] = useState('');  // Unique ID (from display_name field)
   const [homeStation, setHomeStation] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('');
   
@@ -40,8 +40,8 @@ export default function ProfileSettings() {
     }
     
     if (profile) {
-      setDisplayName(profile.display_name || '');
-      setUsername(profile.username || '');
+      setRealName(profile.username || '');  // Real name from username field
+      setDisplayName(profile.display_name || '');  // Unique ID from display_name field
       setHomeStation(profile.home_station || '');
       setSelectedAvatar(profile.avatar_url || '');
     }
@@ -56,23 +56,52 @@ export default function ProfileSettings() {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!displayName.trim()) {
+    if (!realName.trim()) {
       toast({
         title: "Error",
-        description: "Display name is required",
+        description: "Your name is required",
         variant: "destructive"
       });
       return;
     }
 
-    // Validate username format if provided
-    if (username && !/^[a-z0-9_-]+$/.test(username)) {
+    // Validate real name (only letters and spaces)
+    if (!/^[a-zA-Z\s]+$/.test(realName.trim())) {
       toast({
-        title: "Invalid username",
-        description: "Username can only contain lowercase letters, numbers, hyphens and underscores",
+        title: "Invalid Name",
+        description: "Your name can only contain letters and spaces",
         variant: "destructive"
       });
       return;
+    }
+
+    // Validate display name format if provided
+    if (displayName && !/^[a-zA-Z0-9_-]+$/.test(displayName.trim())) {
+      toast({
+        title: "Invalid Display Name",
+        description: "Display name can only contain letters, numbers, dashes and underscores (no spaces)",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check display name uniqueness if provided
+    if (displayName.trim()) {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('display_name', displayName.trim())
+        .neq('user_id', user!.id)
+        .maybeSingle();
+
+      if (existingProfile) {
+        toast({
+          title: "Display Name Taken",
+          description: "This display name is already in use. Please choose another.",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     setLoading(true);
@@ -82,8 +111,8 @@ export default function ProfileSettings() {
         .from('profiles')
         .upsert({
           user_id: user!.id,
-          display_name: displayName.trim(),
-          username: username.trim() || null,
+          username: realName.trim(),  // Real name → username field
+          display_name: displayName.trim() || null,  // Unique ID → display_name field
           home_station: homeStation.trim() || null,
           avatar_url: selectedAvatar
         }, { onConflict: 'user_id' });
@@ -231,13 +260,13 @@ export default function ProfileSettings() {
               <CardContent>
                 <form onSubmit={handleProfileUpdate} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="display-name">Your Name *</Label>
+                    <Label htmlFor="real-name">Your Name *</Label>
                     <Input
-                      id="display-name"
+                      id="real-name"
                       type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="John Doe"
+                      value={realName}
+                      onChange={(e) => setRealName(e.target.value)}
+                      placeholder="Alan Bainbridge"
                       pattern="[a-zA-Z\s]+"
                       required
                     />
@@ -247,17 +276,17 @@ export default function ProfileSettings() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="username">Display Name</Label>
+                    <Label htmlFor="display-name">Display Name</Label>
                     <Input
-                      id="username"
+                      id="display-name"
                       type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                      placeholder="johndoe123"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Alan-013"
                       pattern="[a-zA-Z0-9_-]+"
                     />
                     <p className="text-sm text-muted-foreground">
-                      Your unique username - letters, numbers, dashes and underscores only (no spaces)
+                      Your unique username - must be unique, letters (upper/lower), numbers, dashes and underscores only
                     </p>
                   </div>
 
@@ -277,7 +306,7 @@ export default function ProfileSettings() {
                       <Avatar className="w-20 h-20">
                         <AvatarImage src={selectedAvatar} />
                         <AvatarFallback>
-                          {displayName.slice(0, 2).toUpperCase() || 'TC'}
+                          {realName.slice(0, 2).toUpperCase() || 'TC'}
                         </AvatarFallback>
                       </Avatar>
                       
