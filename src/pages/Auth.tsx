@@ -56,12 +56,26 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
-  // Clear form state on mount to prevent stale cached values
+  // Clear form state on mount and when page becomes visible
   useEffect(() => {
-    setEmail('');
-    setPassword('');
-    setDisplayName('');
-    setUsername('');
+    const clearForm = () => {
+      setEmail('');
+      setPassword('');
+      setDisplayName('');
+      setUsername('');
+    };
+    
+    clearForm();
+    
+    // Also clear when page becomes visible (e.g., after navigating back)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        clearForm();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -280,7 +294,7 @@ export default function Auth() {
             </div>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-4" autoComplete="off">
                 <div className="space-y-2">
                   <Label htmlFor="signin-email">Email</Label>
                   <Input
@@ -329,7 +343,7 @@ export default function Auth() {
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
+              <form onSubmit={handleSignUp} className="space-y-4" autoComplete="off">
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Your Name *</Label>
                   <Input
