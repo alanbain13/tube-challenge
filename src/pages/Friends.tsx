@@ -224,7 +224,7 @@ export default function Friends() {
     <AppLayout>
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold mb-2">Friends</h1>
+          <h1 className="text-4xl font-black mb-2">Friends</h1>
           <p className="text-muted-foreground">Connect with other metro explorers</p>
         </div>
 
