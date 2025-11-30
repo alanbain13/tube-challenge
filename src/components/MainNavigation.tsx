@@ -17,19 +17,19 @@ export const MainNavigation = () => {
   const location = useLocation();
 
   return (
-    <nav className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
-      <div className="container mx-auto px-4">
+    <nav className="bg-background border-b border-border/50 sticky top-0 z-50">
+      <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 font-bold text-xl text-primary">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+          <Link to="/" className="flex items-center gap-3 font-bold text-xl text-foreground hover:opacity-80 transition-opacity">
+            <div className="w-10 h-10 rounded-full bg-gradient-hero flex items-center justify-center text-white text-sm font-bold shadow-md">
               TC
             </div>
-            Tube Challenge
+            <span>Tube Challenge</span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-8">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.icon;
@@ -39,10 +39,10 @@ export const MainNavigation = () => {
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                    "flex items-center gap-2 text-sm font-medium transition-colors",
                     isActive
-                      ? "text-accent bg-accent/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <Icon className="w-4 h-4" />
