@@ -110,6 +110,22 @@ export default function Auth() {
       return;
     }
     
+    // Check display name uniqueness before signup
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('display_name', username.trim())
+      .maybeSingle();
+
+    if (existingProfile) {
+      toast({
+        title: "Display Name Taken",
+        description: "This display name is already in use. Please choose another.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setLoading(true);
     
     // Call Supabase directly to check the response
