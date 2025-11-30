@@ -56,6 +56,14 @@ export default function Auth() {
     }
   }, [user, navigate]);
 
+  // Clear form state on mount to prevent stale cached values
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    setDisplayName('');
+    setUsername('');
+  }, []);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -277,7 +285,9 @@ export default function Auth() {
                   <Label htmlFor="signin-email">Email</Label>
                   <Input
                     id="signin-email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     placeholder="your@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -299,7 +309,9 @@ export default function Auth() {
                   </div>
                   <Input
                     id="signin-password"
+                    name="password"
                     type="password"
+                    autoComplete="current-password"
                     placeholder="Your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -322,7 +334,9 @@ export default function Auth() {
                   <Label htmlFor="signup-name">Your Name *</Label>
                   <Input
                     id="signup-name"
+                    name="name"
                     type="text"
+                    autoComplete="off"
                     placeholder="John Doe"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
@@ -335,7 +349,9 @@ export default function Auth() {
                   <Label htmlFor="signup-username">Display Name *</Label>
                   <Input
                     id="signup-username"
+                    name="username"
                     type="text"
+                    autoComplete="off"
                     placeholder="JohnDoe123"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -348,7 +364,9 @@ export default function Auth() {
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
                     id="signup-email"
+                    name="signup-email"
                     type="email"
+                    autoComplete="email"
                     placeholder="your@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -359,7 +377,9 @@ export default function Auth() {
                   <Label htmlFor="signup-password">Password</Label>
                   <Input
                     id="signup-password"
+                    name="signup-password"
                     type="password"
+                    autoComplete="new-password"
                     placeholder="Create a password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
