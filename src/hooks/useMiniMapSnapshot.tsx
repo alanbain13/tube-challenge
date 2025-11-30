@@ -156,7 +156,7 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
   const [shouldLoad, setShouldLoad] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | undefined>(mapboxTokenProp);
 
-  // Read token from localStorage on mount
+  // Read token from environment variable or localStorage on mount
   useEffect(() => {
     console.log('[MiniMapSnapshot] Token check - mapboxTokenProp:', mapboxTokenProp ? 'exists' : 'undefined');
     
@@ -164,20 +164,18 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
       console.log('[MiniMapSnapshot] Using token from prop');
       setMapboxToken(mapboxTokenProp);
     } else {
-      // Debug: Check all localStorage keys
-      console.log('[MiniMapSnapshot] Checking localStorage...');
-      console.log('[MiniMapSnapshot] All localStorage keys:', Object.keys(localStorage));
+      // First check env variable (perpetual), then localStorage (fallback)
+      const envToken = import.meta.env.VITE_MAPBOX_TOKEN;
+      const savedToken = localStorage.getItem('mapbox_token');
+      const token = envToken || savedToken;
       
-      const token = localStorage.getItem('mapbox_token');
-      console.log('[MiniMapSnapshot] Retrieved token:', token ? `${token.substring(0, 20)}...` : 'null/undefined');
-      console.log('[MiniMapSnapshot] Token type:', typeof token);
+      console.log('[MiniMapSnapshot] Token source:', envToken ? 'env' : savedToken ? 'localStorage' : 'none');
       
       if (token && token !== 'undefined' && token !== 'null') {
-        console.log('[MiniMapSnapshot] ✅ Valid token loaded from localStorage');
+        console.log('[MiniMapSnapshot] ✅ Valid token loaded');
         setMapboxToken(token);
       } else {
-        console.error('[MiniMapSnapshot] ❌ No valid token found. Current value:', token);
-        console.error('[MiniMapSnapshot] Please set token with: localStorage.setItem("mapboxToken", "pk.your_actual_token_here")');
+        console.error('[MiniMapSnapshot] ❌ No valid token found');
       }
     }
   }, [mapboxTokenProp]);
