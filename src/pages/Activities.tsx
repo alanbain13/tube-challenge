@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityTileMiniMap } from "@/components/ActivityTileMiniMap";
+import { AppLayout } from "@/components/AppLayout";
 
 const Activities = () => {
   const { user, loading } = useAuth();
@@ -208,8 +209,8 @@ const Activities = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
-      <div className="container mx-auto px-4 py-8">
+    <>
+      <AppLayout>
         <header className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-foreground">My Activities</h1>
@@ -219,9 +220,6 @@ const Activities = () => {
             <Button onClick={() => setShowActivityModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Create Activity
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/")}>
-              Back to Dashboard
             </Button>
           </div>
         </header>
@@ -359,22 +357,22 @@ const Activities = () => {
             </div>
           )}
         </main>
-        
-        <ActivityStartModal 
-          open={showActivityModal} 
-          onOpenChange={setShowActivityModal} 
-        />
-        
-        <DeleteConfirmModal
-          open={deleteModal.open}
-          onOpenChange={(open) => setDeleteModal(prev => ({ ...prev, open }))}
-          title="Delete this Activity?"
-          description="This action can't be undone. You'll lose this activity and its local progress."
-          onConfirm={handleDeleteActivity}
-          isDeleting={isDeleting}
-        />
-      </div>
-    </div>
+      </AppLayout>
+      
+      <ActivityStartModal 
+        open={showActivityModal} 
+        onOpenChange={setShowActivityModal} 
+      />
+      
+      <DeleteConfirmModal
+        open={deleteModal.open}
+        onOpenChange={(open) => setDeleteModal(prev => ({ ...prev, open }))}
+        title="Delete this Activity?"
+        description="This action can't be undone. You'll lose this activity and its local progress."
+        onConfirm={handleDeleteActivity}
+        isDeleting={isDeleting}
+      />
+    </>
   );
 };
 

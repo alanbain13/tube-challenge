@@ -20,6 +20,10 @@ import ActivityDetail from "@/pages/ActivityDetail";
 import ProfileSettings from "@/pages/ProfileSettings";
 import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import Metros from "@/pages/Metros";
+import Challenges from "@/pages/Challenges";
+import Badges from "@/pages/Badges";
+import Friends from "@/pages/Friends";
 
 const queryClient = new QueryClient();
 
@@ -33,7 +37,11 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/metros" element={<Metros />} />
             <Route path="/map" element={<MapPage />} />
+            <Route path="/challenges" element={<Challenges />} />
+            <Route path="/badges" element={<Badges />} />
+            <Route path="/friends" element={<Friends />} />
             <Route path="/activities/new" element={<ActivityNew />} />
             <Route path="/activities/:activityId/checkin" element={<ActivityCheckin />} />
             <Route path="/routes" element={<RoutesPage />} />

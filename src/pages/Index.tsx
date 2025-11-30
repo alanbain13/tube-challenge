@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { useStations } from "@/hooks/useStations";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ProfileSetup from "@/components/ProfileSetup";
 import { Tutorial } from "@/components/Tutorial";
+import { AppLayout } from "@/components/AppLayout";
+import { StatCard } from "@/components/StatCard";
+import { ActionCard } from "@/components/ActionCard";
+import { MapPin, Trophy, Activity, Award, Users, Zap, Route, Rss } from "lucide-react";
 
 const Index = () => {
-  const { user, profile, loading, profileLoading, signOut } = useAuth();
-  const { stations } = useStations();
+  const { user, profile, loading, profileLoading } = useAuth();
   const navigate = useNavigate();
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -185,151 +186,124 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
-      <div className="container mx-auto px-4 py-8">
-        <header className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            {profile.avatar_url && (
-              <img 
-                src={profile.avatar_url} 
-                alt={profile.display_name || 'Profile'} 
-                className="w-12 h-12 rounded-full border-2 border-primary"
-              />
+    <>
+      <AppLayout>
+        {/* Top Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <StatCard
+            icon={MapPin}
+            label="Stations Visited"
+            value={totalVisited}
+            iconColor="text-accent"
+            loading={isLoadingAny}
+          />
+          <StatCard
+            icon={Trophy}
+            label="Challenges Done"
+            value={linesCompleted}
+            iconColor="text-action-orange"
+            loading={isLoadingAny}
+          />
+          <StatCard
+            icon={Activity}
+            label="Active Now"
+            value={weekly.activities}
+            iconColor="text-action-green"
+            loading={isLoadingAny}
+          />
+          <StatCard
+            icon={Award}
+            label="Badges Earned"
+            value={linesCompleted}
+            iconColor="text-primary"
+            loading={isLoadingAny}
+          />
+          <StatCard
+            icon={Users}
+            label="Friends"
+            value={0}
+            iconColor="text-action-pink"
+            loading={isLoadingAny}
+          />
+        </div>
+
+        {/* Action Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <ActionCard
+            title="Start a Challenge"
+            description="Test yourself with official challenges"
+            icon={Zap}
+            href="/challenges"
+            colorClass="bg-gradient-to-br from-action-blue to-action-blue/80"
+          />
+          <ActionCard
+            title="Create a Route"
+            description="Plan your next tube adventure"
+            icon={Route}
+            href="/routes/create"
+            colorClass="bg-gradient-to-br from-action-purple to-action-purple/80"
+          />
+          <ActionCard
+            title="View Feed"
+            description="See what your friends are doing"
+            icon={Rss}
+            href="/activities"
+            colorClass="bg-gradient-to-br from-action-green to-action-green/80"
+          />
+        </div>
+
+        {/* Recent Activities */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Recent Activities</CardTitle>
+            <CardDescription>Your latest tube adventures</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {activitiesLoading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : activitiesData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activities yet. Start your first activity!</p>
+            ) : (
+              <ul className="divide-y">
+                {activitiesData.slice(0, 5).map((a: any) => (
+                  <li 
+                    key={a.id} 
+                    className="py-4 flex items-center justify-between hover:bg-muted/50 -mx-6 px-6 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/activities/${a.id}`)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Activity className="w-6 h-6 text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-medium">{a.title || 'Untitled Activity'}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {a.station_tfl_ids?.length || 0} stations • {a.distance_km ? Number(a.distance_km).toFixed(1) : '0.0'} km
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {new Date(a.started_at).toLocaleDateString()}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Public Transport Dashboard</h1>
-              <p className="text-muted-foreground">Welcome back, {profile.display_name || user.email}!</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate('/settings')}>Settings</Button>
-            <Button variant="outline" onClick={() => navigate('/routes/create')}>Create Route</Button>
-            <Button onClick={() => navigate('/activities/new')}>New Activity</Button>
-          </div>
-        </header>
+          </CardContent>
+        </Card>
 
-        <main>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="animate-fade-in">
-            <CardHeader>
-              <CardTitle>Total Stations Visited</CardTitle>
-              <CardDescription>Verified visits only</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold">{isLoadingAny ? '—' : totalVisited}</p>
-            </CardContent>
-          </Card>
-          <Card className="animate-fade-in">
-            <CardHeader>
-              <CardTitle>Lines Completed</CardTitle>
-              <CardDescription>Across all Tube lines</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold">{isLoadingAny ? '—' : linesCompleted}</p>
-            </CardContent>
-          </Card>
-          <Card className="animate-fade-in">
-            <CardHeader>
-              <CardTitle>Distance Travelled</CardTitle>
-              <CardDescription>From your activities (km)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold">{isLoadingAny ? '—' : totalDistance.toFixed(1)}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* My Activities and My Routes tiles */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/activities')}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                My Activities
-                <span className="text-xl">▸</span>
-              </CardTitle>
-              <CardDescription>
-                {latestActivity ? (
-                  <>
-                    Latest: {latestActivity.title || 'Untitled activity'}
-                    <br />
-                    {latestActivity.start_station_tfl_id && latestActivity.end_station_tfl_id && stations.length > 0 ? 
-                      `${stations.find(s => s.id === latestActivity.start_station_tfl_id)?.name || latestActivity.start_station_tfl_id} → ${stations.find(s => s.id === latestActivity.end_station_tfl_id)?.name || latestActivity.end_station_tfl_id}` : 
-                      'Route not specified'}
-                  </>
-                ) : (
-                  'No activities yet'
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {latestActivity ? (
-                <div className="space-y-1">
-                  <div className="text-sm">Visited {Array.isArray(latestActivity.station_tfl_ids) ? Math.floor(latestActivity.station_tfl_ids.length * 0.6) : 0}/{Array.isArray(latestActivity.station_tfl_ids) ? latestActivity.station_tfl_ids.length : 0} • {latestActivity.distance_km ? Number(latestActivity.distance_km).toFixed(1) : '0.0'} km</div>
-                  <div className="text-xs text-muted-foreground">Updated {new Date(latestActivity.started_at).toLocaleTimeString()}</div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Start your first activity</p>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button onClick={(e) => { e.stopPropagation(); navigate('/activities'); }} className="w-full">
-                View Activities
-              </Button>
-            </CardFooter>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/routes')}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                My Routes
-                <span className="text-xl">▸</span>
-              </CardTitle>
-              <CardDescription>Saved routes and challenges</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1">
-                <div className="text-sm">Your saved tube routes for planning activities</div>
-                <div className="text-xs text-muted-foreground">Create routes to track your journeys</div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={(e) => { e.stopPropagation(); navigate('/routes'); }} className="w-full">
-                View Routes
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Map section */}
-        <div className="grid grid-cols-1 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Map</CardTitle>
-              <CardDescription>Open the interactive network map</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="relative w-full h-48 rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-secondary/20">
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">Map preview</div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full" onClick={() => navigate('/map')}>Open Map</Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Weekly / Monthly */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Weekly & Monthly Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
               <CardTitle>This Week</CardTitle>
               <CardDescription>Last 7 days</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold">{isLoadingAny ? '—' : `${weekly.activities} activities`}</div>
-              <div className="text-muted-foreground">Distance: {isLoadingAny ? '—' : `${weekly.distance.toFixed(1)} km`}</div>
+              <div className="text-3xl font-bold mb-2">{weekly.activities}</div>
+              <p className="text-sm text-muted-foreground">
+                Activities • {weekly.distance.toFixed(1)} km travelled
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -338,44 +312,16 @@ const Index = () => {
               <CardDescription>Last 30 days</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold">{isLoadingAny ? '—' : `${monthly.activities} activities`}</div>
-              <div className="text-muted-foreground">Distance: {isLoadingAny ? '—' : `${monthly.distance.toFixed(1)} km`}</div>
+              <div className="text-3xl font-bold mb-2">{monthly.activities}</div>
+              <p className="text-sm text-muted-foreground">
+                Activities • {monthly.distance.toFixed(1)} km travelled
+              </p>
             </CardContent>
           </Card>
         </div>
-
-        {/* Recent activities feed */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activities</CardTitle>
-            <CardDescription>Your last 5 activities</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {activitiesLoading ? (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : activitiesData.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No activities yet.</p>
-            ) : (
-              <ul className="divide-y">
-                {activitiesData.map((a: any) => (
-                  <li key={a.id} className="py-3 flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">{a.title || 'Untitled activity'}</div>
-                      <div className="text-xs text-muted-foreground">{new Date(a.started_at).toLocaleString()}</div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {a.distance_km ? Number(a.distance_km).toFixed(1) : '0.0'} km
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </main>
-      </div>
+      </AppLayout>
       <Tutorial open={showTutorial} onComplete={handleTutorialComplete} />
-    </div>
+    </>
   );
 };
 
