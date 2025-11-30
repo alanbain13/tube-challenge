@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Loader2, Check, X } from 'lucide-react';
 
 interface ProfileSetupProps {
   userId: string;
@@ -27,6 +28,9 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [displayNameChecking, setDisplayNameChecking] = useState(false);
+  const [displayNameAvailable, setDisplayNameAvailable] = useState<boolean | null>(null);
+  const [originalDisplayName, setOriginalDisplayName] = useState('');
   const { toast } = useToast();
   
   // Load existing profile data if available
@@ -41,6 +45,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
       if (data) {
         setRealName(data.username || '');  // Real name from username field
         setDisplayName(data.display_name || '');  // Unique ID from display_name field
+        setOriginalDisplayName(data.display_name || '');
         setHomeStation(data.home_station || '');
         if (data.avatar_url) {
           setSelectedAvatar(data.avatar_url);
@@ -51,6 +56,41 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
     
     loadProfile();
   }, [userId]);
+
+  // Real-time display name validation
+  useEffect(() => {
+    const trimmedDisplayName = displayName.trim();
+    
+    // Reset if empty or unchanged
+    if (!trimmedDisplayName || trimmedDisplayName === originalDisplayName) {
+      setDisplayNameAvailable(null);
+      setDisplayNameChecking(false);
+      return;
+    }
+
+    // Check format first (client-side)
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedDisplayName)) {
+      setDisplayNameAvailable(false);
+      setDisplayNameChecking(false);
+      return;
+    }
+
+    // Debounced uniqueness check
+    setDisplayNameChecking(true);
+    const timeoutId = setTimeout(async () => {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('display_name', trimmedDisplayName)
+        .neq('user_id', userId)
+        .maybeSingle();
+
+      setDisplayNameAvailable(!existingProfile);
+      setDisplayNameChecking(false);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [displayName, userId, originalDisplayName]);
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -229,16 +269,57 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
           {/* Display Name */}
           <div className="space-y-2">
             <Label htmlFor="display-name">Display Name (Optional)</Label>
-            <Input
-              id="display-name"
-              placeholder="Alan-013"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              pattern="[a-zA-Z0-9_-]+"
-            />
-            <p className="text-sm text-muted-foreground">
-              Your unique username - letters, numbers, dashes and underscores only
-            </p>
+            <div className="relative">
+              <Input
+                id="display-name"
+                placeholder="Alan-013"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                pattern="[a-zA-Z0-9_-]+"
+                className={
+                  displayName.trim() && displayName.trim() !== originalDisplayName
+                    ? displayNameAvailable === false
+                      ? 'pr-10 border-destructive focus-visible:ring-destructive'
+                      : displayNameAvailable === true
+                      ? 'pr-10 border-green-500 focus-visible:ring-green-500'
+                      : ''
+                    : ''
+                }
+              />
+              {displayName.trim() && displayName.trim() !== originalDisplayName && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {displayNameChecking ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : displayNameAvailable === true ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : displayNameAvailable === false ? (
+                    <X className="h-4 w-4 text-destructive" />
+                  ) : null}
+                </div>
+              )}
+            </div>
+            {displayName.trim() && displayName.trim() !== originalDisplayName && (
+              <p className={`text-sm ${
+                displayNameAvailable === false 
+                  ? 'text-destructive' 
+                  : displayNameAvailable === true 
+                  ? 'text-green-600 dark:text-green-500' 
+                  : 'text-muted-foreground'
+              }`}>
+                {displayNameChecking 
+                  ? 'Checking availability...' 
+                  : displayNameAvailable === true 
+                  ? 'Display name is available!' 
+                  : displayNameAvailable === false 
+                  ? 'Display name is already taken' 
+                  : 'Your unique username - letters, numbers, dashes and underscores only'}
+              </p>
+            )}
+            {(!displayName.trim() || displayName.trim() === originalDisplayName) && (
+              <p className="text-sm text-muted-foreground">
+                Your unique username - letters, numbers, dashes and underscores only
+              </p>
+            )}
           </div>
 
           {/* Home Station */}
@@ -258,7 +339,12 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
           <Button 
             onClick={handleSave} 
             className="w-full" 
-            disabled={saving || !realName.trim()}
+            disabled={
+              saving || 
+              !realName.trim() || 
+              displayNameChecking || 
+              (displayName.trim() && displayName.trim() !== originalDisplayName && displayNameAvailable === false)
+            }
           >
             {saving ? 'Saving...' : 'Complete Profile'}
           </Button>
