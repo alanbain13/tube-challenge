@@ -232,7 +232,7 @@ const Routes = () => {
       <AppLayout>
         <header className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Routes</h1>
+          <h1 className="text-4xl font-black text-foreground">Routes</h1>
           <p className="text-muted-foreground">Your saved tube routes and challenges</p>
         </div>
         <div className="flex gap-2">

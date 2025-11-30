@@ -213,7 +213,7 @@ const Activities = () => {
       <AppLayout>
         <header className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">My Activities</h1>
+            <h1 className="text-4xl font-black text-foreground">My Activities</h1>
             <p className="text-muted-foreground">Your tube journey activities and challenges</p>
           </div>
           <div className="flex gap-2">

@@ -321,7 +321,7 @@ const Index = () => {
         {/* Recent Activities */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Recent Activities</CardTitle>
+            <CardTitle className="text-4xl font-black">Recent Activities</CardTitle>
             <CardDescription>Your latest tube adventures</CardDescription>
           </CardHeader>
           <CardContent>
@@ -362,8 +362,8 @@ const Index = () => {
         {friendsList && friendsList.length > 0 && (
           <Card className="mb-8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Rss className="w-5 h-5" />
+              <CardTitle className="text-4xl font-black flex items-center gap-2">
+                <Rss className="w-8 h-8" />
                 Activity Feed
               </CardTitle>
               <CardDescription>Recent activities from you and your friends</CardDescription>
@@ -421,7 +421,7 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>This Week</CardTitle>
+              <CardTitle className="text-4xl font-black">This Week</CardTitle>
               <CardDescription>Last 7 days</CardDescription>
             </CardHeader>
             <CardContent>
@@ -433,7 +433,7 @@ const Index = () => {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>This Month</CardTitle>
+              <CardTitle className="text-4xl font-black">This Month</CardTitle>
               <CardDescription>Last 30 days</CardDescription>
             </CardHeader>
             <CardContent>
