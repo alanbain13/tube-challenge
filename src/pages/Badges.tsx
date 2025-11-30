@@ -26,17 +26,20 @@ interface UserBadge {
 }
 
 export default function Badges() {
-  // Fetch all available badges
+  // Fetch all available badges with metro system info
   const { data: allBadges } = useQuery({
     queryKey: ["all-badges"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("badges")
-        .select("*")
+        .select(`
+          *,
+          metro_system:metro_systems(*)
+        `)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      return data as Badge[];
+      return data;
     },
   });
 
@@ -66,6 +69,20 @@ export default function Badges() {
   const availableCount = totalBadges - earnedCount;
   const completionPercentage = totalBadges ? Math.round((earnedCount / totalBadges) * 100) : 0;
   const thisMonthCount = userBadges?.filter(ub => isThisMonth(new Date(ub.earned_at))).length || 0;
+
+  // Get earned badge IDs
+  const earnedBadgeIds = new Set(userBadges?.map(ub => ub.badge_id) || []);
+  
+  // Get unearned badges grouped by metro system
+  const unearnedBadges = allBadges?.filter(badge => !earnedBadgeIds.has(badge.id)) || [];
+  const badgesByMetro = unearnedBadges.reduce((acc, badge) => {
+    const metroName = badge.metro_system?.name || "Other";
+    if (!acc[metroName]) {
+      acc[metroName] = [];
+    }
+    acc[metroName].push(badge);
+    return acc;
+  }, {} as Record<string, typeof unearnedBadges>);
 
   return (
     <AppLayout>
@@ -153,6 +170,36 @@ export default function Badges() {
                 </Card>
               );
             })}
+          </div>
+        )}
+
+        {/* Available Badges Section */}
+        {Object.keys(badgesByMetro).length > 0 && (
+          <div className="mt-16">
+            {Object.entries(badgesByMetro).map(([metroName, badges]) => (
+              <div key={metroName} className="mb-12">
+                <h2 className="text-2xl font-semibold mb-6">
+                  {metroName}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {badges.map((badge) => (
+                    <Card key={badge.id} className="overflow-hidden opacity-60 hover:opacity-75 transition-opacity">
+                      <CardContent className="pt-8 pb-6 text-center space-y-4">
+                        <div className="text-7xl mb-4 grayscale">
+                          {badge.image_url}
+                        </div>
+                        <h3 className="font-bold text-lg text-muted-foreground">
+                          {badge.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground px-2">
+                          {badge.description}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
