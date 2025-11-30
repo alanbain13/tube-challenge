@@ -10,6 +10,8 @@ import { AppLayout } from "@/components/AppLayout";
 import { StatCard } from "@/components/StatCard";
 import { ActionCard } from "@/components/ActionCard";
 import { MapPin, Trophy, Activity, Award, Users, Zap, Route, Rss } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { formatDistanceToNow } from "date-fns";
 
 const Index = () => {
   const { user, profile, loading, profileLoading } = useAuth();
@@ -80,6 +82,70 @@ const Index = () => {
       return data ?? [];
     },
     enabled: !!user,
+  });
+
+  // Fetch friends list
+  const { data: friendsList } = useQuery({
+    queryKey: ["friends-list", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from("friendships")
+        .select("user_id_1, user_id_2")
+        .eq("status", "accepted")
+        .or(`user_id_1.eq.${user.id},user_id_2.eq.${user.id}`);
+
+      if (error) throw error;
+      
+      const friendIds = data.map(f => 
+        f.user_id_1 === user.id ? f.user_id_2 : f.user_id_1
+      );
+      
+      return friendIds;
+    },
+    enabled: !!user,
+  });
+
+  // Fetch combined feed (user + friends activities)
+  const { data: combinedFeed = [], isLoading: feedLoading } = useQuery({
+    queryKey: ["combined-feed", user?.id, friendsList],
+    queryFn: async () => {
+      if (!user || !friendsList) return [];
+
+      const userIds = [user.id, ...friendsList];
+
+      // Fetch activities
+      const { data: activities, error: activitiesError } = await supabase
+        .from("activities")
+        .select("*")
+        .in("user_id", userIds)
+        .order("started_at", { ascending: false })
+        .limit(20);
+
+      if (activitiesError) throw activitiesError;
+
+      // Fetch profiles for all users
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("user_id", userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Create profile map
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+
+      // Enrich activities with profile data
+      const enrichedActivities = activities?.map(activity => ({
+        ...activity,
+        profile: profileMap.get(activity.user_id),
+        isCurrentUser: activity.user_id === user.id,
+      })) || [];
+
+      return enrichedActivities;
+    },
+    enabled: !!user && !!friendsList,
   });
 
   const {
@@ -291,6 +357,65 @@ const Index = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Combined Feed (User + Friends) */}
+        {friendsList && friendsList.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Rss className="w-5 h-5" />
+                Activity Feed
+              </CardTitle>
+              <CardDescription>Recent activities from you and your friends</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {feedLoading ? (
+                <p className="text-sm text-muted-foreground">Loading feed...</p>
+              ) : combinedFeed.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No activities to show yet</p>
+              ) : (
+                <ul className="divide-y">
+                  {combinedFeed.map((activity: any) => (
+                    <li 
+                      key={activity.id} 
+                      className="py-4 flex items-center justify-between hover:bg-muted/50 -mx-6 px-6 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/activities/${activity.id}`)}
+                    >
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <Avatar className="h-12 w-12 flex-shrink-0">
+                          <AvatarImage src={activity.profile?.avatar_url || undefined} />
+                          <AvatarFallback>
+                            {activity.profile?.display_name?.charAt(0).toUpperCase() || 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold truncate">
+                              {activity.isCurrentUser 
+                                ? 'You' 
+                                : (activity.profile?.display_name || activity.profile?.username || 'Unknown User')
+                              }
+                            </span>
+                            <span className="text-muted-foreground text-sm">
+                              {activity.title || 'Untitled Activity'}
+                            </span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {activity.station_tfl_ids?.length || 0} stations
+                            {activity.distance_km && ` • ${Number(activity.distance_km).toFixed(1)} km`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground whitespace-nowrap ml-4">
+                        {formatDistanceToNow(new Date(activity.started_at), { addSuffix: true })}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Weekly & Monthly Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
