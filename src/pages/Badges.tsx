@@ -6,97 +6,66 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, isThisMonth } from "date-fns";
 
-interface Achievement {
+interface Badge {
   id: string;
   name: string;
-  key: string;
-  type: string;
-  earned_at: string;
-  meta: any;
+  description: string;
+  image_url: string;
+  challenge_id: string | null;
+  metro_system_id: string | null;
+  badge_type: string;
 }
 
-interface ChallengeAttempt {
-  duration_minutes: number;
-  completed_at: string;
-  challenge_id: string;
-  challenge: {
-    name: string;
-    challenge_type: string;
-  };
+interface UserBadge {
+  id: string;
+  badge_id: string;
+  earned_at: string;
+  completion_time_minutes: number | null;
+  rank: number | null;
+  badge: Badge;
 }
 
 export default function Badges() {
-  const { data: achievements, isLoading } = useQuery({
-    queryKey: ["achievements"],
+  // Fetch all available badges
+  const { data: allBadges } = useQuery({
+    queryKey: ["all-badges"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("badges")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data as Badge[];
+    },
+  });
+
+  // Fetch user's earned badges
+  const { data: userBadges, isLoading } = useQuery({
+    queryKey: ["user-badges"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase
-        .from("achievements")
-        .select("*")
+        .from("user_badges")
+        .select(`
+          *,
+          badge:badges(*)
+        `)
         .eq("user_id", user.id)
         .order("earned_at", { ascending: false });
 
       if (error) throw error;
-      return data as Achievement[];
+      return data as UserBadge[];
     },
   });
 
-  const { data: challengeAttempts } = useQuery({
-    queryKey: ["challenge-attempts"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { data, error } = await supabase
-        .from("challenge_attempts")
-        .select(`
-          *,
-          challenge:challenges(name, challenge_type)
-        `)
-        .eq("user_id", user.id)
-        .order("completed_at", { ascending: false });
-
-      if (error) throw error;
-      return data as ChallengeAttempt[];
-    },
-  });
-
-  const { data: totalChallenges } = useQuery({
-    queryKey: ["total-challenges"],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from("challenges")
-        .select("*", { count: "exact", head: true })
-        .eq("is_official", true);
-
-      if (error) throw error;
-      return count || 0;
-    },
-  });
-
-  const earnedCount = achievements?.length || 0;
-  const availableCount = (totalChallenges || 0) - earnedCount;
-  const completionPercentage = totalChallenges ? Math.round((earnedCount / totalChallenges) * 100) : 0;
-  const thisMonthCount = achievements?.filter(a => isThisMonth(new Date(a.earned_at))).length || 0;
-
-  const getBadgeEmoji = (challengeName: string) => {
-    const name = challengeName.toLowerCase();
-    if (name.includes("all lines") || name.includes("complete all")) return "🏆";
-    if (name.includes("circle")) return "🥇";
-    if (name.includes("speed") || name.includes("fast")) return "⚡";
-    if (name.includes("district")) return "🎯";
-    if (name.includes("northern")) return "⭐";
-    return "🏅";
-  };
-
-  const getBadgeDescription = (challengeName: string) => {
-    const name = challengeName.toLowerCase();
-    if (name.includes("all lines")) return "Completed all London Underground stations";
-    if (name.includes("circle")) return "Completed the Circle Line challenge";
-    return `Completed the ${challengeName}`;
-  };
+  const earnedCount = userBadges?.length || 0;
+  const totalBadges = allBadges?.length || 0;
+  const availableCount = totalBadges - earnedCount;
+  const completionPercentage = totalBadges ? Math.round((earnedCount / totalBadges) * 100) : 0;
+  const thisMonthCount = userBadges?.filter(ub => isThisMonth(new Date(ub.earned_at))).length || 0;
 
   return (
     <AppLayout>
@@ -150,7 +119,7 @@ export default function Badges() {
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading your badges...</p>
           </div>
-        ) : !achievements || achievements.length === 0 ? (
+        ) : !userBadges || userBadges.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <Award className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -159,27 +128,26 @@ export default function Badges() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {achievements.map((achievement) => {
-              const relatedAttempt = challengeAttempts?.find(
-                (attempt) => attempt.challenge_id === achievement.meta?.challenge_id
-              );
-              const emoji = getBadgeEmoji(achievement.name);
-              const description = getBadgeDescription(achievement.name);
-
+            {userBadges.map((userBadge) => {
               return (
-                <Card key={achievement.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                <Card key={userBadge.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="pt-8 pb-6 text-center space-y-4">
                     <div className="text-7xl mb-4">
-                      {emoji}
+                      {userBadge.badge.image_url}
                     </div>
                     <h3 className="font-bold text-lg">
-                      {achievement.name}
+                      {userBadge.badge.name}
                     </h3>
                     <p className="text-sm text-muted-foreground px-2">
-                      {description}
+                      {userBadge.badge.description}
                     </p>
+                    {userBadge.completion_time_minutes && (
+                      <p className="text-xs text-primary font-medium">
+                        Completed in {Math.floor(userBadge.completion_time_minutes / 60)}h {userBadge.completion_time_minutes % 60}m
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground pt-2">
-                      Earned {format(new Date(achievement.earned_at), "MMM d, yyyy")}
+                      Earned {format(new Date(userBadge.earned_at), "MMM d, yyyy")}
                     </p>
                   </CardContent>
                 </Card>

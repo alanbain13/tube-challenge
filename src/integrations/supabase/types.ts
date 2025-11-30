@@ -177,6 +177,57 @@ export type Database = {
           },
         ]
       }
+      badges: {
+        Row: {
+          badge_type: string
+          challenge_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string
+          metro_system_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          badge_type?: string
+          challenge_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url: string
+          metro_system_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          badge_type?: string
+          challenge_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string
+          metro_system_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "badges_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "badges_metro_system_id_fkey"
+            columns: ["metro_system_id"]
+            isOneToOne: false
+            referencedRelation: "metro_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       challenge_attempts: {
         Row: {
           activity_id: string
@@ -674,6 +725,47 @@ export type Database = {
             columns: ["metro_system_id"]
             isOneToOne: false
             referencedRelation: "metro_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_badges: {
+        Row: {
+          badge_id: string
+          completion_time_minutes: number | null
+          created_at: string
+          earned_at: string
+          id: string
+          meta: Json | null
+          rank: number | null
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          completion_time_minutes?: number | null
+          created_at?: string
+          earned_at?: string
+          id?: string
+          meta?: Json | null
+          rank?: number | null
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          completion_time_minutes?: number | null
+          created_at?: string
+          earned_at?: string
+          id?: string
+          meta?: Json | null
+          rank?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
             referencedColumns: ["id"]
           },
         ]
