@@ -13,6 +13,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
@@ -80,6 +81,35 @@ export default function Auth() {
       return;
     }
     
+    if (!username.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a display name",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate real name (only letters and spaces)
+    if (!/^[a-zA-Z\s]+$/.test(displayName.trim())) {
+      toast({
+        title: "Invalid Name",
+        description: "Your name can only contain letters and spaces",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate username (letters, numbers, dashes, underscores, no spaces)
+    if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
+      toast({
+        title: "Invalid Display Name",
+        description: "Display name can only contain letters, numbers, dashes and underscores (no spaces)",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setLoading(true);
     
     // Call Supabase directly to check the response
@@ -88,8 +118,11 @@ export default function Auth() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        // Store display_name (real name) in metadata
-        data: { display_name: displayName.trim() }
+        // Store both display_name (real name) and username
+        data: { 
+          display_name: displayName.trim(),
+          username: username.trim().toLowerCase()
+        }
       }
     });
     
@@ -277,9 +310,23 @@ export default function Auth() {
                     placeholder="John Doe"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
+                    pattern="[a-zA-Z\s]+"
                     required
                   />
-                  <p className="text-xs text-muted-foreground">Your real name</p>
+                  <p className="text-xs text-muted-foreground">Your real name - letters and spaces only</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-username">Display Name *</Label>
+                  <Input
+                    id="signup-username"
+                    type="text"
+                    placeholder="johndoe123"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                    pattern="[a-zA-Z0-9_-]+"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">Your unique username - letters, numbers, dashes and underscores only (no spaces)</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
