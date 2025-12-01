@@ -27,7 +27,10 @@ export const useNotifications = () => {
 
   // Fetch notifications
   const fetchNotifications = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase

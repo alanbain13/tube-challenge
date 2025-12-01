@@ -13,7 +13,15 @@ import { Badge } from "@/components/ui/badge";
 
 export const NotificationBell = () => {
   const navigate = useNavigate();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, loading } = useNotifications();
+
+  if (loading) {
+    return (
+      <Button variant="ghost" size="icon" className="relative">
+        <Bell className="w-5 h-5" />
+      </Button>
+    );
+  }
 
   const handleNotificationClick = (notification: any) => {
     markAsRead(notification.id);
