@@ -66,3 +66,6 @@ verify_jwt = false
 
 [functions.verify-roundel]
 verify_jwt = true
+
+[functions.update-station-zones]
+verify_jwt = false
