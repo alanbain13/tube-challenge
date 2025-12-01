@@ -6,6 +6,24 @@ import filledRoundel from "@/assets/roundel-filled.svg";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || localStorage.getItem('mapbox_token') || '';
 
+// TfL official tube line colors
+const tubeLineColors: { [key: string]: string } = {
+  'Bakerloo': '#B36305',
+  'Central': '#E32017', 
+  'Circle': '#FFD300',
+  'District': '#00782A',
+  'DLR': '#00A4A7',
+  'Hammersmith & City': '#F3A9BB',
+  'Jubilee': '#A0A5A9',
+  'Metropolitan': '#9B0056',
+  'Northern': '#000000',
+  'Piccadilly': '#003688',
+  'Victoria': '#0098D4',
+  'Waterloo & City': '#95CDBA',
+  'Elizabeth': '#7156A5',
+  'London Overground': '#FF6600'
+};
+
 interface Station {
   id: string;
   name: string;
@@ -31,6 +49,33 @@ export default function ReadOnlyMetroMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [lineFeatures, setLineFeatures] = useState<any[]>([]);
+
+  // Load tube lines from GeoJSON
+  useEffect(() => {
+    const loadLinesFromGeoJSON = async () => {
+      try {
+        const response = await fetch('/data/stations.json');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch stations data: ${response.status}`);
+        }
+        
+        const geojsonData = await response.json();
+        
+        // Get line features (LineString features)
+        const lines = geojsonData.features.filter(
+          (feature: any) => feature.geometry.type === 'LineString'
+        );
+        
+        setLineFeatures(lines);
+      } catch (error) {
+        console.error('Error loading GeoJSON data:', error);
+        setLineFeatures([]);
+      }
+    };
+
+    loadLinesFromGeoJSON();
+  }, []);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -58,6 +103,54 @@ export default function ReadOnlyMetroMap({
     };
   }, [center, zoom]);
 
+  // Add tube lines to map
+  useEffect(() => {
+    if (!map.current || !mapLoaded || lineFeatures.length === 0) return;
+
+    lineFeatures.forEach((lineFeature, index) => {
+      const lineName = lineFeature.properties.line_name || `Line-${index}`;
+      const lineColor = lineFeature.properties.color || lineFeature.properties.stroke || '#666666';
+      
+      const sourceId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+      const layerId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+
+      try {
+        // Check if source already exists and remove it
+        if (map.current!.getSource(sourceId)) {
+          map.current!.removeLayer(layerId);
+          map.current!.removeSource(sourceId);
+        }
+
+        // Create GeoJSON for this line
+        const lineGeoJSON = {
+          type: 'FeatureCollection' as const,
+          features: [lineFeature]
+        };
+        
+        // Add source
+        map.current!.addSource(sourceId, {
+          type: 'geojson',
+          data: lineGeoJSON
+        });
+
+        // Add line layer
+        map.current!.addLayer({
+          id: layerId,
+          type: 'line',
+          source: sourceId,
+          paint: {
+            'line-color': lineColor,
+            'line-width': lineFeature.properties['stroke-width'] || 4,
+            'line-opacity': 0.8
+          }
+        });
+      } catch (error) {
+        console.error(`Error adding line layer ${layerId}:`, error);
+      }
+    });
+  }, [mapLoaded, lineFeatures]);
+
+  // Add station markers
   useEffect(() => {
     if (!map.current || !mapLoaded || stations.length === 0) return;
 
