@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Map, Activity, Trophy, Route, Award, Users, Settings, Menu, X } from "lucide-react";
+import { Home, Map, Activity, Trophy, Route, Award, Users, Settings, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "./NotificationBell";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { name: "Home", path: "/", icon: Home },
@@ -20,6 +21,7 @@ const navItems = [
 export const MainNavigation = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
 
   return (
     <nav className="bg-background border-b border-border/50 sticky top-0 z-50">
@@ -55,12 +57,12 @@ export const MainNavigation = () => {
                 </Link>
               );
             })}
-            <NotificationBell />
+            {!loading && user && <NotificationBell />}
           </div>
 
           {/* Mobile Navigation */}
           <div className="md:hidden flex items-center gap-2">
-            <NotificationBell />
+            {!loading && user && <NotificationBell />}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-foreground">
