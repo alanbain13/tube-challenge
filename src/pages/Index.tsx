@@ -9,6 +9,7 @@ import { Tutorial } from "@/components/Tutorial";
 import { AppLayout } from "@/components/AppLayout";
 import { StatCard } from "@/components/StatCard";
 import { ActionCard } from "@/components/ActionCard";
+import ActivityStartModal from "@/components/ActivityStartModal";
 import { MapPin, Trophy, Activity, Award, Users, Zap, Route, Rss } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
@@ -17,6 +18,7 @@ const Index = () => {
   const { user, profile, loading, profileLoading } = useAuth();
   const navigate = useNavigate();
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -295,6 +297,15 @@ const Index = () => {
 
         {/* Action Cards Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div onClick={() => setShowActivityModal(true)}>
+            <ActionCard
+              title="Start an Activity"
+              description="Begin tracking your tube journey"
+              icon={Activity}
+              href="#"
+              colorClass="bg-gradient-to-br from-action-orange to-action-orange/80"
+            />
+          </div>
           <ActionCard
             title="Start a Challenge"
             description="Test yourself with official challenges"
@@ -308,13 +319,6 @@ const Index = () => {
             icon={Route}
             href="/routes/create"
             colorClass="bg-gradient-to-br from-action-purple to-action-purple/80"
-          />
-          <ActionCard
-            title="View Feed"
-            description="See what your friends are doing"
-            icon={Rss}
-            href="/activities"
-            colorClass="bg-gradient-to-br from-action-green to-action-green/80"
           />
         </div>
 
@@ -446,6 +450,7 @@ const Index = () => {
         </div>
       </AppLayout>
       <Tutorial open={showTutorial} onComplete={handleTutorialComplete} />
+      <ActivityStartModal open={showActivityModal} onOpenChange={setShowActivityModal} />
     </>
   );
 };
