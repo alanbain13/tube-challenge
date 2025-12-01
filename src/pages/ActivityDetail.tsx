@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
+import { ActivityLikeButton } from "@/components/ActivityLikeButton";
+import { ActivityComments } from "@/components/ActivityComments";
 
 // Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
@@ -528,6 +530,26 @@ const ActivityDetail = () => {
               </Button>
             </div>
           </div>
+
+          {/* Social Features - Only show for completed activities */}
+          {activity.status === 'completed' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+              {/* Likes Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Reactions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ActivityLikeButton activityId={activity.id} showCount={true} />
+                </CardContent>
+              </Card>
+
+              {/* Comments Section - Full Width on smaller screens */}
+              <div className="lg:col-span-1">
+                <ActivityComments activityId={activity.id} />
+              </div>
+            </div>
+          )}
         </main>
         
         <DeleteConfirmModal
