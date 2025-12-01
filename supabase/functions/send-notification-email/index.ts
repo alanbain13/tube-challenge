@@ -210,7 +210,7 @@ serve(async (req) => {
 
     // Send email via Resend
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'TubeChallenge <notifications@send.antareez.com>',
+      from: 'TubeChallenge <notifications@antareez.com>',
       to: [recipient.email],
       subject,
       html: htmlContent,
