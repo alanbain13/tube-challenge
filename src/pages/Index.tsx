@@ -78,6 +78,7 @@ const Index = () => {
       const { data, error } = await supabase
         .from('activities')
         .select('*')
+        .eq('user_id', user!.id)
         .order('started_at', { ascending: false })
         .limit(5);
       if (error) throw error;
