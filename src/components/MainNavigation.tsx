@@ -4,6 +4,7 @@ import { Home, Map, Activity, Trophy, Route, Award, Users, Settings, Menu, X } f
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "./NotificationBell";
 
 const navItems = [
   { name: "Home", path: "/", icon: Home },
@@ -33,7 +34,7 @@ export const MainNavigation = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-6">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.icon;
@@ -54,10 +55,12 @@ export const MainNavigation = () => {
                 </Link>
               );
             })}
+            <NotificationBell />
           </div>
 
           {/* Mobile Navigation */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center gap-2">
+            <NotificationBell />
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-foreground">
