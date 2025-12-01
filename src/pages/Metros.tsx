@@ -62,7 +62,11 @@ export default function Metros() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {metros?.map((metro) => (
-              <Card key={metro.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <Card 
+                key={metro.id} 
+                className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => metro.is_active && navigate(`/metros/${metro.code}`)}
+              >
                 <div className="relative h-32 overflow-hidden">
                   <img 
                     src={metro.image_url} 
@@ -97,7 +101,10 @@ export default function Metros() {
                     className="w-full" 
                     disabled={!metro.is_active}
                     variant={metro.is_active ? "default" : "outline"}
-                    onClick={() => metro.is_active && navigate(`/metros/${metro.code}`)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      metro.is_active && navigate(`/metros/${metro.code}`);
+                    }}
                   >
                     {metro.is_active ? "View Map" : "Coming Soon"}
                   </Button>
