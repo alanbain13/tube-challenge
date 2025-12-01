@@ -4,7 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Settings } from "lucide-react";
-import ImportTfLStations from "@/components/ImportTfLStations";
+import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
 
 const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
@@ -85,9 +85,9 @@ export const DevPanel = ({ className }: DevPanelProps) => {
         )}
         
         <div className="pt-4 border-t border-orange-200 space-y-2">
-          <div className="text-xs font-medium text-orange-700 mb-2">Admin Tools</div>
+          <div className="text-xs font-medium text-orange-700 mb-2">Station Data Management</div>
           <div className="flex gap-2">
-            <ImportTfLStations onComplete={() => window.location.reload()} />
+            <SyncStationsFromGeoJSON onComplete={() => window.location.reload()} />
             <UpdateStationZones onComplete={() => window.location.reload()} />
           </div>
         </div>

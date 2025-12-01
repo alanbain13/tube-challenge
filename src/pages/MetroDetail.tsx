@@ -80,8 +80,21 @@ export default function MetroDetail() {
     enabled: !!metro?.id
   });
 
-  // Fetch stations from database (filtered by tfl_id prefix for tube)
-  const { data: dbStations, isLoading: stationsLoading } = useQuery({
+  // Fetch ALL stations for map display
+  const { data: allStations, isLoading: allStationsLoading } = useQuery({
+    queryKey: ['all-stations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('stations')
+        .select('*');
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch tube stations only for Line Progress and Station Checklist
+  const { data: tubeStations, isLoading: tubeStationsLoading } = useQuery({
     queryKey: ['tube-stations'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -112,10 +125,10 @@ export default function MetroDetail() {
     enabled: !!user
   });
 
-  // Transform stations for map display
-  const stations: Station[] = useMemo(() => {
-    if (!dbStations) return [];
-    return dbStations.map(s => ({
+  // Transform ALL stations for map display
+  const allStationsForMap: Station[] = useMemo(() => {
+    if (!allStations) return [];
+    return allStations.map(s => ({
       id: s.tfl_id,
       name: s.name,
       displayName: s.name,
@@ -123,7 +136,20 @@ export default function MetroDetail() {
       zone: s.zone,
       coordinates: [s.longitude, s.latitude] as [number, number]
     }));
-  }, [dbStations]);
+  }, [allStations]);
+
+  // Transform tube stations only for Line Progress and Station Checklist
+  const tubeStationsOnly: Station[] = useMemo(() => {
+    if (!tubeStations) return [];
+    return tubeStations.map(s => ({
+      id: s.tfl_id,
+      name: s.name,
+      displayName: s.name,
+      lines: s.lines || [],
+      zone: s.zone,
+      coordinates: [s.longitude, s.latitude] as [number, number]
+    }));
+  }, [tubeStations]);
 
   const verifiedVisitIds = useMemo(() => {
     return verifiedVisits?.map(v => v.station_tfl_id) || [];
@@ -167,12 +193,12 @@ export default function MetroDetail() {
     return { visitedCount, totalStations, progressPercent, currentPace, estimatedCompletion };
   }, [verifiedVisits, verifiedVisitIds, metro]);
 
-  // Calculate per-line progress
+  // Calculate per-line progress (tube lines only)
   const lineProgress = useMemo(() => {
-    if (!lines || !stations) return [];
+    if (!lines || !tubeStationsOnly) return [];
     
     return lines.map(line => {
-      const lineStations = stations.filter(s => s.lines.includes(line.name));
+      const lineStations = tubeStationsOnly.filter(s => s.lines.includes(line.name));
       const visitedInLine = lineStations.filter(s => verifiedVisitIds.includes(s.id)).length;
       const percentage = lineStations.length > 0 
         ? Math.round((visitedInLine / lineStations.length) * 100)
@@ -185,9 +211,9 @@ export default function MetroDetail() {
         percentage
       };
     });
-  }, [lines, stations, verifiedVisitIds]);
+  }, [lines, tubeStationsOnly, verifiedVisitIds]);
 
-  const isLoading = metroLoading || linesLoading || stationsLoading || visitsLoading;
+  const isLoading = metroLoading || linesLoading || allStationsLoading || tubeStationsLoading || visitsLoading;
 
   if (isLoading) {
     return (
@@ -249,7 +275,8 @@ export default function MetroDetail() {
 
         <Card className="mb-6 overflow-hidden">
           <ReadOnlyMetroMap
-            stations={stations}
+            key={metroId}
+            stations={allStationsForMap}
             verifiedVisits={verifiedVisitIds}
             center={[-0.1276, 51.5074]}
             zoom={10}
@@ -269,7 +296,7 @@ export default function MetroDetail() {
           <TabsContent value="checklist">
             <StationChecklist
               lines={lines || []}
-              stations={stations}
+              stations={tubeStationsOnly}
               verifiedVisits={verifiedVisitIds}
             />
           </TabsContent>
