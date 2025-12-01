@@ -4,6 +4,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Settings } from "lucide-react";
+import ImportTfLStations from "@/components/ImportTfLStations";
+import UpdateStationZones from "@/components/UpdateStationZones";
 
 const SIMULATION_MODE_ENV = import.meta.env.DEV || import.meta.env.VITE_SIMULATION_MODE === 'true';
 
@@ -81,6 +83,14 @@ export const DevPanel = ({ className }: DevPanelProps) => {
             Simulation mode is OFF — normal geofence validation will apply.
           </div>
         )}
+        
+        <div className="pt-4 border-t border-orange-200 space-y-2">
+          <div className="text-xs font-medium text-orange-700 mb-2">Admin Tools</div>
+          <div className="flex gap-2">
+            <ImportTfLStations onComplete={() => window.location.reload()} />
+            <UpdateStationZones onComplete={() => window.location.reload()} />
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

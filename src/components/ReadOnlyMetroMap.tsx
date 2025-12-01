@@ -171,14 +171,20 @@ export default function ReadOnlyMetroMap({
       el.style.backgroundSize = "100%";
       el.style.cursor = "default";
 
-      // Create popup content
+      // Categorize lines by type
+      const tubeLines = ['Bakerloo', 'Central', 'Circle', 'District', 'Hammersmith & City', 
+                         'Jubilee', 'Metropolitan', 'Northern', 'Piccadilly', 'Victoria', 'Waterloo & City'];
+      
+      const stationTubeLines = station.lines.filter(l => tubeLines.includes(l));
+      const stationOtherLines = station.lines.filter(l => !tubeLines.includes(l));
+
+      // Create popup content with line type categorization
       const popupContent = `
         <div class="p-2">
           <div class="font-semibold text-sm">${station.displayName}</div>
-          <div class="text-xs text-muted-foreground mt-1">
-            ${station.lines.join(", ")}
-          </div>
-          <div class="text-xs text-muted-foreground">Zone ${station.zone}</div>
+          ${stationTubeLines.length > 0 ? `<div class="text-xs text-muted-foreground mt-1">🚇 Tube: ${stationTubeLines.join(", ")}</div>` : ''}
+          ${stationOtherLines.length > 0 ? `<div class="text-xs text-muted-foreground mt-0.5">🚆 ${stationOtherLines.join(", ")}</div>` : ''}
+          <div class="text-xs text-muted-foreground mt-1">Zone ${station.zone}</div>
           <div class="text-xs mt-1 font-medium ${isVisited ? 'text-green-600' : 'text-gray-500'}">
             ${isVisited ? '✓ Visited' : 'Not visited'}
           </div>
