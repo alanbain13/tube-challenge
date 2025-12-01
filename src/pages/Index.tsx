@@ -296,7 +296,7 @@ const Index = () => {
         </div>
 
         {/* Action Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div onClick={() => setShowActivityModal(true)}>
             <ActionCard
               title="Start an Activity"
@@ -319,6 +319,13 @@ const Index = () => {
             icon={Route}
             href="/routes/create"
             colorClass="bg-gradient-to-br from-action-purple to-action-purple/80"
+          />
+          <ActionCard
+            title="View Feed"
+            description="See what your friends are doing"
+            icon={Rss}
+            href="/activities"
+            colorClass="bg-gradient-to-br from-action-green to-action-green/80"
           />
         </div>
 
