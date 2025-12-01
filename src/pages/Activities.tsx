@@ -7,12 +7,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2 } from "lucide-react";
+import { Plus, MapPin, Clock, Play, Eye, Edit, Trash2, Heart, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ActivityStartModal from "@/components/ActivityStartModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityTileMiniMap } from "@/components/ActivityTileMiniMap";
 import { AppLayout } from "@/components/AppLayout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FriendActivityFeed } from "@/components/FriendActivityFeed";
+import { ActivityLikeButton } from "@/components/ActivityLikeButton";
 
 const Activities = () => {
   const { user, loading } = useAuth();
@@ -208,13 +211,40 @@ const Activities = () => {
     );
   }
 
+  // Fetch likes/comments counts for activity
+  const { data: socialCounts } = useQuery({
+    queryKey: ["activity-social-counts"],
+    queryFn: async () => {
+      const activityIds = activities.map((a: any) => a.id);
+      
+      const counts: Record<string, { likes: number; comments: number }> = {};
+      
+      await Promise.all(
+        activityIds.map(async (id) => {
+          const [likesResult, commentsResult] = await Promise.all([
+            supabase.from("activity_likes").select("id").eq("activity_id", id),
+            supabase.from("activity_comments").select("id").eq("activity_id", id),
+          ]);
+          
+          counts[id] = {
+            likes: likesResult.data?.length || 0,
+            comments: commentsResult.data?.length || 0,
+          };
+        })
+      );
+      
+      return counts;
+    },
+    enabled: activities.length > 0,
+  });
+
   return (
     <>
       <AppLayout>
         <header className="mb-6 text-center">
           <div>
-            <h1 className="text-4xl font-black text-foreground mb-2">My Activities</h1>
-            <p className="text-muted-foreground">Your tube journey activities and challenges</p>
+            <h1 className="text-4xl font-black text-foreground mb-2">Activities</h1>
+            <p className="text-muted-foreground">Your tube journey activities and friends' feed</p>
           </div>
           <div className="flex gap-2 justify-center mt-6">
             <Button onClick={() => setShowActivityModal(true)}>
@@ -225,34 +255,42 @@ const Activities = () => {
         </header>
 
         <main>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-lg text-muted-foreground">Loading activities...</p>
-            </div>
-          ) : activities.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="max-w-md mx-auto">
-                <h2 className="text-xl font-semibold mb-4">No activities yet</h2>
-                <p className="text-muted-foreground mb-6">
-                  Create your first activity to start tracking your tube journeys
-                </p>
-                <Button onClick={() => setShowActivityModal(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Activity
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activities.map((activity: any) => {
-                const unifiedState = activity._unifiedState || { visited_actual: 0, planned_total: 0 };
-                const { visited_actual, planned_total } = unifiedState;
-                const statusText = activity.status === 'draft' ? 'Not started' : 
-                                 activity.status === 'active' ? 'Active' : 
-                                 activity.status === 'paused' ? 'Paused' : 'Completed';
-                
-                return (
-                  <Card key={activity.id} className="hover:shadow-lg transition-shadow">
+          <Tabs defaultValue="my-activities" className="w-full">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
+              <TabsTrigger value="my-activities">My Activities</TabsTrigger>
+              <TabsTrigger value="feed">Feed</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="my-activities">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-lg text-muted-foreground">Loading activities...</p>
+                </div>
+              ) : activities.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="max-w-md mx-auto">
+                    <h2 className="text-xl font-semibold mb-4">No activities yet</h2>
+                    <p className="text-muted-foreground mb-6">
+                      Create your first activity to start tracking your tube journeys
+                    </p>
+                    <Button onClick={() => setShowActivityModal(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Your First Activity
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {activities.map((activity: any) => {
+                    const unifiedState = activity._unifiedState || { visited_actual: 0, planned_total: 0 };
+                    const { visited_actual, planned_total } = unifiedState;
+                    const statusText = activity.status === 'draft' ? 'Not started' : 
+                                     activity.status === 'active' ? 'Active' : 
+                                     activity.status === 'paused' ? 'Paused' : 'Completed';
+                    const activityCounts = socialCounts?.[activity.id] || { likes: 0, comments: 0 };
+                    
+                    return (
+                      <Card key={activity.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between">
                         <span>{activity.title || "Untitled Activity"}</span>
@@ -299,19 +337,33 @@ const Activities = () => {
                           {activity.status === 'active' ? 'Updated' : 'Created'} {new Date(activity.started_at).toLocaleDateString()}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                         onClick={() => {
-                            console.log(`🧭 NAV: View activity clicked: ${activity.id}`);
-                            navigate(`/activities/${activity.id}`);
-                          }}
-                          className="flex items-center gap-1"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </Button>
+                        {/* Social Stats */}
+                        {activity.status === 'completed' && (
+                          <div className="flex items-center gap-4 pt-2 border-t text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Heart className="w-4 h-4" />
+                              <span>{activityCounts.likes}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <MessageCircle className="w-4 h-4" />
+                              <span>{activityCounts.comments}</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex flex-wrap gap-2 mt-4">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                           onClick={() => {
+                              console.log(`🧭 NAV: View activity clicked: ${activity.id}`);
+                              navigate(`/activities/${activity.id}`);
+                            }}
+                            className="flex items-center gap-1"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -337,25 +389,31 @@ const Activities = () => {
                           {activity.status === 'draft' ? 'Start' : 
                            activity.status === 'active' ? 'Continue' : 'Resume'}
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDeleteModal({ 
-                            open: true, 
-                            activityId: activity.id, 
-                            title: activity.title || "Untitled Activity" 
-                          })}
-                          className="flex items-center gap-1 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDeleteModal({ 
+                              open: true, 
+                              activityId: activity.id, 
+                              title: activity.title || "Untitled Activity" 
+                            })}
+                            className="flex items-center gap-1 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="feed">
+              <FriendActivityFeed />
+            </TabsContent>
+          </Tabs>
         </main>
       </AppLayout>
       
