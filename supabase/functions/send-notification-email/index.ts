@@ -125,7 +125,7 @@ serve(async (req) => {
                         <div style="color: #4a4a4a; font-size: 16px; line-height: 1.6;">
                           <p style="margin: 0 0 20px;"><strong>${actorName}</strong> liked your activity <strong>${activityTitle}</strong>!</p>
                           <div style="text-align: center; margin: 30px 0;">
-                            <a href="${appUrl}/activity/${activity_id}" style="display: inline-block; padding: 12px 30px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 500;">View Activity</a>
+                            <a href="${appUrl}/activities/${activity_id}" style="display: inline-block; padding: 12px 30px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 500;">View Activity</a>
                           </div>
                         </div>
                       </td>
@@ -186,7 +186,7 @@ serve(async (req) => {
                             <p style="margin: 0; color: #333; font-style: italic;">"${commentPreview}"</p>
                           </div>
                           <div style="text-align: center; margin: 30px 0;">
-                            <a href="${appUrl}/activity/${activity_id}" style="display: inline-block; padding: 12px 30px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 500;">View Activity</a>
+                            <a href="${appUrl}/activities/${activity_id}" style="display: inline-block; padding: 12px 30px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 500;">View Activity</a>
                           </div>
                         </div>
                       </td>
