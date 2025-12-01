@@ -4,7 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import emptyRoundel from "@/assets/roundel-empty.svg";
 import filledRoundel from "@/assets/roundel-filled.svg";
 
-const MAPBOX_TOKEN = "pk.eyJ1IjoiYWl2bWFpbiIsImEiOiJjbTRvMnV0YnYwd2RwMmlzOGEwdGsxcjN5In0.N7RfYGBBdtAG9zwLXYhBtw";
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || localStorage.getItem('mapbox_token') || '';
 
 interface Station {
   id: string;
@@ -34,6 +34,11 @@ export default function ReadOnlyMetroMap({
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
+
+    if (!MAPBOX_TOKEN) {
+      console.error('Mapbox token not found. Please add VITE_MAPBOX_TOKEN to your .env file.');
+      return;
+    }
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
