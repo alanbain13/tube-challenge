@@ -38,6 +38,11 @@ export default function ProfileSettings() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Notification preferences
+  const [emailOnLike, setEmailOnLike] = useState(true);
+  const [emailOnComment, setEmailOnComment] = useState(true);
+  const [prefsLoading, setPrefsLoading] = useState(false);
+
   useEffect(() => {
     if (!user) {
       navigate('/auth');
@@ -51,6 +56,22 @@ export default function ProfileSettings() {
       setHomeStation(profile.home_station || '');
       setSelectedAvatar(profile.avatar_url || '');
     }
+
+    // Fetch notification preferences
+    const fetchPreferences = async () => {
+      const { data, error } = await supabase
+        .from('notification_preferences')
+        .select('email_on_like, email_on_comment')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!error && data) {
+        setEmailOnLike(data.email_on_like);
+        setEmailOnComment(data.email_on_comment);
+      }
+    };
+
+    fetchPreferences();
   }, [user, profile, navigate]);
 
   // Real-time display name uniqueness check with debounce
@@ -271,6 +292,36 @@ export default function ProfileSettings() {
     navigate('/auth');
   };
 
+  const handleNotificationPrefsUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPrefsLoading(true);
+
+    try {
+      const { error } = await supabase
+        .from('notification_preferences')
+        .upsert({
+          user_id: user!.id,
+          email_on_like: emailOnLike,
+          email_on_comment: emailOnComment,
+        }, { onConflict: 'user_id' });
+
+      if (error) throw error;
+
+      toast({
+        title: "Preferences saved",
+        description: "Your notification preferences have been updated"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update preferences",
+        variant: "destructive"
+      });
+    } finally {
+      setPrefsLoading(false);
+    }
+  };
+
   if (!profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
@@ -291,8 +342,9 @@ export default function ProfileSettings() {
         </div>
 
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
 
@@ -425,6 +477,64 @@ export default function ProfileSettings() {
                     </Button>
                     <Button type="button" variant="outline" onClick={() => navigate('/')}>
                       Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <Card>
+              <CardHeader>
+                <CardTitle>Notification Preferences</CardTitle>
+                <CardDescription>
+                  Choose how you want to be notified about activity on your posts
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleNotificationPrefsUpdate} className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="email-on-like" className="text-base font-medium">
+                          Email me when someone likes my activity
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Get an email notification every time someone likes your activity
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="email-on-like"
+                        checked={emailOnLike}
+                        onChange={(e) => setEmailOnLike(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="email-on-comment" className="text-base font-medium">
+                          Email me when someone comments on my activity
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Get an email notification every time someone comments on your activity
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="email-on-comment"
+                        checked={emailOnComment}
+                        onChange={(e) => setEmailOnComment(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <Button type="submit" disabled={prefsLoading}>
+                      {prefsLoading ? 'Saving...' : 'Save Preferences'}
                     </Button>
                   </div>
                 </form>
