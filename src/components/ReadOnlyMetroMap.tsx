@@ -150,58 +150,124 @@ export default function ReadOnlyMetroMap({
     });
   }, [mapLoaded, lineFeatures]);
 
-  // Add station markers
+  // Add station markers as GeoJSON layers
   useEffect(() => {
     if (!map.current || !mapLoaded || stations.length === 0) return;
 
-    // Clear existing markers
-    const existingMarkers = document.querySelectorAll('.mapboxgl-marker');
-    existingMarkers.forEach(marker => marker.remove());
+    const sourceId = 'stations';
+    const visitedLayerId = 'visited-stations';
+    const unvisitedLayerId = 'unvisited-stations';
 
-    // Add markers for all stations
-    stations.forEach((station) => {
-      if (!map.current) return;
+    // Create GeoJSON from stations
+    const stationsGeoJSON = {
+      type: 'FeatureCollection' as const,
+      features: stations.map(station => ({
+        type: 'Feature' as const,
+        geometry: { 
+          type: 'Point' as const, 
+          coordinates: station.coordinates 
+        },
+        properties: {
+          id: station.id,
+          displayName: station.displayName,
+          zone: station.zone,
+          lines: station.lines,
+          visited: verifiedVisits.includes(station.id)
+        }
+      }))
+    };
 
-      const isVisited = verifiedVisits.includes(station.id);
-      const el = document.createElement("div");
-      el.className = "station-marker";
-      el.style.backgroundImage = `url(${isVisited ? filledRoundel : emptyRoundel})`;
-      el.style.width = "24px";
-      el.style.height = "24px";
-      el.style.backgroundSize = "100%";
-      el.style.cursor = "default";
-
-      // Categorize lines by type
-      const tubeLines = ['Bakerloo', 'Central', 'Circle', 'District', 'Hammersmith & City', 
-                         'Jubilee', 'Metropolitan', 'Northern', 'Piccadilly', 'Victoria', 'Waterloo & City'];
+    try {
+      const source = map.current.getSource(sourceId) as mapboxgl.GeoJSONSource;
       
-      const stationTubeLines = station.lines.filter(l => tubeLines.includes(l));
-      const stationOtherLines = station.lines.filter(l => !tubeLines.includes(l));
+      if (source) {
+        // Update existing source data
+        source.setData(stationsGeoJSON);
+      } else {
+        // Add source and layers for first time
+        map.current.addSource(sourceId, {
+          type: 'geojson',
+          data: stationsGeoJSON
+        });
 
-      // Create popup content with line type categorization
-      const popupContent = `
-        <div class="p-2">
-          <div class="font-semibold text-sm">${station.displayName}</div>
-          ${stationTubeLines.length > 0 ? `<div class="text-xs text-muted-foreground mt-1">🚇 Tube: ${stationTubeLines.join(", ")}</div>` : ''}
-          ${stationOtherLines.length > 0 ? `<div class="text-xs text-muted-foreground mt-0.5">🚆 ${stationOtherLines.join(", ")}</div>` : ''}
-          <div class="text-xs text-muted-foreground mt-1">Zone ${station.zone}</div>
-          <div class="text-xs mt-1 font-medium ${isVisited ? 'text-green-600' : 'text-gray-500'}">
-            ${isVisited ? '✓ Visited' : 'Not visited'}
-          </div>
-        </div>
-      `;
+        // Add visited stations layer (filled red circles)
+        map.current.addLayer({
+          id: visitedLayerId,
+          type: 'circle',
+          source: sourceId,
+          filter: ['==', ['get', 'visited'], true],
+          paint: {
+            'circle-radius': 8,
+            'circle-color': '#E32017',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        });
 
-      const popup = new mapboxgl.Popup({
-        offset: 25,
-        closeButton: false,
-        className: "station-popup"
-      }).setHTML(popupContent);
+        // Add unvisited stations layer (white circles with red stroke)
+        map.current.addLayer({
+          id: unvisitedLayerId,
+          type: 'circle',
+          source: sourceId,
+          filter: ['==', ['get', 'visited'], false],
+          paint: {
+            'circle-radius': 6,
+            'circle-color': '#ffffff',
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#E32017'
+          }
+        });
 
-      new mapboxgl.Marker(el)
-        .setLngLat(station.coordinates)
-        .setPopup(popup)
-        .addTo(map.current);
-    });
+        // Add click handlers for both layers
+        [visitedLayerId, unvisitedLayerId].forEach(layerId => {
+          map.current!.on('click', layerId, (e) => {
+            if (!e.features || !e.features[0]) return;
+
+            const props = e.features[0].properties;
+            const lines = JSON.parse(props.lines || '[]');
+            
+            // Categorize lines by type
+            const tubeLines = ['Bakerloo', 'Central', 'Circle', 'District', 'Hammersmith & City', 
+                               'Jubilee', 'Metropolitan', 'Northern', 'Piccadilly', 'Victoria', 'Waterloo & City'];
+            
+            const stationTubeLines = lines.filter((l: string) => tubeLines.includes(l));
+            const stationOtherLines = lines.filter((l: string) => !tubeLines.includes(l));
+
+            // Create popup content
+            const popupContent = `
+              <div class="p-2">
+                <div class="font-semibold text-sm">${props.displayName}</div>
+                ${stationTubeLines.length > 0 ? `<div class="text-xs text-muted-foreground mt-1">🚇 Tube: ${stationTubeLines.join(", ")}</div>` : ''}
+                ${stationOtherLines.length > 0 ? `<div class="text-xs text-muted-foreground mt-0.5">🚆 ${stationOtherLines.join(", ")}</div>` : ''}
+                <div class="text-xs text-muted-foreground mt-1">Zone ${props.zone}</div>
+                <div class="text-xs mt-1 font-medium ${props.visited ? 'text-green-600' : 'text-gray-500'}">
+                  ${props.visited ? '✓ Visited' : 'Not visited'}
+                </div>
+              </div>
+            `;
+
+            new mapboxgl.Popup({
+              closeButton: false,
+              className: "station-popup"
+            })
+              .setLngLat(e.lngLat)
+              .setHTML(popupContent)
+              .addTo(map.current!);
+          });
+
+          // Change cursor on hover
+          map.current!.on('mouseenter', layerId, () => {
+            if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+          });
+
+          map.current!.on('mouseleave', layerId, () => {
+            if (map.current) map.current.getCanvas().style.cursor = '';
+          });
+        });
+      }
+    } catch (error) {
+      console.error('Error adding station layers:', error);
+    }
   }, [mapLoaded, stations, verifiedVisits]);
 
   return (
