@@ -101,7 +101,7 @@ serve(async (req) => {
 
     let subject: string;
     let htmlContent: string;
-    const appUrl = 'https://demmocgrnvkjbzxlhcdz.supabase.co'; // Replace with your actual app URL
+    const appUrl = 'https://tube-challenge.lovable.app';
 
     if (type === 'like') {
       subject = `${actorName} liked your activity`;
@@ -210,7 +210,7 @@ serve(async (req) => {
 
     // Send email via Resend
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: 'TubeTracker <onboarding@resend.dev>',
+      from: 'TubeChallenge <notifications@send.antareez.com>',
       to: [recipient.email],
       subject,
       html: htmlContent,
