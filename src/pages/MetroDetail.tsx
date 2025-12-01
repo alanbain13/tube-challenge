@@ -4,8 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import Map from "@/components/Map";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import ReadOnlyMetroMap from "@/components/ReadOnlyMetroMap";
+import MetroProgressStats from "@/components/MetroProgressStats";
+import LineProgressGrid from "@/components/LineProgressGrid";
+import StationChecklist from "@/components/StationChecklist";
+import { useAuth } from "@/hooks/useAuth";
+import { useMemo } from "react";
 
 interface MetroSystem {
   id: string;
@@ -17,11 +24,31 @@ interface MetroSystem {
   line_count: number;
 }
 
+interface Line {
+  id: string;
+  name: string;
+  display_name: string;
+  line_type: string;
+  color: string;
+  sort_order: number;
+}
+
+interface Station {
+  id: string;
+  name: string;
+  displayName: string;
+  lines: string[];
+  zone: string;
+  coordinates: [number, number];
+}
+
 export default function MetroDetail() {
   const { metroId } = useParams<{ metroId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const { data: metro, isLoading } = useQuery({
+  // Fetch metro system info
+  const { data: metro, isLoading: metroLoading } = useQuery({
     queryKey: ['metro-system', metroId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -35,6 +62,132 @@ export default function MetroDetail() {
     },
     enabled: !!metroId
   });
+
+  // Fetch lines for this metro system
+  const { data: lines, isLoading: linesLoading } = useQuery({
+    queryKey: ['lines', metro?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lines')
+        .select('*')
+        .eq('metro_system_id', metro!.id)
+        .eq('line_type', 'tube')
+        .order('sort_order');
+      
+      if (error) throw error;
+      return data as Line[];
+    },
+    enabled: !!metro?.id
+  });
+
+  // Fetch stations from database (filtered by tfl_id prefix for tube)
+  const { data: dbStations, isLoading: stationsLoading } = useQuery({
+    queryKey: ['tube-stations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('stations')
+        .select('*')
+        .like('tfl_id', '940GZZLU%');
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch user's verified visits from activities
+  const { data: verifiedVisits, isLoading: visitsLoading } = useQuery({
+    queryKey: ['verified-visits', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('station_visits')
+        .select('station_tfl_id, visited_at')
+        .eq('user_id', user.id)
+        .eq('status', 'verified')
+        .not('activity_id', 'is', null);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user
+  });
+
+  // Transform stations for map display
+  const stations: Station[] = useMemo(() => {
+    if (!dbStations) return [];
+    return dbStations.map(s => ({
+      id: s.tfl_id,
+      name: s.name,
+      displayName: s.name,
+      lines: s.lines || [],
+      zone: s.zone,
+      coordinates: [s.longitude, s.latitude] as [number, number]
+    }));
+  }, [dbStations]);
+
+  const verifiedVisitIds = useMemo(() => {
+    return verifiedVisits?.map(v => v.station_tfl_id) || [];
+  }, [verifiedVisits]);
+
+  // Calculate progress statistics
+  const stats = useMemo(() => {
+    const visitedCount = verifiedVisitIds.length;
+    const totalStations = metro?.station_count || 0;
+    const progressPercent = totalStations > 0 
+      ? Math.round((visitedCount / totalStations) * 100) 
+      : 0;
+
+    // Calculate pace (visits per week)
+    let currentPace = 0;
+    if (verifiedVisits && verifiedVisits.length > 1) {
+      const sortedVisits = [...verifiedVisits].sort((a, b) => 
+        new Date(a.visited_at).getTime() - new Date(b.visited_at).getTime()
+      );
+      const firstVisit = new Date(sortedVisits[0].visited_at);
+      const lastVisit = new Date(sortedVisits[sortedVisits.length - 1].visited_at);
+      const daysDiff = (lastVisit.getTime() - firstVisit.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysDiff > 0) {
+        currentPace = (verifiedVisits.length / daysDiff) * 7; // per week
+      }
+    }
+
+    // Calculate estimated completion
+    let estimatedCompletion = undefined;
+    if (currentPace > 0 && visitedCount < totalStations) {
+      const remaining = totalStations - visitedCount;
+      const weeksNeeded = remaining / currentPace;
+      const completionDate = new Date();
+      completionDate.setDate(completionDate.getDate() + weeksNeeded * 7);
+      estimatedCompletion = completionDate.toLocaleDateString('en-GB', { 
+        month: 'short', 
+        year: 'numeric' 
+      });
+    }
+
+    return { visitedCount, totalStations, progressPercent, currentPace, estimatedCompletion };
+  }, [verifiedVisits, verifiedVisitIds, metro]);
+
+  // Calculate per-line progress
+  const lineProgress = useMemo(() => {
+    if (!lines || !stations) return [];
+    
+    return lines.map(line => {
+      const lineStations = stations.filter(s => s.lines.includes(line.name));
+      const visitedInLine = lineStations.filter(s => verifiedVisitIds.includes(s.id)).length;
+      const percentage = lineStations.length > 0 
+        ? Math.round((visitedInLine / lineStations.length) * 100)
+        : 0;
+
+      return {
+        line,
+        visitedCount: visitedInLine,
+        totalCount: lineStations.length,
+        percentage
+      };
+    });
+  }, [lines, stations, verifiedVisitIds]);
+
+  const isLoading = metroLoading || linesLoading || stationsLoading || visitsLoading;
 
   if (isLoading) {
     return (
@@ -78,16 +231,49 @@ export default function MetroDetail() {
             Back to Metro Systems
           </Button>
           
-          <h1 className="text-3xl font-bold mb-2 text-foreground">{metro.city} - {metro.name}</h1>
+          <h1 className="text-3xl font-bold mb-2 text-foreground">
+            {metro.city} - {metro.name}
+          </h1>
           <p className="text-muted-foreground">
-            {metro.station_count} stations across {metro.line_count} lines • 
-            Your visited stations are highlighted on the map
+            Track your journey across all {metro.name} stations
           </p>
         </div>
 
-        <div className="bg-card rounded-lg shadow-lg overflow-hidden">
-          <Map />
-        </div>
+        <MetroProgressStats
+          visitedCount={stats.visitedCount}
+          totalStations={stats.totalStations}
+          progressPercent={stats.progressPercent}
+          currentPace={stats.currentPace}
+          estimatedCompletion={stats.estimatedCompletion}
+        />
+
+        <Card className="mb-6 overflow-hidden">
+          <ReadOnlyMetroMap
+            stations={stations}
+            verifiedVisits={verifiedVisitIds}
+            center={[-0.1276, 51.5074]}
+            zoom={10}
+          />
+        </Card>
+
+        <Tabs defaultValue="lines" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="lines">Line Progress</TabsTrigger>
+            <TabsTrigger value="checklist">Station Checklist</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="lines">
+            <LineProgressGrid lineProgress={lineProgress} />
+          </TabsContent>
+          
+          <TabsContent value="checklist">
+            <StationChecklist
+              lines={lines || []}
+              stations={stations}
+              verifiedVisits={verifiedVisitIds}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );

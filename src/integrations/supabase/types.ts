@@ -427,6 +427,59 @@ export type Database = {
         }
         Relationships: []
       }
+      lines: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          display_name: string
+          id: string
+          is_active: boolean | null
+          line_type: string
+          metro_system_id: string | null
+          name: string
+          sort_order: number | null
+          station_count: number | null
+          tfl_line_code: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean | null
+          line_type: string
+          metro_system_id?: string | null
+          name: string
+          sort_order?: number | null
+          station_count?: number | null
+          tfl_line_code?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean | null
+          line_type?: string
+          metro_system_id?: string | null
+          name?: string
+          sort_order?: number | null
+          station_count?: number | null
+          tfl_line_code?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lines_metro_system_id_fkey"
+            columns: ["metro_system_id"]
+            isOneToOne: false
+            referencedRelation: "metro_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metro_systems: {
         Row: {
           city: string
