@@ -95,6 +95,7 @@ const Activities = () => {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
+        .eq('user_id', user!.id)
         .order("started_at", { ascending: false });
       if (error) throw error;
       
