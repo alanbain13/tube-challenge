@@ -275,7 +275,6 @@ export default function MetroDetail() {
 
         <Card className="mb-6 overflow-hidden">
           <ReadOnlyMetroMap
-            key={metroId}
             stations={allStationsForMap}
             verifiedVisits={verifiedVisitIds}
             center={[-0.1276, 51.5074]}
