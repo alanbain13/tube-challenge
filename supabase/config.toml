@@ -69,3 +69,6 @@ verify_jwt = true
 
 [functions.update-station-zones]
 verify_jwt = false
+
+[functions.sync-stations-from-geojson]
+verify_jwt = false
