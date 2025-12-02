@@ -217,11 +217,10 @@ export const ChallengeContextCard = ({
                 <div className="font-medium text-sm">{getStationName(challenge.end_station_tfl_id)}</div>
               </div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Progress</span>
-              <span className="font-medium">{visitedCount} / {totalStations} stations</span>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Navigation className="w-4 h-4" />
+              <span>Stations visited: {visitedCount}</span>
             </div>
-            <Progress value={progressPercent} className="h-2" />
           </div>
         )}
 
