@@ -22,6 +22,7 @@ interface RouteMapProps {
   visits?: StationVisit[];
   activityStations?: string[]; // Complete list of stations in activity sequence
   activityMode?: 'planned' | 'unplanned'; // undefined = route creation/view mode
+  isSequenced?: boolean; // For challenges: true = show sequence numbers, false = hide them
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -33,7 +34,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
   readOnly = false,
   visits = [],
   activityStations = [],
-  activityMode // undefined for route creation/view mode
+  activityMode, // undefined for route creation/view mode
+  isSequenced = true // default to showing sequence numbers
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -232,7 +234,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   const getStationSequenceNumber = (stationId: string) => {
-    console.log(`🔢 Getting sequence for station ${stationId}, activityMode=${activityMode}, selectedStations=`, selectedStations);
+    console.log(`🔢 Getting sequence for station ${stationId}, activityMode=${activityMode}, isSequenced=${isSequenced}, selectedStations=`, selectedStations);
     
     // For route creation/view mode (when activityMode is undefined), use selectedStations index
     if (activityMode === undefined) {
@@ -249,11 +251,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
         console.log(`🔢 Activity mode: Station ${stationId} visit sequence: ${visit.sequence_number}`);
         return visit.sequence_number; // Use actual visit sequence for visited stations
       }
-      // For planned but unvisited stations, use planned sequence 
-      const activityIndex = activityStations.indexOf(stationId);
-      if (activityIndex >= 0) {
-        console.log(`🔢 Activity mode: Station ${stationId} planned sequence: ${activityIndex + 1}`);
-        return activityIndex + 1;
+      // For planned but unvisited stations in SEQUENCED challenges, show planned sequence
+      // For UNSEQUENCED challenges, don't show sequence numbers for unvisited stations
+      if (isSequenced) {
+        const activityIndex = activityStations.indexOf(stationId);
+        if (activityIndex >= 0) {
+          console.log(`🔢 Activity mode: Station ${stationId} planned sequence: ${activityIndex + 1}`);
+          return activityIndex + 1;
+        }
       }
     }
     
@@ -365,6 +370,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
     // Add route connector lines
     if (selectedStations.length > 1) {
       if (activityMode) {
+        // For unsequenced challenges, only show paths for visited stations (not planned dotted paths)
         addActivityPaths();
       } else {
         addRouteConnectorLines();
@@ -649,8 +655,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
       }
     }
 
-    // For planned activities, add dashed preview path from last visited to remaining planned
-    if (activityMode === 'planned' && visitedStationsInOrder.length > 0) {
+    // For planned activities with SEQUENCED routes, add dashed preview path from last visited to remaining planned
+    // For UNSEQUENCED routes, skip the dotted path (stations can be visited in any order)
+    if (activityMode === 'planned' && isSequenced && visitedStationsInOrder.length > 0) {
       const lastVisitedStation = visitedStationsInOrder[visitedStationsInOrder.length - 1];
       const lastVisitedCoords = stations.find(s => s.id === lastVisitedStation)?.coordinates;
       

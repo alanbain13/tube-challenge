@@ -7,6 +7,7 @@ import UnifiedActivityMap from '@/components/UnifiedActivityMap';
 const ActivityMap = () => {
   const { id: activityId } = useParams<{ id: string }>();
   const [activity, setActivity] = useState<any>(null);
+  const [challenge, setChallenge] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -34,6 +35,16 @@ const ActivityMap = () => {
       }
 
       setActivity(data);
+
+      // If activity has a challenge, fetch challenge data
+      if (data.challenge_id) {
+        const { data: challengeData } = await supabase
+          .from('challenges')
+          .select('*')
+          .eq('id', data.challenge_id)
+          .single();
+        setChallenge(challengeData);
+      }
     } catch (error) {
       console.error('Error loading activity data:', error);
       navigate('/activities');
@@ -55,7 +66,7 @@ const ActivityMap = () => {
     );
   }
 
-  return <UnifiedActivityMap activityId={activityId!} activity={activity} />;
+  return <UnifiedActivityMap activityId={activityId!} activity={activity} challenge={challenge} />;
 };
 
 export default ActivityMap;

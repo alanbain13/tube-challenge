@@ -18,7 +18,13 @@ interface UnifiedActivityMapProps {
     start_station_tfl_id?: string;
     end_station_tfl_id?: string;
     status: string;
+    challenge_id?: string;
   };
+  challenge?: {
+    id: string;
+    is_sequenced?: boolean;
+    challenge_type?: string;
+  } | null;
 }
 
 // Interface matching RouteMap component
@@ -28,7 +34,7 @@ interface RouteMapStationVisit {
   sequence_number: number;
 }
 
-const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, activity }) => {
+const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, activity, challenge }) => {
   const navigate = useNavigate();
   const { stations } = useStations();
   const { data: activityState, isLoading } = useActivityState(activityId);
@@ -157,6 +163,7 @@ const UnifiedActivityMap: React.FC<UnifiedActivityMapProps> = ({ activityId, act
                 activityStations={selectedStations}
                 visits={visits}
                 activityMode={mode}
+                isSequenced={challenge?.is_sequenced !== false}
               />
             </div>
 
