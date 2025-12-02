@@ -306,9 +306,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
       paint: {
         'circle-radius': [
           'case',
-          ['get', 'isSelected'],
-          14, // Larger for selected stations with numbers
-          7
+          ['>', ['get', 'sequence'], 0], // Only enlarge if showing sequence numbers
+          14,
+          7 // Fixed size for all other stations (including unsequenced planned)
         ],
         'circle-color': [
           'case',
@@ -507,9 +507,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
     // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
     map.current.setPaintProperty('stations', 'circle-radius', [
       'case',
-      ['get', 'isSelected'],
-      14, // Larger for selected stations with numbers
-      7
+      ['>', ['get', 'sequence'], 0], // Only enlarge if showing sequence numbers
+      14,
+      7 // Fixed size for all other stations
     ]);
 
     map.current.setPaintProperty('stations', 'circle-color', [
