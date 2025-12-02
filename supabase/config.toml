@@ -72,3 +72,6 @@ verify_jwt = false
 
 [functions.sync-stations-from-geojson]
 verify_jwt = false
+
+[functions.seed-challenges]
+verify_jwt = false

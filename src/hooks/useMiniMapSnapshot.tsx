@@ -136,6 +136,7 @@ interface UseMiniMapSnapshotOptions {
   lastVisitAt?: string | null; // For cache invalidation
   updatedAt?: string; // For cache invalidation
   mapboxToken?: string;
+  isSequenced?: boolean; // For challenges: if false, don't draw planned paths
 }
 
 export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
@@ -147,7 +148,8 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
     remainingStations = [],
     lastVisitAt,
     updatedAt,
-    mapboxToken: mapboxTokenProp
+    mapboxToken: mapboxTokenProp,
+    isSequenced = true
   } = options;
 
   const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
@@ -218,7 +220,8 @@ export const useMiniMapSnapshot = (options: UseMiniMapSnapshotOptions) => {
         type,
         stationSequence: stationSequence || [],
         visitedStations,
-        remainingStations
+        remainingStations,
+        isSequenced
       });
 
       // Initialize map
