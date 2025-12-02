@@ -109,8 +109,7 @@ export default function ReadOnlyMetroMap({
 
     lineFeatures.forEach((lineFeature, index) => {
       const lineName = lineFeature.properties.line_name || `Line-${index}`;
-      // Use hardcoded TfL colors first (more accurate), then fall back to GeoJSON
-      const lineColor = tubeLineColors[lineName] || lineFeature.properties.color || lineFeature.properties.stroke || '#666666';
+      const lineColor = lineFeature.properties.color || lineFeature.properties.stroke || '#666666';
       
       const sourceId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
       const layerId = `tube-line-${lineName.replace(/\s+/g, '-').toLowerCase()}-${index}`;
