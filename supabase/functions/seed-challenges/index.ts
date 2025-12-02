@@ -6,56 +6,43 @@ const corsHeaders = {
 };
 
 // Station IDs from stations.json (GeoJSON format - 940GZZLU prefix)
-const STATION_IDS = {
-  // Victoria Line stations (south to north)
-  brixton: '940GZZLUBXN',
-  stockwell: '940GZZLUSKW',
-  vauxhall: '940GZZLUVXL',
-  pimlico: '940GZZLUPCO',
-  victoria: '940GZZLUVIC',
-  greenPark: '940GZZLUGPK',
-  oxfordCircus: '940GZZLUOXC',
-  warrenStreet: '940GZZLUWRR',
-  euston: '940GZZLUEUS',
-  kingsCross: '940GZZLUKSX',
-  highburyIslington: '940GZZLUHBN',
-  finsburyPark: '940GZZLUFPK',
-  sevenSisters: '940GZZLUSST',
-  tottenhamHale: '940GZZLUTML',
-  blackhorseRoad: '940GZZLUBLR',
-  walthamstowCentral: '940GZZLUWWL',
-  
-  // Circle Line key stations
-  paddington: '940GZZLUPAD',
-  edgwareRoad: '940GZZLUERC',
-  bakerStreet: '940GZZLUBST',
-  greatPortlandStreet: '940GZZLUGPS',
-  kingsXStPancras: '940GZZLUKSX',
-  farringdon: '940GZZLUFAR',
-  barbican: '940GZZLUBBN',
-  moorgate: '940GZZLUMGT',
-  liverpool: '940GZZLULVT',
-  aldgate: '940GZZLUALD',
-  towerHill: '940GZZLUTWR',
-  monument: '940GZZLUMMT',
-  cannon: '940GZZLUCST',
-  mansion: '940GZZLUMSH',
-  blackfriars: '940GZZLUBKF',
-  temple: '940GZZLUTML',
-  embankment: '940GZZLUEMB',
-  westminster: '940GZZLUWSM',
-  stJames: '940GZZLUSJP',
-  victoriaCircle: '940GZZLUVIC',
-  sloane: '940GZZLUSKS',
-  southKensington: '940GZZLUSKS',
-  gloucesterRoad: '940GZZLUGTR',
-  highStreetKensington: '940GZZLUHSK',
-  nottingHillGate: '940GZZLUNHG',
-  bayswater: '940GZZLUBWT',
-  
-  // Point-to-point
-  stratford: '940GZZLUSTD',
-};
+// Victoria Line stations in order (south to north)
+const VICTORIA_LINE_CONSECUTIVE = [
+  '940GZZLUBXN',  // Brixton
+  '940GZZLUSKW',  // Stockwell
+  '940GZZLUVXL',  // Vauxhall
+  '940GZZLUPCO',  // Pimlico
+  '940GZZLUVIC',  // Victoria
+];
+
+// Circle Line key stations
+const CIRCLE_LINE_STATIONS = [
+  '940GZZLUPAD',  // Paddington
+  '940GZZLUERC',  // Edgware Road (Circle)
+  '940GZZLUBST',  // Baker Street
+  '940GZZLUGPS',  // Great Portland Street
+  '940GZZLUKSX',  // King's Cross St. Pancras
+  '940GZZLUFAR',  // Farringdon
+  '940GZZLUBBN',  // Barbican
+  '940GZZLUMGT',  // Moorgate
+  '940GZZLULVT',  // Liverpool Street
+  '940GZZLUALD',  // Aldgate
+  '940GZZLUTWR',  // Tower Hill
+  '940GZZLUMMT',  // Monument
+  '940GZZLUEMB',  // Embankment
+  '940GZZLUWSM',  // Westminster
+  '940GZZLUVIC',  // Victoria
+  '940GZZLUSKS',  // Sloane Square
+  '940GZZLUSSQ',  // South Kensington (fixed)
+  '940GZZLUGTR',  // Gloucester Road
+  '940GZZLUHSK',  // High Street Kensington
+  '940GZZLUNHG',  // Notting Hill Gate
+  '940GZZLUBWT',  // Bayswater
+];
+
+// Point-to-point stations
+const KINGS_CROSS = '940GZZLUKSX';
+const STRATFORD = '940GZZLUSTD';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -81,52 +68,22 @@ Deno.serve(async (req) => {
     }
 
     console.log('✅ Found London Underground metro system:', metroSystem.id);
-
-    // Victoria Line stations sequence (5 stations for sprint)
-    const victoriaLineStations = [
-      STATION_IDS.brixton,
-      STATION_IDS.stockwell,
-      STATION_IDS.vauxhall,
-      STATION_IDS.pimlico,
-      STATION_IDS.victoria,
-    ];
-
-    // Circle Line stations (subset for explorer)
-    const circleLineStations = [
-      STATION_IDS.paddington,
-      STATION_IDS.edgwareRoad,
-      STATION_IDS.bakerStreet,
-      STATION_IDS.greatPortlandStreet,
-      STATION_IDS.kingsXStPancras,
-      STATION_IDS.farringdon,
-      STATION_IDS.barbican,
-      STATION_IDS.moorgate,
-      STATION_IDS.liverpool,
-      STATION_IDS.aldgate,
-      STATION_IDS.towerHill,
-      STATION_IDS.monument,
-      STATION_IDS.embankment,
-      STATION_IDS.westminster,
-      STATION_IDS.victoriaCircle,
-      STATION_IDS.gloucesterRoad,
-      STATION_IDS.highStreetKensington,
-      STATION_IDS.nottingHillGate,
-      STATION_IDS.bayswater,
-    ];
+    console.log('📍 Victoria Line stations:', VICTORIA_LINE_CONSECUTIVE);
+    console.log('📍 Point-to-point:', { kingsCross: KINGS_CROSS, stratford: STRATFORD });
 
     // Prepare challenge data with CORRECT station IDs
     const newChallenges = [
       // 1. Sequenced Route Challenge - Victoria Line (visit in order)
       {
         name: 'Victoria Line Sprint',
-        description: 'Visit 5 Victoria Line stations in sequence - Brixton to Victoria',
+        description: 'Visit 5 consecutive Victoria Line stations - Brixton to Victoria',
         metro_system_id: metroSystem.id,
         challenge_type: 'sequenced_route',
         is_official: true,
         is_sequenced: true,
-        station_tfl_ids: victoriaLineStations,
-        start_station_tfl_id: STATION_IDS.brixton,
-        end_station_tfl_id: STATION_IDS.victoria,
+        station_tfl_ids: VICTORIA_LINE_CONSECUTIVE,
+        start_station_tfl_id: VICTORIA_LINE_CONSECUTIVE[0], // Brixton
+        end_station_tfl_id: VICTORIA_LINE_CONSECUTIVE[4], // Victoria
         estimated_duration_minutes: 15,
         ranking_metric: 'time',
         difficulty: 'Easy',
@@ -139,7 +96,7 @@ Deno.serve(async (req) => {
         challenge_type: 'unsequenced_route',
         is_official: true,
         is_sequenced: false,
-        station_tfl_ids: circleLineStations,
+        station_tfl_ids: CIRCLE_LINE_STATIONS,
         estimated_duration_minutes: 120,
         ranking_metric: 'time',
         difficulty: 'Medium',
@@ -178,9 +135,9 @@ Deno.serve(async (req) => {
         challenge_type: 'point_to_point',
         is_official: true,
         is_sequenced: false,
-        station_tfl_ids: [STATION_IDS.kingsCross, STATION_IDS.stratford],
-        start_station_tfl_id: STATION_IDS.kingsCross,
-        end_station_tfl_id: STATION_IDS.stratford,
+        station_tfl_ids: [KINGS_CROSS, STRATFORD],
+        start_station_tfl_id: KINGS_CROSS,
+        end_station_tfl_id: STRATFORD,
         estimated_duration_minutes: 20,
         ranking_metric: 'time',
         difficulty: 'Easy',
@@ -210,8 +167,8 @@ Deno.serve(async (req) => {
           console.error(`❌ Error updating ${challenge.name}:`, error.message);
           results.push({ name: challenge.name, status: 'error', error: error.message });
         } else {
-          console.log(`✅ Updated challenge: ${challenge.name}`);
-          results.push({ name: challenge.name, status: 'updated', id: updated.id });
+          console.log(`✅ Updated challenge: ${challenge.name} with stations:`, challenge.station_tfl_ids);
+          results.push({ name: challenge.name, status: 'updated', id: updated.id, stations: challenge.station_tfl_ids });
         }
       } else {
         const { data: inserted, error } = await supabase
@@ -224,8 +181,8 @@ Deno.serve(async (req) => {
           console.error(`❌ Error inserting ${challenge.name}:`, error.message);
           results.push({ name: challenge.name, status: 'error', error: error.message });
         } else {
-          console.log(`✅ Inserted challenge: ${challenge.name}`);
-          results.push({ name: challenge.name, status: 'created', id: inserted.id });
+          console.log(`✅ Inserted challenge: ${challenge.name} with stations:`, challenge.station_tfl_ids);
+          results.push({ name: challenge.name, status: 'created', id: inserted.id, stations: challenge.station_tfl_ids });
         }
       }
     }
