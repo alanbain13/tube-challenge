@@ -304,12 +304,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       type: 'circle',
       source: 'stations',
       paint: {
-        'circle-radius': [
-          'case',
-          ['>', ['get', 'sequence'], 0], // Only enlarge if showing sequence numbers
-          14,
-          7 // Fixed size for all other stations (including unsequenced planned)
-        ],
+        'circle-radius': 7, // Fixed size for all stations
         'circle-color': [
           'case',
           ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Red - verified visited

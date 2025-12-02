@@ -5,6 +5,58 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Station IDs from stations.json (GeoJSON format - 940GZZLU prefix)
+const STATION_IDS = {
+  // Victoria Line stations (south to north)
+  brixton: '940GZZLUBXN',
+  stockwell: '940GZZLUSKW',
+  vauxhall: '940GZZLUVXL',
+  pimlico: '940GZZLUPCO',
+  victoria: '940GZZLUVIC',
+  greenPark: '940GZZLUGPK',
+  oxfordCircus: '940GZZLUOXC',
+  warrenStreet: '940GZZLUWRR',
+  euston: '940GZZLUEUS',
+  kingsCross: '940GZZLUKSX',
+  highburyIslington: '940GZZLUHBN',
+  finsburyPark: '940GZZLUFPK',
+  sevenSisters: '940GZZLUSST',
+  tottenhamHale: '940GZZLUTML',
+  blackhorseRoad: '940GZZLUBLR',
+  walthamstowCentral: '940GZZLUWWL',
+  
+  // Circle Line key stations
+  paddington: '940GZZLUPAD',
+  edgwareRoad: '940GZZLUERC',
+  bakerStreet: '940GZZLUBST',
+  greatPortlandStreet: '940GZZLUGPS',
+  kingsXStPancras: '940GZZLUKSX',
+  farringdon: '940GZZLUFAR',
+  barbican: '940GZZLUBBN',
+  moorgate: '940GZZLUMGT',
+  liverpool: '940GZZLULVT',
+  aldgate: '940GZZLUALD',
+  towerHill: '940GZZLUTWR',
+  monument: '940GZZLUMMT',
+  cannon: '940GZZLUCST',
+  mansion: '940GZZLUMSH',
+  blackfriars: '940GZZLUBKF',
+  temple: '940GZZLUTML',
+  embankment: '940GZZLUEMB',
+  westminster: '940GZZLUWSM',
+  stJames: '940GZZLUSJP',
+  victoriaCircle: '940GZZLUVIC',
+  sloane: '940GZZLUSKS',
+  southKensington: '940GZZLUSKS',
+  gloucesterRoad: '940GZZLUGTR',
+  highStreetKensington: '940GZZLUHSK',
+  nottingHillGate: '940GZZLUNHG',
+  bayswater: '940GZZLUBWT',
+  
+  // Point-to-point
+  stratford: '940GZZLUSTD',
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -15,7 +67,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('🌱 Starting challenge seeding...');
+    console.log('🌱 Starting challenge seeding with correct station IDs...');
 
     // Get London Underground metro system ID
     const { data: metroSystem } = await supabase
@@ -30,86 +82,56 @@ Deno.serve(async (req) => {
 
     console.log('✅ Found London Underground metro system:', metroSystem.id);
 
-    // Get all London stations for full network challenge
-    const { data: allStations } = await supabase
-      .from('stations')
-      .select('tfl_id, name')
-      .eq('metro_system_id', metroSystem.id)
-      .limit(300);
+    // Victoria Line stations sequence (5 stations for sprint)
+    const victoriaLineStations = [
+      STATION_IDS.brixton,
+      STATION_IDS.stockwell,
+      STATION_IDS.vauxhall,
+      STATION_IDS.pimlico,
+      STATION_IDS.victoria,
+    ];
 
-    console.log(`✅ Found ${allStations?.length || 0} total stations`);
+    // Circle Line stations (subset for explorer)
+    const circleLineStations = [
+      STATION_IDS.paddington,
+      STATION_IDS.edgwareRoad,
+      STATION_IDS.bakerStreet,
+      STATION_IDS.greatPortlandStreet,
+      STATION_IDS.kingsXStPancras,
+      STATION_IDS.farringdon,
+      STATION_IDS.barbican,
+      STATION_IDS.moorgate,
+      STATION_IDS.liverpool,
+      STATION_IDS.aldgate,
+      STATION_IDS.towerHill,
+      STATION_IDS.monument,
+      STATION_IDS.embankment,
+      STATION_IDS.westminster,
+      STATION_IDS.victoriaCircle,
+      STATION_IDS.gloucesterRoad,
+      STATION_IDS.highStreetKensington,
+      STATION_IDS.nottingHillGate,
+      STATION_IDS.bayswater,
+    ];
 
-    // Get Victoria Line stations for sequenced route challenge
-    const { data: victoriaStations } = await supabase
-      .from('stations')
-      .select('tfl_id, name')
-      .eq('metro_system_id', metroSystem.id)
-      .contains('lines', ['Victoria']);
-
-    console.log(`✅ Found ${victoriaStations?.length || 0} Victoria Line stations`);
-
-    // Get Circle Line stations for unsequenced route challenge
-    const { data: circleStations } = await supabase
-      .from('stations')
-      .select('tfl_id, name')
-      .eq('metro_system_id', metroSystem.id)
-      .contains('lines', ['Circle']);
-
-    console.log(`✅ Found ${circleStations?.length || 0} Circle Line stations`);
-
-    // Get specific stations for point-to-point challenge
-    const { data: kingsCross } = await supabase
-      .from('stations')
-      .select('tfl_id')
-      .eq('metro_system_id', metroSystem.id)
-      .ilike('name', '%king%cross%')
-      .limit(1)
-      .maybeSingle();
-
-    const { data: stratford } = await supabase
-      .from('stations')
-      .select('tfl_id')
-      .eq('metro_system_id', metroSystem.id)
-      .ilike('name', '%stratford%')
-      .limit(1)
-      .maybeSingle();
-
-    console.log('✅ Point-to-point stations:', { kingsCross: kingsCross?.tfl_id, stratford: stratford?.tfl_id });
-
-    // Update existing "Complete All Lines" challenge to be unsequenced
-    const { error: updateError } = await supabase
-      .from('challenges')
-      .update({ 
-        is_sequenced: false, 
-        challenge_type: 'unsequenced_route',
-        difficulty: 'Expert'
-      })
-      .eq('name', 'Complete All Lines');
-
-    if (updateError) {
-      console.log('⚠️ Error updating Complete All Lines:', updateError.message);
-    } else {
-      console.log('✅ Updated Complete All Lines challenge');
-    }
-
-    // Prepare NEW challenge data (only challenges that don't exist yet)
+    // Prepare challenge data with CORRECT station IDs
     const newChallenges = [
       // 1. Sequenced Route Challenge - Victoria Line (visit in order)
       {
         name: 'Victoria Line Sprint',
-        description: 'Visit 5 Victoria Line stations in sequence - Brixton to Warren Street',
+        description: 'Visit 5 Victoria Line stations in sequence - Brixton to Victoria',
         metro_system_id: metroSystem.id,
         challenge_type: 'sequenced_route',
         is_official: true,
         is_sequenced: true,
-        station_tfl_ids: victoriaStations?.slice(0, 5).map(s => s.tfl_id) || [],
-        start_station_tfl_id: victoriaStations?.[0]?.tfl_id || null,
-        end_station_tfl_id: victoriaStations?.[4]?.tfl_id || null,
+        station_tfl_ids: victoriaLineStations,
+        start_station_tfl_id: STATION_IDS.brixton,
+        end_station_tfl_id: STATION_IDS.victoria,
         estimated_duration_minutes: 15,
         ranking_metric: 'time',
         difficulty: 'Easy',
       },
-      // 2. Circle Line Unsequenced (different from the sequenced one)
+      // 2. Circle Line Unsequenced (any order)
       {
         name: 'Circle Line Explorer',
         description: 'Visit all Circle Line stations in any order',
@@ -117,7 +139,7 @@ Deno.serve(async (req) => {
         challenge_type: 'unsequenced_route',
         is_official: true,
         is_sequenced: false,
-        station_tfl_ids: circleStations?.map(s => s.tfl_id) || [],
+        station_tfl_ids: circleLineStations,
         estimated_duration_minutes: 120,
         ranking_metric: 'time',
         difficulty: 'Medium',
@@ -156,16 +178,16 @@ Deno.serve(async (req) => {
         challenge_type: 'point_to_point',
         is_official: true,
         is_sequenced: false,
-        station_tfl_ids: [kingsCross?.tfl_id, stratford?.tfl_id].filter(Boolean) as string[],
-        start_station_tfl_id: kingsCross?.tfl_id || null,
-        end_station_tfl_id: stratford?.tfl_id || null,
+        station_tfl_ids: [STATION_IDS.kingsCross, STATION_IDS.stratford],
+        start_station_tfl_id: STATION_IDS.kingsCross,
+        end_station_tfl_id: STATION_IDS.stratford,
         estimated_duration_minutes: 20,
         ranking_metric: 'time',
         difficulty: 'Easy',
       },
     ];
 
-    // Insert only new challenges (skip duplicates)
+    // Upsert challenges (update if exists, insert if not)
     const results = [];
     for (const challenge of newChallenges) {
       // Check if exists
@@ -176,8 +198,21 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (existing) {
-        console.log(`⏭️ Skipping existing challenge: ${challenge.name}`);
-        results.push({ name: challenge.name, status: 'skipped' });
+        // Update existing challenge with correct station IDs
+        const { data: updated, error } = await supabase
+          .from('challenges')
+          .update(challenge)
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error(`❌ Error updating ${challenge.name}:`, error.message);
+          results.push({ name: challenge.name, status: 'error', error: error.message });
+        } else {
+          console.log(`✅ Updated challenge: ${challenge.name}`);
+          results.push({ name: challenge.name, status: 'updated', id: updated.id });
+        }
       } else {
         const { data: inserted, error } = await supabase
           .from('challenges')
