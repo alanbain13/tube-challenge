@@ -51,6 +51,10 @@ export type Database = {
         Row: {
           activity_type: string | null
           actual_duration_minutes: number | null
+          challenge_attempt_id: string | null
+          challenge_deadline: string | null
+          challenge_id: string | null
+          challenge_target_station_count: number | null
           created_at: string
           distance_km: number | null
           end_latitude: number | null
@@ -79,6 +83,10 @@ export type Database = {
         Insert: {
           activity_type?: string | null
           actual_duration_minutes?: number | null
+          challenge_attempt_id?: string | null
+          challenge_deadline?: string | null
+          challenge_id?: string | null
+          challenge_target_station_count?: number | null
           created_at?: string
           distance_km?: number | null
           end_latitude?: number | null
@@ -107,6 +115,10 @@ export type Database = {
         Update: {
           activity_type?: string | null
           actual_duration_minutes?: number | null
+          challenge_attempt_id?: string | null
+          challenge_deadline?: string | null
+          challenge_id?: string | null
+          challenge_target_station_count?: number | null
           created_at?: string
           distance_km?: number | null
           end_latitude?: number | null
@@ -133,6 +145,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "activities_challenge_attempt_id_fkey"
+            columns: ["challenge_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "challenge_attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "activities_route_id_fkey"
             columns: ["route_id"]
@@ -299,7 +325,13 @@ export type Database = {
           completed_at: string
           created_at: string
           duration_minutes: number
+          duration_seconds: number | null
+          failure_reason: string | null
           id: string
+          is_personal_best: boolean | null
+          started_at: string | null
+          stations_visited: number | null
+          status: string | null
           user_id: string
         }
         Insert: {
@@ -308,7 +340,13 @@ export type Database = {
           completed_at: string
           created_at?: string
           duration_minutes: number
+          duration_seconds?: number | null
+          failure_reason?: string | null
           id?: string
+          is_personal_best?: boolean | null
+          started_at?: string | null
+          stations_visited?: number | null
+          status?: string | null
           user_id: string
         }
         Update: {
@@ -317,7 +355,13 @@ export type Database = {
           completed_at?: string
           created_at?: string
           duration_minutes?: number
+          duration_seconds?: number | null
+          failure_reason?: string | null
           id?: string
+          is_personal_best?: boolean | null
+          started_at?: string | null
+          stations_visited?: number | null
+          status?: string | null
           user_id?: string
         }
         Relationships: [
@@ -345,12 +389,18 @@ export type Database = {
           created_from_route_id: string | null
           description: string | null
           difficulty: string | null
+          end_station_tfl_id: string | null
           estimated_duration_minutes: number | null
           id: string
           is_official: boolean
+          is_sequenced: boolean | null
           metro_system_id: string
           name: string
+          ranking_metric: string | null
+          start_station_tfl_id: string | null
           station_tfl_ids: string[]
+          target_station_count: number | null
+          time_limit_seconds: number | null
           updated_at: string
         }
         Insert: {
@@ -360,12 +410,18 @@ export type Database = {
           created_from_route_id?: string | null
           description?: string | null
           difficulty?: string | null
+          end_station_tfl_id?: string | null
           estimated_duration_minutes?: number | null
           id?: string
           is_official?: boolean
+          is_sequenced?: boolean | null
           metro_system_id: string
           name: string
+          ranking_metric?: string | null
+          start_station_tfl_id?: string | null
           station_tfl_ids: string[]
+          target_station_count?: number | null
+          time_limit_seconds?: number | null
           updated_at?: string
         }
         Update: {
@@ -375,12 +431,18 @@ export type Database = {
           created_from_route_id?: string | null
           description?: string | null
           difficulty?: string | null
+          end_station_tfl_id?: string | null
           estimated_duration_minutes?: number | null
           id?: string
           is_official?: boolean
+          is_sequenced?: boolean | null
           metro_system_id?: string
           name?: string
+          ranking_metric?: string | null
+          start_station_tfl_id?: string | null
           station_tfl_ids?: string[]
+          target_station_count?: number | null
+          time_limit_seconds?: number | null
           updated_at?: string
         }
         Relationships: [
