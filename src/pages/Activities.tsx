@@ -321,6 +321,7 @@ const Activities = () => {
                       <ActivityTileMiniMap 
                         activityId={activity.id}
                         updatedAt={activity.updated_at}
+                        challengeId={activity.challenge_id}
                       />
                       <div className="space-y-3 mt-4">
                         {!activity.start_station_tfl_id && !activity.end_station_tfl_id && (

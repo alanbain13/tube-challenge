@@ -5,6 +5,7 @@ interface BuildMiniMapOptions {
   stationSequence: string[];
   visitedStations?: Array<{ station_tfl_id: string; seq_actual: number }>;
   remainingStations?: Array<{ station_tfl_id: string; seq_planned: number }>;
+  isSequenced?: boolean; // For challenges: if false, don't draw planned paths
 }
 
 interface StationCoordinates {
@@ -39,7 +40,7 @@ const loadStationCoordinates = async (): Promise<StationCoordinates> => {
 export const buildMiniMapGeoJson = async (
   options: BuildMiniMapOptions
 ): Promise<FeatureCollection> => {
-  const { type, stationSequence, visitedStations = [], remainingStations = [] } = options;
+  const { type, stationSequence, visitedStations = [], remainingStations = [], isSequenced = true } = options;
   
   const coordinates = await loadStationCoordinates();
   const features: Feature<LineString>[] = [];
@@ -80,8 +81,9 @@ export const buildMiniMapGeoJson = async (
       }
     }
 
-    // Build remaining path (dotted)
-    if (remainingStations.length > 0) {
+    // Build remaining path (dotted) - ONLY for sequenced activities
+    // For unsequenced challenges, skip this to avoid showing misleading paths
+    if (isSequenced && remainingStations.length > 0) {
       const sortedRemaining = [...remainingStations].sort((a, b) => a.seq_planned - b.seq_planned);
       
       // Connect last visited to first remaining

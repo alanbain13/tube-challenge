@@ -1,14 +1,32 @@
 import { MiniMapSnapshot } from './MiniMapSnapshot';
 import { RoundelGallery } from './RoundelGallery';
 import { useActivityState } from '@/hooks/useActivityState';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ActivityTileMiniMapProps {
   activityId: string;
   updatedAt: string;
+  challengeId?: string | null;
 }
 
-export const ActivityTileMiniMap = ({ activityId, updatedAt }: ActivityTileMiniMapProps) => {
+export const ActivityTileMiniMap = ({ activityId, updatedAt, challengeId }: ActivityTileMiniMapProps) => {
   const { data: activityState, isLoading } = useActivityState(activityId);
+
+  // Fetch challenge to get isSequenced flag
+  const { data: challenge } = useQuery({
+    queryKey: ['challenge', challengeId],
+    queryFn: async () => {
+      if (!challengeId) return null;
+      const { data } = await supabase
+        .from('challenges')
+        .select('is_sequenced')
+        .eq('id', challengeId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!challengeId
+  });
 
   if (isLoading || !activityState) {
     return (
@@ -26,6 +44,9 @@ export const ActivityTileMiniMap = ({ activityId, updatedAt }: ActivityTileMiniM
     seq_planned: r.seq_planned || 0
   }));
 
+  // Determine if sequenced: default to true unless challenge explicitly sets it to false
+  const isSequenced = challenge?.is_sequenced !== false;
+
   return (
     <div>
       <MiniMapSnapshot
@@ -34,6 +55,7 @@ export const ActivityTileMiniMap = ({ activityId, updatedAt }: ActivityTileMiniM
         visitedStations={visitedStations}
         remainingStations={remainingStations}
         lastVisitAt={updatedAt}
+        isSequenced={isSequenced}
       />
       <RoundelGallery type="activity" id={activityId} />
     </div>

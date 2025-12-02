@@ -9,6 +9,7 @@ interface MiniMapSnapshotProps {
   remainingStations?: Array<{ station_tfl_id: string; seq_planned: number }>;
   lastVisitAt?: string | null;
   updatedAt?: string;
+  isSequenced?: boolean; // For challenges: if false, don't draw planned paths
 }
 
 export const MiniMapSnapshot = (props: MiniMapSnapshotProps) => {
