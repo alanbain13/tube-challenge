@@ -13,6 +13,7 @@ import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
 import { ActivityComments } from "@/components/ActivityComments";
 import { ChallengeContextCard } from "@/components/ChallengeContextCard";
+import { ChallengeLeaderboard } from "@/components/ChallengeLeaderboard";
 
 // Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
@@ -414,15 +415,22 @@ const ActivityDetail = () => {
 
           {/* Challenge Context - Show when activity is linked to a challenge */}
           {challenge && (
-            <ChallengeContextCard
-              challenge={challenge}
-              activity={{
-                gate_start_at: activity.gate_start_at,
-                status: activity.status || 'draft',
-              }}
-              visitedCount={counts.visited_actual}
-              totalStations={counts.planned_total}
-            />
+            <>
+              <ChallengeContextCard
+                challenge={challenge}
+                activity={{
+                  gate_start_at: activity.gate_start_at,
+                  status: activity.status || 'draft',
+                }}
+                visitedCount={counts.visited_actual}
+                totalStations={counts.planned_total}
+              />
+              <ChallengeLeaderboard
+                challengeId={challenge.id}
+                challengeType={challenge.challenge_type}
+                rankingMetric={challenge.ranking_metric}
+              />
+            </>
           )}
 
           {/* Empty Plan Info - Updated for free-order mode */}
