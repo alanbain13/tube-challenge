@@ -315,11 +315,6 @@ const ActivityDetail = () => {
 
   const statusText = activity.status === 'draft' ? 'Not started' : 
                     activity.status === 'active' ? 'Active' : 'Completed';
-  
-  const elapsedTime = activity.started_at && activity.ended_at ? 
-    new Date(activity.ended_at).getTime() - new Date(activity.started_at).getTime() : 
-    activity.started_at && activity.status === 'active' ? 
-    Date.now() - new Date(activity.started_at).getTime() : 0;
 
   const formatDuration = (ms: number) => {
     const hours = Math.floor(ms / (1000 * 60 * 60));
@@ -330,6 +325,15 @@ const ActivityDetail = () => {
 
   // Use derived state for all UI rendering
   const { plan, counts, actual_visits } = activityState;
+  
+  // Use gate_start_at (first station visit) for timing, fallback to first actual visit
+  const timerStartTime = activity.gate_start_at || (actual_visits?.length > 0 ? actual_visits[0]?.visited_at : null);
+  const timerEndTime = activity.gate_end_at || activity.ended_at;
+  
+  const elapsedTime = timerStartTime && timerEndTime ? 
+    new Date(timerEndTime).getTime() - new Date(timerStartTime).getTime() : 
+    timerStartTime && activity.status === 'active' ? 
+    Date.now() - new Date(timerStartTime).getTime() : 0;
   
   // Log free-order mode state
   console.log(`HUD: Free-order mode | planned=${counts.planned_total} visited=${counts.visited_actual} actual_visits=${actual_visits?.length || 0} (version=${activityState.version})`);
