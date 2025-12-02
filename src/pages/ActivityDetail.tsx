@@ -405,7 +405,7 @@ const ActivityDetail = () => {
                 <div>
                   <div className="text-sm text-muted-foreground">Visited Count</div>
                   <div className="font-medium">
-                    {counts.visited_actual}/{counts.planned_total > 0 ? counts.planned_total : 'Open'} stations
+                    {counts.visited_actual}/{(challenge?.challenge_type === 'point_to_point' || challenge?.challenge_type === 'timed' || counts.planned_total === 0) ? 'Open' : counts.planned_total} stations
                   </div>
                 </div>
               </div>
