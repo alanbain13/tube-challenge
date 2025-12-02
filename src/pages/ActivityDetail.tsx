@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
 import { ActivityComments } from "@/components/ActivityComments";
+import { ChallengeContextCard } from "@/components/ChallengeContextCard";
 
 // Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
@@ -113,6 +114,22 @@ const ActivityDetail = () => {
     },
     enabled: !!user && !!id,
     staleTime: 0, // Always refetch to get latest state
+  });
+
+  // Fetch challenge data if this activity is linked to a challenge
+  const { data: challenge } = useQuery({
+    queryKey: ["challenge", activity?.challenge_id],
+    queryFn: async () => {
+      if (!activity?.challenge_id) return null;
+      const { data, error } = await supabase
+        .from("challenges")
+        .select("*")
+        .eq("id", activity.challenge_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!activity?.challenge_id,
   });
 
   // Auto-refetch when returning to this page (especially from check-in)
@@ -394,6 +411,19 @@ const ActivityDetail = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Challenge Context - Show when activity is linked to a challenge */}
+          {challenge && (
+            <ChallengeContextCard
+              challenge={challenge}
+              activity={{
+                gate_start_at: activity.gate_start_at,
+                status: activity.status || 'draft',
+              }}
+              visitedCount={counts.visited_actual}
+              totalStations={counts.planned_total}
+            />
+          )}
 
           {/* Empty Plan Info - Updated for free-order mode */}
           {activityState.counts.planned_total === 0 && (
