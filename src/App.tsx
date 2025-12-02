@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import Metros from "@/pages/Metros";
 import MetroDetail from "@/pages/MetroDetail";
 import Challenges from "@/pages/Challenges";
+import ChallengeLeaderboardPage from "@/pages/ChallengeLeaderboardPage";
 import Badges from "@/pages/Badges";
 import Friends from "@/pages/Friends";
 
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/metros/:metroId" element={<MetroDetail />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/challenges" element={<Challenges />} />
+            <Route path="/challenges/:id/leaderboard" element={<ChallengeLeaderboardPage />} />
             <Route path="/badges" element={<Badges />} />
             <Route path="/friends" element={<Friends />} />
             <Route path="/activities/new" element={<ActivityNew />} />
