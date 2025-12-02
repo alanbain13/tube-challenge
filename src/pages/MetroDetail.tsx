@@ -12,8 +12,8 @@ import MetroProgressStats from "@/components/MetroProgressStats";
 import LineProgressGrid from "@/components/LineProgressGrid";
 import StationChecklist from "@/components/StationChecklist";
 import { useAuth } from "@/hooks/useAuth";
+import { useStations } from "@/hooks/useStations";
 import { useMemo } from "react";
-
 interface MetroSystem {
   id: string;
   name: string;
@@ -80,18 +80,8 @@ export default function MetroDetail() {
     enabled: !!metro?.id
   });
 
-  // Fetch ALL stations for map display
-  const { data: allStations, isLoading: allStationsLoading } = useQuery({
-    queryKey: ['all-stations'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('stations')
-        .select('*');
-      
-      if (error) throw error;
-      return data;
-    }
-  });
+  // Use the useStations hook for map display (properly filtered station-level data from GeoJSON)
+  const { stations: allStationsFromGeoJSON, loading: stationsLoading } = useStations();
 
   // Fetch tube stations only for Line Progress and Station Checklist
   const { data: tubeStations, isLoading: tubeStationsLoading } = useQuery({
@@ -125,18 +115,17 @@ export default function MetroDetail() {
     enabled: !!user
   });
 
-  // Transform ALL stations for map display
+  // Transform stations from useStations hook for map display
   const allStationsForMap: Station[] = useMemo(() => {
-    if (!allStations) return [];
-    return allStations.map(s => ({
-      id: s.tfl_id,
+    return allStationsFromGeoJSON.map(s => ({
+      id: s.id,
       name: s.name,
-      displayName: s.name,
-      lines: s.lines || [],
+      displayName: s.displayName,
+      lines: s.lines.map(l => l.name),
       zone: s.zone,
-      coordinates: [s.longitude, s.latitude] as [number, number]
+      coordinates: s.coordinates
     }));
-  }, [allStations]);
+  }, [allStationsFromGeoJSON]);
 
   // Transform tube stations only for Line Progress and Station Checklist
   const tubeStationsOnly: Station[] = useMemo(() => {
@@ -213,7 +202,7 @@ export default function MetroDetail() {
     });
   }, [lines, tubeStationsOnly, verifiedVisitIds]);
 
-  const isLoading = metroLoading || linesLoading || allStationsLoading || tubeStationsLoading || visitsLoading;
+  const isLoading = metroLoading || linesLoading || stationsLoading || tubeStationsLoading || visitsLoading;
 
   if (isLoading) {
     return (
