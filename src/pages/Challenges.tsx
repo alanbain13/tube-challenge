@@ -175,6 +175,25 @@ export default function Challenges() {
         .update({ challenge_attempt_id: attempt.id } as any)
         .eq("id", activity.id);
 
+      // Create activity_plan_item records for the challenge stations
+      // This marks the activity as "planned" so the map shows target stations
+      if (challenge.station_tfl_ids && challenge.station_tfl_ids.length > 0) {
+        const planItems = challenge.station_tfl_ids.map((stationId, index) => ({
+          activity_id: activity.id,
+          station_tfl_id: stationId,
+          seq_planned: index + 1, // Sequence matters for sequenced challenges, arbitrary for unsequenced
+        }));
+
+        const { error: planError } = await supabase
+          .from("activity_plan_item")
+          .insert(planItems);
+
+        if (planError) {
+          console.error("Error creating plan items:", planError);
+          // Don't fail the whole operation, just log the error
+        }
+      }
+
       toast.success("Challenge started!");
       navigate(`/activities/${activity.id}/checkin`);
     } catch (error) {
