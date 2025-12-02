@@ -125,28 +125,12 @@ export default function Challenges() {
         return;
       }
 
-      // Create challenge attempt (cast needed - new columns not yet in generated types)
-      const { data: attempt, error: attemptError } = await supabase
-        .from("challenge_attempts")
-        .insert({
-          challenge_id: challenge.id,
-          user_id: user.id,
-          duration_minutes: 0, // placeholder, will be updated on completion
-          completed_at: new Date().toISOString(), // placeholder, will be updated on completion
-          status: "active",
-          stations_visited: 0,
-        } as any)
-        .select()
-        .single();
-
-      if (attemptError) throw attemptError;
-
       // Determine activity type based on challenge type
       const activityType = challenge.challenge_type === "timed" || challenge.challenge_type === "station_count"
         ? "open"
         : "route";
 
-      // Create linked activity (cast to any for new columns not yet in types)
+      // Create activity FIRST (activity_id is required on challenge_attempts)
       const { data: activity, error: activityError } = await supabase
         .from("activities")
         .insert({
@@ -160,7 +144,6 @@ export default function Challenges() {
           // New challenge columns - cast needed until types regenerated
           ...({ 
             challenge_id: challenge.id,
-            challenge_attempt_id: attempt.id,
             challenge_target_station_count: challenge.target_station_count,
           } as Record<string, unknown>),
         } as any)
@@ -169,11 +152,28 @@ export default function Challenges() {
 
       if (activityError) throw activityError;
 
-      // Update attempt with activity_id
-      await supabase
+      // Create challenge attempt with activity_id
+      const { data: attempt, error: attemptError } = await supabase
         .from("challenge_attempts")
-        .update({ activity_id: activity.id })
-        .eq("id", attempt.id);
+        .insert({
+          challenge_id: challenge.id,
+          user_id: user.id,
+          activity_id: activity.id,
+          duration_minutes: 0, // placeholder, will be updated on completion
+          completed_at: new Date().toISOString(), // placeholder, will be updated on completion
+          status: "active",
+          stations_visited: 0,
+        } as any)
+        .select()
+        .single();
+
+      if (attemptError) throw attemptError;
+
+      // Update activity with attempt_id
+      await supabase
+        .from("activities")
+        .update({ challenge_attempt_id: attempt.id } as any)
+        .eq("id", activity.id);
 
       toast.success("Challenge started!");
       navigate(`/activities/${activity.id}/checkin`);
