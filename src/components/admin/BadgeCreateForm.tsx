@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Plus, Save, X } from "lucide-react";
+import { IconPicker } from "./IconPicker";
 import type { Tables } from "@/integrations/supabase/types";
 
 const badgeSchema = z.object({
@@ -185,9 +186,9 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
               name="image_url"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Image URL</FormLabel>
+                  <FormLabel>Badge Icon</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://example.com/badge.png" {...field} />
+                    <IconPicker value={field.value} onChange={field.onChange} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

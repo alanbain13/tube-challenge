@@ -27,6 +27,7 @@ import UpdateStationZones from "@/components/UpdateStationZones";
 import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
 import { ChallengeDetailModal } from "@/components/admin/ChallengeDetailModal";
 import { BadgeCreateForm } from "@/components/admin/BadgeCreateForm";
+import { BadgeIcon } from "@/components/admin/IconPicker";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -569,18 +570,7 @@ const Admin = () => {
                                 <TableRow key={badge.id}>
                                   <TableCell>
                                     <div className="flex items-center gap-3">
-                                      {badge.image_url && !badge.image_url.startsWith('http') && !badge.image_url.startsWith('/') ? (
-                                        <span className="w-8 h-8 flex items-center justify-center text-2xl">{badge.image_url}</span>
-                                      ) : (
-                                        <img
-                                          src={badge.image_url}
-                                          alt={badge.name}
-                                          className="w-8 h-8 rounded object-cover"
-                                          onError={(e) => {
-                                            (e.target as HTMLImageElement).src = "/placeholder.svg";
-                                          }}
-                                        />
-                                      )}
+                                      <BadgeIcon value={badge.image_url} className="w-8 h-8" />
                                       <span className="font-medium">{badge.name}</span>
                                     </div>
                                   </TableCell>

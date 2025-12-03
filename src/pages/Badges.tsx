@@ -9,6 +9,7 @@ import { format, isThisMonth } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BadgeIcon } from "@/components/admin/IconPicker";
 
 interface BadgeData {
   id: string;
@@ -572,8 +573,8 @@ export default function Badges() {
               return (
                 <Card key={userBadge.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="pt-8 pb-6 text-center space-y-4">
-                    <div className="text-7xl mb-4">
-                      {userBadge.badge.image_url}
+                    <div className="mb-4 flex justify-center">
+                      <BadgeIcon value={userBadge.badge.image_url} className="w-16 h-16 text-primary" />
                     </div>
                     <h3 className="font-bold text-lg">
                       {userBadge.badge.name}
@@ -616,8 +617,8 @@ export default function Badges() {
                     return (
                       <Card key={badge.id} className="overflow-hidden opacity-70 hover:opacity-90 transition-opacity">
                         <CardContent className="pt-8 pb-6 text-center space-y-4">
-                          <div className="text-7xl mb-4 grayscale">
-                            {badge.image_url}
+                          <div className="mb-4 flex justify-center">
+                            <BadgeIcon value={badge.image_url} className="w-16 h-16 text-muted-foreground" />
                           </div>
                           <h3 className="font-bold text-lg text-muted-foreground">
                             {badge.name}
