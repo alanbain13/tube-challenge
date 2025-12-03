@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/StatCard";
+import { Progress } from "@/components/ui/progress";
 import { Award, Trophy, Zap, Target, Medal, TrendingUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-interface Badge {
+interface BadgeData {
   id: string;
   name: string;
   description: string;
@@ -17,6 +18,12 @@ interface Badge {
   challenge_id: string | null;
   metro_system_id: string | null;
   badge_type: string;
+  criteria: {
+    threshold?: number;
+    zone?: string;
+    line?: string;
+    time_limit_minutes?: number;
+  } | null;
 }
 
 interface UserBadge {
@@ -25,7 +32,13 @@ interface UserBadge {
   earned_at: string;
   completion_time_minutes: number | null;
   rank: number | null;
-  badge: Badge;
+  badge: BadgeData;
+}
+
+interface ProgressData {
+  totalUniqueStations: number;
+  stationsByZone: Record<string, { visited: number; total: number }>;
+  stationsByLine: Record<string, { visited: number; total: number }>;
 }
 
 interface Profile {
@@ -192,6 +205,124 @@ export default function Badges() {
       return data as UserBadge[];
     },
   });
+
+  // Fetch user's progress data for badge tracking
+  const { data: progressData } = useQuery({
+    queryKey: ["badge-progress", currentUser?.id],
+    queryFn: async (): Promise<ProgressData> => {
+      if (!currentUser) throw new Error("Not authenticated");
+
+      // Get user's verified station visits
+      const { data: visits, error: visitsError } = await supabase
+        .from("station_visits")
+        .select("station_tfl_id")
+        .eq("user_id", currentUser.id)
+        .eq("status", "verified");
+
+      if (visitsError) throw visitsError;
+
+      const visitedStationIds = new Set(visits?.map(v => v.station_tfl_id).filter(Boolean) || []);
+
+      // Get all stations with zone and line info
+      const { data: stations, error: stationsError } = await supabase
+        .from("stations")
+        .select("tfl_id, zone, lines");
+
+      if (stationsError) throw stationsError;
+
+      // Calculate stats by zone
+      const stationsByZone: Record<string, { visited: number; total: number }> = {};
+      const stationsByLine: Record<string, { visited: number; total: number }> = {};
+
+      stations?.forEach(station => {
+        // Handle zones (use primary zone from "2/3" format)
+        const primaryZone = station.zone?.split('/')[0];
+        if (primaryZone && !isNaN(parseInt(primaryZone))) {
+          if (!stationsByZone[primaryZone]) {
+            stationsByZone[primaryZone] = { visited: 0, total: 0 };
+          }
+          stationsByZone[primaryZone].total++;
+          if (visitedStationIds.has(station.tfl_id)) {
+            stationsByZone[primaryZone].visited++;
+          }
+        }
+
+        // Handle lines
+        station.lines?.forEach((line: string) => {
+          const lineLower = line.toLowerCase();
+          if (!stationsByLine[lineLower]) {
+            stationsByLine[lineLower] = { visited: 0, total: 0 };
+          }
+          stationsByLine[lineLower].total++;
+          if (visitedStationIds.has(station.tfl_id)) {
+            stationsByLine[lineLower].visited++;
+          }
+        });
+      });
+
+      return {
+        totalUniqueStations: visitedStationIds.size,
+        stationsByZone,
+        stationsByLine,
+      };
+    },
+    enabled: !!currentUser,
+  });
+
+  // Calculate progress for a badge
+  const getBadgeProgress = (badge: BadgeData): { current: number; target: number; percentage: number } | null => {
+    if (!progressData || !badge.criteria) return null;
+
+    const { badge_type, criteria } = badge;
+
+    if (badge_type === 'milestone' && criteria.threshold) {
+      const current = progressData.totalUniqueStations;
+      const target = criteria.threshold;
+      return { current, target, percentage: Math.min(100, Math.round((current / target) * 100)) };
+    }
+
+    if (badge_type === 'zone' && criteria.zone) {
+      const zoneData = progressData.stationsByZone[criteria.zone];
+      if (!zoneData) return null;
+      return { 
+        current: zoneData.visited, 
+        target: zoneData.total, 
+        percentage: zoneData.total > 0 ? Math.round((zoneData.visited / zoneData.total) * 100) : 0 
+      };
+    }
+
+    if (badge_type === 'line' && criteria.line) {
+      const lineData = progressData.stationsByLine[criteria.line];
+      if (!lineData) return null;
+      return { 
+        current: lineData.visited, 
+        target: lineData.total, 
+        percentage: lineData.total > 0 ? Math.round((lineData.visited / lineData.total) * 100) : 0 
+      };
+    }
+
+    if (badge_type === 'timed' && criteria.threshold && criteria.time_limit_minutes) {
+      // For timed badges, show the station requirement (time constraint shown in description)
+      const target = criteria.threshold;
+      // If zone-restricted, use zone data; otherwise use total stations
+      if (criteria.zone) {
+        const zoneData = progressData.stationsByZone[criteria.zone];
+        if (!zoneData) return null;
+        return { 
+          current: zoneData.visited, 
+          target, 
+          percentage: Math.min(100, Math.round((zoneData.visited / target) * 100)) 
+        };
+      }
+      return { 
+        current: progressData.totalUniqueStations, 
+        target, 
+        percentage: Math.min(100, Math.round((progressData.totalUniqueStations / target) * 100)) 
+      };
+    }
+
+    return null;
+  };
 
   const earnedCount = userBadges?.length || 0;
   const totalBadges = allBadges?.length || 0;
@@ -480,21 +611,32 @@ export default function Badges() {
                   {badgeTypeLabels[type] || type}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {badgesByType[type].map((badge) => (
-                    <Card key={badge.id} className="overflow-hidden opacity-60 hover:opacity-75 transition-opacity">
-                      <CardContent className="pt-8 pb-6 text-center space-y-4">
-                        <div className="text-7xl mb-4 grayscale">
-                          {badge.image_url}
-                        </div>
-                        <h3 className="font-bold text-lg text-muted-foreground">
-                          {badge.name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground px-2">
-                          {badge.description}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {badgesByType[type].map((badge) => {
+                    const progress = getBadgeProgress(badge as BadgeData);
+                    return (
+                      <Card key={badge.id} className="overflow-hidden opacity-70 hover:opacity-90 transition-opacity">
+                        <CardContent className="pt-8 pb-6 text-center space-y-4">
+                          <div className="text-7xl mb-4 grayscale">
+                            {badge.image_url}
+                          </div>
+                          <h3 className="font-bold text-lg text-muted-foreground">
+                            {badge.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground px-2">
+                            {badge.description}
+                          </p>
+                          {progress && (
+                            <div className="px-4 pt-2 space-y-2">
+                              <Progress value={progress.percentage} className="h-2" />
+                              <p className="text-xs text-muted-foreground">
+                                {progress.current} / {progress.target} ({progress.percentage}%)
+                              </p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             ))}
