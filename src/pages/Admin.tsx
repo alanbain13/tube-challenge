@@ -26,6 +26,7 @@ import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
 import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
 import { ChallengeDetailModal } from "@/components/admin/ChallengeDetailModal";
+import { BadgeCreateForm } from "@/components/admin/BadgeCreateForm";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -44,6 +45,8 @@ const Admin = () => {
   const [challengeToDelete, setChallengeToDelete] = useState<{ id: string; name: string } | null>(null);
   const [editingChallenge, setEditingChallenge] = useState<Tables<"challenges"> | null>(null);
   const [viewingChallenge, setViewingChallenge] = useState<Tables<"challenges"> | null>(null);
+  const [editingBadge, setEditingBadge] = useState<Tables<"badges"> | null>(null);
+  const [badgeToDelete, setBadgeToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Fetch all users with their roles
   const { data: usersWithRoles, isLoading: usersLoading } = useQuery({
@@ -104,6 +107,49 @@ const Admin = () => {
       
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch badges
+  const { data: badges, isLoading: badgesLoading } = useQuery({
+    queryKey: ["admin-badges"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("badges")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Delete badge mutation
+  const deleteBadgeMutation = useMutation({
+    mutationFn: async (badgeId: string) => {
+      // First delete related user_badges
+      const { error: userBadgesError } = await supabase
+        .from("user_badges")
+        .delete()
+        .eq("badge_id", badgeId);
+      
+      if (userBadgesError) throw userBadgesError;
+
+      // Then delete the badge itself
+      const { error: badgeError } = await supabase
+        .from("badges")
+        .delete()
+        .eq("id", badgeId);
+      
+      if (badgeError) throw badgeError;
+    },
+    onSuccess: () => {
+      toast.success("Badge deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["admin-badges"] });
+      setBadgeToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete badge: ${error.message}`);
     },
   });
 
@@ -458,15 +504,110 @@ const Admin = () => {
 
           {/* Badges Tab */}
           <TabsContent value="badges" className="space-y-4">
+            <BadgeCreateForm
+              editingBadge={editingBadge}
+              onCancelEdit={() => setEditingBadge(null)}
+              onSuccess={() => setEditingBadge(null)}
+            />
+
             <Card>
               <CardHeader>
-                <CardTitle>Badge Management</CardTitle>
+                <CardTitle>Existing Badges</CardTitle>
                 <CardDescription>View and manage badge definitions</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground text-center py-8">Badge management coming soon</p>
+                {badgesLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : badges?.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No badges found</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Badge</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {badges?.map((badge) => (
+                        <TableRow key={badge.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={badge.image_url}
+                                alt={badge.name}
+                                className="w-8 h-8 rounded object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/placeholder.svg";
+                                }}
+                              />
+                              <span className="font-medium">{badge.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {badge.badge_type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
+                              {badge.description || "No description"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingBadge(badge)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setBadgeToDelete({ id: badge.id, name: badge.name })}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
+
+            {/* Delete Badge Confirmation Dialog */}
+            <AlertDialog open={!!badgeToDelete} onOpenChange={(open) => !open && setBadgeToDelete(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Badge</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{badgeToDelete?.name}"? This will also remove
+                    this badge from all users who have earned it. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => badgeToDelete && deleteBadgeMutation.mutate(badgeToDelete.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleteBadgeMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </TabsContent>
 
           {/* Stations Tab */}
