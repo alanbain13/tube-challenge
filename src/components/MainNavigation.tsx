@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
   { name: "Home", path: "/", icon: Home },
@@ -61,43 +62,57 @@ export const MainNavigation = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-1 xl:gap-4">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
+          <TooltipProvider delayDuration={100}>
+            <div className="hidden lg:flex items-center gap-1 xl:gap-4">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                const Icon = item.icon;
+                
+                return (
+                  <Tooltip key={item.path}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        to={item.path}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 xl:px-3 py-2 text-sm font-medium transition-colors rounded-md",
+                          isActive
+                            ? "text-foreground bg-accent/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="hidden xl:inline">{item.name}</span>
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent className="xl:hidden">
+                      {item.name}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
               
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2 xl:px-3 py-2 text-sm font-medium transition-colors rounded-md",
-                    isActive
-                      ? "text-foreground bg-accent/10"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="hidden xl:inline">{item.name}</span>
-                </Link>
-              );
-            })}
-            
-            {/* Admin Link (conditional) */}
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className={cn(
-                  "flex items-center gap-1.5 px-2 xl:px-3 py-2 text-sm font-medium transition-colors rounded-md",
-                  location.pathname === "/admin"
-                    ? "text-foreground bg-accent/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-              >
-                <Shield className="w-4 h-4" />
-                <span className="hidden xl:inline">Admin</span>
-              </Link>
-            )}
+              {/* Admin Link (conditional) */}
+              {isAdmin && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      to="/admin"
+                      className={cn(
+                        "flex items-center gap-1.5 px-2 xl:px-3 py-2 text-sm font-medium transition-colors rounded-md",
+                        location.pathname === "/admin"
+                          ? "text-foreground bg-accent/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      )}
+                    >
+                      <Shield className="w-4 h-4" />
+                      <span className="hidden xl:inline">Admin</span>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent className="xl:hidden">
+                    Admin
+                  </TooltipContent>
+                </Tooltip>
+              )}
             
             {/* Notification Bell */}
             {!loading && user && <NotificationBell />}
@@ -130,7 +145,8 @@ export const MainNavigation = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-          </div>
+            </div>
+          </TooltipProvider>
 
           {/* Mobile Navigation */}
           <div className="lg:hidden flex items-center gap-2">
