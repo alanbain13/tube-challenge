@@ -1,31 +1,33 @@
 import { useState, useMemo } from "react";
-import { icons, LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
-// Curated list of badge-appropriate icons
-const BADGE_ICONS = [
-  // Achievements & Awards
-  "Trophy", "Medal", "Award", "Star", "Crown", "Gem", "Diamond", "Heart",
+// Curated list of badge-appropriate emojis
+const BADGE_EMOJIS = [
+  // Trophies & Awards
+  "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️",
+  // Stars & Sparkles
+  "⭐", "🌟", "✨", "💫", "🌠",
   // Progress & Milestones
-  "Target", "Flag", "Milestone", "TrendingUp", "Rocket", "Zap", "Flame",
-  // Transportation (relevant to tube challenge)
-  "Train", "TrainFront", "Tram", "Map", "MapPin", "Navigation", "Compass", "Route",
-  // Numbers & Counts
-  "Hash", "Timer", "Clock", "Hourglass", "Calendar", "CalendarCheck",
-  // Checkmarks & Success
-  "Check", "CheckCircle", "CheckCircle2", "CircleCheck", "BadgeCheck", "ShieldCheck",
-  // Badges & Shields
-  "Shield", "ShieldPlus", "Badge", "BadgePlus", "Ribbon",
-  // Misc Achievement-related
-  "Sparkles", "PartyPopper", "Gift", "Cake", "Sun", "Moon", "Mountain", "Trees",
-  "Building", "Building2", "Landmark", "Castle", "Church", "Factory",
-  // User & Social
-  "User", "Users", "UserCheck", "UserPlus", "HandMetal", "ThumbsUp",
-] as const;
+  "🚶", "🔍", "🧭", "💯", "🗺️", "🎯", "📍", "🧩",
+  // Transportation
+  "🚇", "🚊", "🚉", "🚃", "🛤️", "🚂",
+  // Colors (for line badges)
+  "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "🟤", "⚫", "⚪",
+  // Numbers
+  "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟",
+  // Achievement & Success
+  "✅", "☑️", "🎉", "🎊", "🎁", "👑", "💎", "💪",
+  // Time & Speed
+  "⏱️", "⏰", "⌚", "🕐", "⚡", "🔥", "💨",
+  // Nature & Places
+  "🌄", "🏙️", "🌃", "🌆", "🏛️", "🗼",
+  // Misc
+  "❤️", "💜", "💙", "💚", "💛", "🧡", "🤍", "🖤",
+];
 
 interface IconPickerProps {
   value: string;
@@ -36,21 +38,15 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  // Extract icon name from stored value (e.g., "lucide:Trophy" -> "Trophy")
-  const selectedIconName = value?.startsWith("lucide:") ? value.replace("lucide:", "") : "";
-  const SelectedIcon = selectedIconName ? (icons[selectedIconName as keyof typeof icons] as LucideIcon) : null;
-
-  const filteredIcons = useMemo(() => {
-    const searchLower = search.toLowerCase();
-    return BADGE_ICONS.filter(name => 
-      name.toLowerCase().includes(searchLower)
-    );
+  const filteredEmojis = useMemo(() => {
+    if (!search) return BADGE_EMOJIS;
+    // Simple filter - in real app could use emoji names
+    return BADGE_EMOJIS;
   }, [search]);
 
-  const handleSelect = (iconName: string) => {
-    onChange(`lucide:${iconName}`);
+  const handleSelect = (emoji: string) => {
+    onChange(emoji);
     setOpen(false);
-    setSearch("");
   };
 
   return (
@@ -62,10 +58,10 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
           aria-expanded={open}
           className="w-full justify-start gap-2"
         >
-          {SelectedIcon ? (
+          {value ? (
             <>
-              <SelectedIcon className="h-4 w-4" />
-              <span>{selectedIconName}</span>
+              <span className="text-2xl">{value}</span>
+              <span className="text-muted-foreground">Selected icon</span>
             </>
           ) : (
             <span className="text-muted-foreground">Select an icon...</span>
@@ -75,42 +71,33 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
       <PopoverContent className="w-80 p-0 bg-popover" align="start">
         <div className="p-2 border-b">
           <Input
-            placeholder="Search icons..."
+            placeholder="Browse icons..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8"
           />
         </div>
         <ScrollArea className="h-64">
-          <div className="grid grid-cols-6 gap-1 p-2">
-            {filteredIcons.map((iconName) => {
-              const Icon = icons[iconName as keyof typeof icons] as LucideIcon;
-              if (!Icon) return null;
-              
-              const isSelected = selectedIconName === iconName;
+          <div className="grid grid-cols-8 gap-1 p-2">
+            {filteredEmojis.map((emoji, index) => {
+              const isSelected = value === emoji;
               
               return (
                 <Button
-                  key={iconName}
+                  key={`${emoji}-${index}`}
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "h-10 w-10",
-                    isSelected && "bg-primary text-primary-foreground hover:bg-primary/90"
+                    "h-10 w-10 text-2xl",
+                    isSelected && "bg-primary/20 ring-2 ring-primary"
                   )}
-                  onClick={() => handleSelect(iconName)}
-                  title={iconName}
+                  onClick={() => handleSelect(emoji)}
                 >
-                  <Icon className="h-5 w-5" />
+                  {emoji}
                 </Button>
               );
             })}
           </div>
-          {filteredIcons.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-4">
-              No icons found
-            </p>
-          )}
         </ScrollArea>
       </PopoverContent>
     </Popover>
@@ -119,13 +106,22 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
 
 // Helper to render a badge icon from stored value
 export function BadgeIcon({ value, className }: { value: string; className?: string }) {
-  if (value?.startsWith("lucide:")) {
-    const iconName = value.replace("lucide:", "");
-    const Icon = icons[iconName as keyof typeof icons] as LucideIcon;
-    if (Icon) {
-      return <Icon className={className} />;
-    }
+  // Check if it's an emoji (single character or emoji sequence)
+  const isEmoji = value && !value.startsWith("http") && !value.startsWith("/") && !value.startsWith("lucide:");
+  
+  if (isEmoji) {
+    return <span className={cn("inline-flex items-center justify-center", className)}>{value}</span>;
   }
+  
   // Fallback to image URL
-  return <img src={value} alt="Badge" className={className} />;
+  return (
+    <img 
+      src={value} 
+      alt="Badge" 
+      className={className}
+      onError={(e) => {
+        (e.target as HTMLImageElement).src = "/placeholder.svg";
+      }}
+    />
+  );
 }
