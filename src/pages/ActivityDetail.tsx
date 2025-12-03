@@ -195,22 +195,84 @@ const ActivityDetail = () => {
   };
 
   const handleFinishJourney = async () => {
-    if (!activity || !activityState) return;
+    if (!activity || !activityState || !user) return;
     
     try {
+      const endTime = new Date();
       // Get the last visited station from actual visits (chronological order)
       const lastVisited = activityState.actual_visits?.[activityState.actual_visits.length - 1];
+      const firstVisit = activityState.actual_visits?.[0];
 
+      // Update the activity
       const { error } = await supabase
         .from("activities")
         .update({ 
           status: "completed",
-          ended_at: new Date().toISOString(),
+          ended_at: endTime.toISOString(),
           end_station_tfl_id: lastVisited?.station_tfl_id || activity.end_station_tfl_id
         })
         .eq("id", activity.id);
 
       if (error) throw error;
+
+      // Update challenge_attempt if this activity is linked to a challenge
+      if (activity.challenge_attempt_id && activity.challenge_id) {
+        const startTime = firstVisit?.visited_at 
+          ? new Date(firstVisit.visited_at) 
+          : new Date(activity.started_at);
+        const durationSeconds = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+        const stationsVisited = activityState.counts?.visited_actual || 0;
+
+        // Check for existing personal best
+        const { data: existingBest } = await supabase
+          .from('challenge_attempts')
+          .select('id, duration_seconds, stations_visited')
+          .eq('challenge_id', activity.challenge_id)
+          .eq('user_id', user.id)
+          .eq('is_personal_best', true)
+          .neq('id', activity.challenge_attempt_id)
+          .maybeSingle();
+
+        // Determine if this is a personal best
+        // For timed challenges: more stations = better
+        // For other challenges: less time = better
+        const isTimedChallenge = challenge?.challenge_type === 'timed';
+        let isPersonalBest = !existingBest;
+        
+        if (existingBest) {
+          if (isTimedChallenge) {
+            isPersonalBest = stationsVisited > (existingBest.stations_visited || 0);
+          } else {
+            isPersonalBest = durationSeconds < (existingBest.duration_seconds || Infinity);
+          }
+        }
+
+        // Update the challenge_attempt record
+        const { error: attemptError } = await supabase
+          .from('challenge_attempts')
+          .update({
+            status: 'completed',
+            completed_at: endTime.toISOString(),
+            started_at: startTime.toISOString(),
+            duration_seconds: durationSeconds,
+            duration_minutes: Math.floor(durationSeconds / 60),
+            stations_visited: stationsVisited,
+            is_personal_best: isPersonalBest,
+          })
+          .eq('id', activity.challenge_attempt_id);
+
+        if (attemptError) {
+          console.error('Error updating challenge attempt:', attemptError);
+        }
+
+        // If new personal best, unset the old one
+        if (isPersonalBest && existingBest) {
+          await supabase
+            .from('challenge_attempts')
+            .update({ is_personal_best: false })
+            .eq('id', existingBest.id);
+        }
+      }
 
       toast({
         title: "Journey completed",
