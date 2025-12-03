@@ -105,12 +105,22 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
 }
 
 // Helper to render a badge icon from stored value
-export function BadgeIcon({ value, className }: { value: string; className?: string }) {
+export function BadgeIcon({ value, className, size = "md" }: { value: string; className?: string; size?: "sm" | "md" | "lg" }) {
   // Check if it's an emoji (single character or emoji sequence)
   const isEmoji = value && !value.startsWith("http") && !value.startsWith("/") && !value.startsWith("lucide:");
   
+  const emojiSizes = {
+    sm: "text-2xl",
+    md: "text-5xl",
+    lg: "text-7xl",
+  };
+  
   if (isEmoji) {
-    return <span className={cn("inline-flex items-center justify-center", className)}>{value}</span>;
+    return (
+      <span className={cn("inline-flex items-center justify-center", emojiSizes[size], className)}>
+        {value}
+      </span>
+    );
   }
   
   // Fallback to image URL

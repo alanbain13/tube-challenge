@@ -570,7 +570,7 @@ const Admin = () => {
                                 <TableRow key={badge.id}>
                                   <TableCell>
                                     <div className="flex items-center gap-3">
-                                      <BadgeIcon value={badge.image_url} className="w-8 h-8" />
+                                      <BadgeIcon value={badge.image_url} size="sm" />
                                       <span className="font-medium">{badge.name}</span>
                                     </div>
                                   </TableCell>

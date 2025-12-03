@@ -574,7 +574,7 @@ export default function Badges() {
                 <Card key={userBadge.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="pt-8 pb-6 text-center space-y-4">
                     <div className="mb-4 flex justify-center">
-                      <BadgeIcon value={userBadge.badge.image_url} className="w-16 h-16 text-primary" />
+                      <BadgeIcon value={userBadge.badge.image_url} size="lg" />
                     </div>
                     <h3 className="font-bold text-lg">
                       {userBadge.badge.name}
@@ -617,8 +617,8 @@ export default function Badges() {
                     return (
                       <Card key={badge.id} className="overflow-hidden opacity-70 hover:opacity-90 transition-opacity">
                         <CardContent className="pt-8 pb-6 text-center space-y-4">
-                          <div className="mb-4 flex justify-center">
-                            <BadgeIcon value={badge.image_url} className="w-16 h-16 text-muted-foreground" />
+                          <div className="mb-4 flex justify-center opacity-50">
+                            <BadgeIcon value={badge.image_url} size="lg" />
                           </div>
                           <h3 className="font-bold text-lg text-muted-foreground">
                             {badge.name}
