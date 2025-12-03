@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Map, Activity, Trophy, Route, Award, Users, Settings, Menu } from "lucide-react";
+import { Home, Map, Activity, Trophy, Route, Award, Users, Settings, Menu, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "./NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const navItems = [
   { name: "Home", path: "/", icon: Home },
@@ -22,6 +23,11 @@ export const MainNavigation = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, loading } = useAuth();
+  const { isAdmin } = useUserRole();
+
+  const allNavItems = isAdmin 
+    ? [...navItems, { name: "Admin", path: "/admin", icon: Shield }]
+    : navItems;
 
   return (
     <nav className="bg-background border-b border-border/50 sticky top-0 z-50">
@@ -37,7 +43,7 @@ export const MainNavigation = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
-            {navItems.map((item) => {
+            {allNavItems.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.icon;
               
@@ -83,7 +89,7 @@ export const MainNavigation = () => {
                   
                   {/* Navigation Items */}
                   <nav className="flex-1 overflow-y-auto py-4">
-                    {navItems.map((item) => {
+                    {allNavItems.map((item) => {
                       const isActive = location.pathname === item.path;
                       const Icon = item.icon;
                       

@@ -26,6 +26,8 @@ import Challenges from "@/pages/Challenges";
 import ChallengeLeaderboardPage from "@/pages/ChallengeLeaderboardPage";
 import Badges from "@/pages/Badges";
 import Friends from "@/pages/Friends";
+import Admin from "@/pages/Admin";
+import { AdminRoute } from "@/components/AdminRoute";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,7 @@ const App = () => (
             <Route path="/activities/:id/map" element={<ActivityMap />} />
             <Route path="/settings" element={<ProfileSettings />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
