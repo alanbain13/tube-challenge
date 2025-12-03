@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lightbulb, Target, MapPin, Trophy } from "lucide-react";
+import { Target, MapPin, Trophy, Sparkles } from "lucide-react";
 
 interface Suggestion {
   type: "line-completion" | "nearest" | "challenge";
@@ -28,15 +28,15 @@ export function SmartSuggestions({ suggestions, loading = false }: SmartSuggesti
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-action-orange" />
-            Suggested Next Steps
+      <Card className="border-border">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            Suggestions
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-20 bg-muted animate-pulse rounded" />
+        <CardContent className="px-4 pb-4">
+          <div className="h-16 bg-muted animate-pulse rounded" />
         </CardContent>
       </Card>
     );
@@ -47,34 +47,34 @@ export function SmartSuggestions({ suggestions, loading = false }: SmartSuggesti
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Lightbulb className="w-5 h-5 text-action-orange" />
-          Suggested Next Steps
+    <Card className="border-border">
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5" />
+          Suggestions
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2 px-4 pb-4">
         {suggestions.slice(0, 2).map((suggestion, index) => {
           const Icon = iconMap[suggestion.icon];
           return (
             <div 
               key={index}
-              className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+              className="flex items-start gap-3 p-2.5 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
             >
-              <div className="p-2 rounded-full bg-primary/10 flex-shrink-0">
-                <Icon className="w-4 h-4 text-primary" />
+              <div className="p-1.5 rounded bg-muted flex-shrink-0">
+                <Icon className="w-3.5 h-3.5 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{suggestion.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-xs font-medium text-foreground">{suggestion.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {suggestion.description}
                 </p>
               </div>
               <Button 
                 size="sm" 
-                variant="outline"
-                className="flex-shrink-0"
+                variant="ghost"
+                className="flex-shrink-0 h-auto py-1 px-2 text-xs"
                 onClick={() => navigate(suggestion.href)}
               >
                 {suggestion.action}

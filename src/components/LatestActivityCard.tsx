@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, MapPin, Route, ArrowRight } from "lucide-react";
+import { Clock, MapPin, ArrowRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface LatestActivityCardProps {
@@ -21,12 +21,12 @@ export function LatestActivityCard({ activity, loading = false }: LatestActivity
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold">Your Latest Adventure</CardTitle>
+      <Card className="border-border">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Recent Activity</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-24 bg-muted animate-pulse rounded" />
+        <CardContent className="px-4 pb-4">
+          <div className="h-16 bg-muted animate-pulse rounded" />
         </CardContent>
       </Card>
     );
@@ -34,31 +34,31 @@ export function LatestActivityCard({ activity, loading = false }: LatestActivity
 
   if (!activity) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold">Your Latest Adventure</CardTitle>
+      <Card className="border-border">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Recent Activity</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-center py-6">
-            <Activity className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground">
-              No activities yet. Start your first journey!
-            </p>
-          </div>
+        <CardContent className="px-4 pb-4">
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No activities yet. Start your first journey!
+          </p>
         </CardContent>
       </Card>
     );
   }
 
+  const timeAgo = formatDistanceToNow(new Date(activity.started_at), { addSuffix: true });
+  const stationCount = activity.station_tfl_ids?.length || 0;
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="border-border">
+      <CardHeader className="pb-3 pt-4 px-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold">Your Latest Adventure</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Recent Activity</CardTitle>
           <Button 
             variant="ghost" 
             size="sm" 
-            className="text-xs"
+            className="text-xs h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
             onClick={() => navigate('/activities')}
           >
             View All
@@ -66,32 +66,33 @@ export function LatestActivityCard({ activity, loading = false }: LatestActivity
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         <div 
-          className="flex items-start gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+          className="p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
           onClick={() => navigate(`/activities/${activity.id}`)}
         >
-          <div className="p-3 rounded-full bg-primary/10 flex-shrink-0">
-            <Activity className="w-6 h-6 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold truncate">
-              {activity.title || "Untitled Activity"}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              {formatDistanceToNow(new Date(activity.started_at), { addSuffix: true })}
-            </p>
-            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {activity.station_tfl_ids?.length || 0} stations
-              </span>
-              {activity.distance_km && (
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {activity.title || "Untitled Activity"}
+              </p>
+              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <Route className="w-3 h-3" />
-                  {Number(activity.distance_km).toFixed(1)} km
+                  <Clock className="w-3 h-3" />
+                  {timeAgo}
                 </span>
-              )}
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {stationCount} stations
+                </span>
+              </div>
+            </div>
+            <div className={`px-2 py-0.5 rounded text-xs font-medium ${
+              activity.status === 'completed' 
+                ? 'bg-green-500/10 text-green-600' 
+                : 'bg-muted text-muted-foreground'
+            }`}>
+              {activity.status || 'draft'}
             </div>
           </div>
         </div>
