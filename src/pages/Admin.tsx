@@ -510,83 +510,117 @@ const Admin = () => {
               onSuccess={() => setEditingBadge(null)}
             />
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Existing Badges</CardTitle>
-                <CardDescription>View and manage badge definitions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {badgesLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : badges?.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No badges found</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Badge</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {badges?.map((badge) => (
-                        <TableRow key={badge.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              {badge.image_url && !badge.image_url.startsWith('http') && !badge.image_url.startsWith('/') ? (
-                                <span className="w-8 h-8 flex items-center justify-center text-2xl">{badge.image_url}</span>
-                              ) : (
-                                <img
-                                  src={badge.image_url}
-                                  alt={badge.name}
-                                  className="w-8 h-8 rounded object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/placeholder.svg";
-                                  }}
-                                />
-                              )}
-                              <span className="font-medium">{badge.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="capitalize">
-                              {badge.badge_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
-                              {badge.description || "No description"}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingBadge(badge)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setBadgeToDelete({ id: badge.id, name: badge.name })}
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+            {badgesLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : badges?.length === 0 ? (
+              <Card>
+                <CardContent className="py-8">
+                  <p className="text-muted-foreground text-center">No badges found</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Group badges by type */}
+                {(['milestone', 'zone', 'line', 'timed', 'challenge'] as const).map((badgeType) => {
+                  const typeBadges = badges?.filter(b => b.badge_type === badgeType) || [];
+                  if (typeBadges.length === 0) return null;
+                  
+                  const typeLabels: Record<string, { title: string; description: string }> = {
+                    milestone: { title: '🏆 Milestone Badges', description: 'Awarded for cumulative station visits' },
+                    zone: { title: '🗺️ Zone Badges', description: 'Awarded for completing all stations in a zone' },
+                    line: { title: '🚇 Line Badges', description: 'Awarded for completing all stations on a line' },
+                    timed: { title: '⏱️ Timed Achievement Badges', description: 'Awarded for visiting stations within time limits' },
+                    challenge: { title: '🎯 Challenge Badges', description: 'Awarded for completing specific challenges' },
+                  };
+                  
+                  return (
+                    <Card key={badgeType}>
+                      <CardHeader>
+                        <CardTitle>{typeLabels[badgeType]?.title || badgeType}</CardTitle>
+                        <CardDescription>{typeLabels[badgeType]?.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Badge</TableHead>
+                              <TableHead>Criteria</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {typeBadges.map((badge) => {
+                              const criteria = badge.criteria as { threshold?: number; zone?: string; line?: string; time_limit_minutes?: number } | null;
+                              let criteriaText = '';
+                              if (badgeType === 'milestone' && criteria?.threshold) {
+                                criteriaText = `${criteria.threshold} stations`;
+                              } else if (badgeType === 'zone' && criteria?.zone) {
+                                criteriaText = `Zone ${criteria.zone}`;
+                              } else if (badgeType === 'line' && criteria?.line) {
+                                criteriaText = criteria.line.replace('-', ' ');
+                              } else if (badgeType === 'timed' && criteria?.threshold && criteria?.time_limit_minutes) {
+                                criteriaText = `${criteria.threshold} stations in ${criteria.time_limit_minutes} min${criteria.zone ? ` (Zone ${criteria.zone})` : ''}`;
+                              }
+                              
+                              return (
+                                <TableRow key={badge.id}>
+                                  <TableCell>
+                                    <div className="flex items-center gap-3">
+                                      {badge.image_url && !badge.image_url.startsWith('http') && !badge.image_url.startsWith('/') ? (
+                                        <span className="w-8 h-8 flex items-center justify-center text-2xl">{badge.image_url}</span>
+                                      ) : (
+                                        <img
+                                          src={badge.image_url}
+                                          alt={badge.name}
+                                          className="w-8 h-8 rounded object-cover"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).src = "/placeholder.svg";
+                                          }}
+                                        />
+                                      )}
+                                      <span className="font-medium">{badge.name}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="text-sm font-mono">{criteriaText || '—'}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
+                                      {badge.description || "No description"}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setEditingBadge(badge)}
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setBadgeToDelete({ id: badge.id, name: badge.name })}
+                                      >
+                                        <Trash2 className="w-4 h-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </>
+            )}
 
             {/* Delete Badge Confirmation Dialog */}
             <AlertDialog open={!!badgeToDelete} onOpenChange={(open) => !open && setBadgeToDelete(null)}>
