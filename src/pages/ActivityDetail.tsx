@@ -279,6 +279,21 @@ const ActivityDetail = () => {
         description: "Activity finished" + (lastVisited ? ` at ${getStationName(lastVisited.station_tfl_id)}` : "")
       });
 
+      // Evaluate badges in the background (don't block UI)
+      supabase.functions.invoke('evaluate-badges', {
+        body: { user_id: user.id, activity_id: activity.id }
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('Badge evaluation error:', error);
+        } else if (data?.awarded?.length > 0) {
+          console.log('Badges awarded:', data.awarded);
+          toast({
+            title: "Badge earned!",
+            description: `You earned: ${data.awarded.map((b: { name: string }) => b.name).join(', ')}`
+          });
+        }
+      });
+
       refetchActivityState();
     } catch (error) {
       console.error('Error finishing journey:', error);

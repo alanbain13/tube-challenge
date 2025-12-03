@@ -174,6 +174,22 @@ export function JourneyTimer() {
         description: `${Math.floor(durationMinutes / 60).toString().padStart(2, '0')}:${(durationMinutes % 60).toString().padStart(2, '0')}:00 recorded`
       });
 
+      // Evaluate badges in the background (don't block UI)
+      if (user?.id) {
+        supabase.functions.invoke('evaluate-badges', {
+          body: { user_id: user.id, activity_id: activeActivity.id }
+        }).then(({ data, error: badgeError }) => {
+          if (badgeError) {
+            console.error('Badge evaluation error:', badgeError);
+          } else if (data?.awarded?.length > 0) {
+            console.log('Badges awarded:', data.awarded);
+            toast({
+              title: "Badge earned!",
+              description: `You earned: ${data.awarded.map((b: { name: string }) => b.name).join(', ')}`
+            });
+          }
+        });
+      }
 
       // Force immediate refetch to hide the HUD
       await refetch();
