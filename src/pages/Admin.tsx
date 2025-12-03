@@ -25,6 +25,7 @@ import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Eye, Edi
 import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
 import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
+import { ChallengeDetailModal } from "@/components/admin/ChallengeDetailModal";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -42,6 +43,7 @@ const Admin = () => {
   const [newRole, setNewRole] = useState<AppRole>("user");
   const [challengeToDelete, setChallengeToDelete] = useState<{ id: string; name: string } | null>(null);
   const [editingChallenge, setEditingChallenge] = useState<Tables<"challenges"> | null>(null);
+  const [viewingChallenge, setViewingChallenge] = useState<Tables<"challenges"> | null>(null);
 
   // Fetch all users with their roles
   const { data: usersWithRoles, isLoading: usersLoading } = useQuery({
@@ -389,10 +391,12 @@ const Admin = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" asChild>
-                                <a href={`/challenges/${challenge.id}/leaderboard`} target="_blank">
-                                  <Eye className="w-4 h-4" />
-                                </a>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setViewingChallenge(challenge)}
+                              >
+                                <Eye className="w-4 h-4" />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -416,6 +420,13 @@ const Admin = () => {
                   </Table>
                 )}
               </CardContent>
+
+              {/* Challenge Detail Modal */}
+              <ChallengeDetailModal
+                challenge={viewingChallenge}
+                open={!!viewingChallenge}
+                onOpenChange={(open) => !open && setViewingChallenge(null)}
+              />
             </Card>
 
             {/* Delete Challenge Confirmation Dialog */}
