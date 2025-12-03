@@ -28,6 +28,7 @@ import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
 import { ChallengeDetailModal } from "@/components/admin/ChallengeDetailModal";
 import { BadgeCreateForm } from "@/components/admin/BadgeCreateForm";
 import { BadgeIcon } from "@/components/admin/IconPicker";
+import { UserSearchInput } from "@/components/admin/UserSearchInput";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -266,17 +267,16 @@ const Admin = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Add Role to User</CardTitle>
-                <CardDescription>Assign a role to a user by their user ID</CardDescription>
+                <CardDescription>Search for a user by name or username to assign a role</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
-                    <Label htmlFor="userId">User ID</Label>
-                    <Input
-                      id="userId"
-                      placeholder="Enter user UUID"
+                    <Label htmlFor="userId">User</Label>
+                    <UserSearchInput
                       value={newRoleUserId}
-                      onChange={(e) => setNewRoleUserId(e.target.value)}
+                      onSelect={setNewRoleUserId}
+                      placeholder="Search users by name..."
                     />
                   </div>
                   <div className="w-full sm:w-40">
