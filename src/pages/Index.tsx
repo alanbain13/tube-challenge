@@ -17,6 +17,7 @@ import { ChallengesCompletedCard } from "@/components/ChallengesCompletedCard";
 import { BadgesEarnedCard } from "@/components/BadgesEarnedCard";
 import { ActivityFeedCard } from "@/components/ActivityFeedCard";
 import { LeaderboardPositionsCard } from "@/components/LeaderboardPositionsCard";
+import { FriendsPreviewCard } from "@/components/FriendsPreviewCard";
 
 const TOTAL_STATIONS = 272; // Current metro system station count
 
@@ -453,7 +454,8 @@ const Index = () => {
           </div>
 
           {/* Secondary Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <FriendsPreviewCard />
             <QuickLineProgress lines={lineProgress} loading={isLoadingAny} />
             <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
             <ActivityFeedCard 
