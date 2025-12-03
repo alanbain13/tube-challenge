@@ -472,6 +472,28 @@ const ActivityDetail = () => {
                   </div>
                 </div>
               </div>
+              
+              {/* Timestamps Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mt-4 pt-4 border-t border-border">
+                <div>
+                  <div className="text-sm text-muted-foreground">Created</div>
+                  <div className="font-medium text-sm">
+                    {new Date(activity.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Started</div>
+                  <div className="font-medium text-sm">
+                    {timerStartTime ? new Date(timerStartTime).toLocaleString() : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Completed</div>
+                  <div className="font-medium text-sm">
+                    {activity.ended_at ? new Date(activity.ended_at).toLocaleString() : '—'}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
