@@ -18,6 +18,7 @@ import RoutesPage from "@/pages/Routes";
 import ActivitiesPage from "@/pages/Activities";
 import ActivityDetail from "@/pages/ActivityDetail";
 import ProfileSettings from "@/pages/ProfileSettings";
+import Profile from "@/pages/Profile";
 import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Metros from "@/pages/Metros";
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/activities/:id" element={<ActivityDetail />} />
             <Route path="/activities/:id/edit" element={<ActivityEdit />} />
             <Route path="/activities/:id/map" element={<ActivityMap />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<ProfileSettings />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />

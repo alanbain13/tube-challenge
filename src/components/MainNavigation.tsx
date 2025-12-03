@@ -132,6 +132,12 @@ export const MainNavigation = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 bg-popover border border-border shadow-lg z-50">
                   <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center gap-2 cursor-pointer">
+                      <User className="w-4 h-4" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link to="/settings" className="flex items-center gap-2 cursor-pointer">
                       <Settings className="w-4 h-4" />
                       Settings
@@ -230,9 +236,17 @@ export const MainNavigation = () => {
                     )}
                   </nav>
                   
-                  {/* Footer with Settings and Sign Out */}
+                  {/* Footer with Profile, Settings and Sign Out */}
                   {user && (
                     <div className="border-t border-border p-4 space-y-2">
+                      <Link
+                        to="/profile"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-2 py-2 text-base font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                      >
+                        <User className="w-5 h-5" />
+                        Profile
+                      </Link>
                       <Link
                         to="/settings"
                         onClick={() => setMobileMenuOpen(false)}
