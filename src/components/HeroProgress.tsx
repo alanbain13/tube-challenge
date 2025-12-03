@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Play, Trophy, Award, Target, Flame, MapPin } from "lucide-react";
+import { Play, Trophy, Award, Target, Flame, MapPin, Activity, Route, Users } from "lucide-react";
 
 interface HeroProgressProps {
   displayName: string;
@@ -10,7 +10,11 @@ interface HeroProgressProps {
   challengesCompleted?: number;
   badgesEarned?: number;
   bestLeaderboardRank?: number | null;
+  activitiesCompleted?: number;
+  routesCreated?: number;
+  friendsCount?: number;
   onStartActivity: () => void;
+  showStartButton?: boolean;
   loading?: boolean;
 }
 
@@ -23,7 +27,11 @@ export function HeroProgress({
   challengesCompleted = 0,
   badgesEarned = 0,
   bestLeaderboardRank,
+  activitiesCompleted = 0,
+  routesCreated = 0,
+  friendsCount = 0,
   onStartActivity,
+  showStartButton = false,
   loading = false,
 }: HeroProgressProps) {
   return (
@@ -38,11 +46,38 @@ export function HeroProgress({
             </h1>
           </div>
 
-          {/* Achievement highlights */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Achievement highlights - 6 stats */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             <div className="text-center p-2 rounded-lg bg-muted/50">
               <div className="flex items-center justify-center gap-1 mb-0.5">
-                <Target className="w-3 h-3 text-primary" />
+                <Activity className="w-3 h-3 text-primary" />
+                <span className="text-lg font-bold text-foreground">
+                  {loading ? "—" : activitiesCompleted}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">Activities</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted/50">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <Route className="w-3 h-3 text-primary" />
+                <span className="text-lg font-bold text-foreground">
+                  {loading ? "—" : routesCreated}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">Routes</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted/50">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <Users className="w-3 h-3 text-primary" />
+                <span className="text-lg font-bold text-foreground">
+                  {loading ? "—" : friendsCount}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">Friends</p>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted/50">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <Target className="w-3 h-3 text-accent" />
                 <span className="text-lg font-bold text-foreground">
                   {loading ? "—" : challengesCompleted}
                 </span>
@@ -87,16 +122,18 @@ export function HeroProgress({
           </div>
         </div>
 
-        {/* Right: CTA */}
-        <div className="sm:flex-shrink-0">
-          <Button
-            size="sm"
-            onClick={onStartActivity}
-          >
-            <Play className="w-4 h-4 mr-1.5" />
-            Start Journey
-          </Button>
-        </div>
+        {/* Right: CTA - only show if no active activity */}
+        {showStartButton && (
+          <div className="sm:flex-shrink-0">
+            <Button
+              size="sm"
+              onClick={onStartActivity}
+            >
+              <Play className="w-4 h-4 mr-1.5" />
+              Start Activity
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

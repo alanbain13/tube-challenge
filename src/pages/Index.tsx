@@ -10,7 +10,6 @@ import ActivityStartModal from "@/components/ActivityStartModal";
 import { HeroProgress } from "@/components/HeroProgress";
 import { ActiveJourneyCard } from "@/components/ActiveJourneyCard";
 import { QuickActions } from "@/components/QuickActions";
-import { QuickLineProgress } from "@/components/QuickLineProgress";
 import { SmartSuggestions } from "@/components/SmartSuggestions";
 import { ActiveMetrosCard } from "@/components/ActiveMetrosCard";
 import { ChallengesCompletedCard } from "@/components/ChallengesCompletedCard";
@@ -18,6 +17,8 @@ import { BadgesEarnedCard } from "@/components/BadgesEarnedCard";
 import { ActivityFeedCard } from "@/components/ActivityFeedCard";
 import { LeaderboardPositionsCard } from "@/components/LeaderboardPositionsCard";
 import { FriendsPreviewCard } from "@/components/FriendsPreviewCard";
+import { RecentActivitiesCard } from "@/components/RecentActivitiesCard";
+import { RecentRoutesCard } from "@/components/RecentRoutesCard";
 
 const TOTAL_STATIONS = 272; // Current metro system station count
 
@@ -232,6 +233,37 @@ const Index = () => {
     enabled: !!user,
   });
 
+  // Routes query
+  const { data: routesData = [], isLoading: routesLoading } = useQuery({
+    queryKey: ['routes', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('routes')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
+
+  // Completed activities count
+  const { data: activitiesCompleted = 0 } = useQuery({
+    queryKey: ['activities-completed', user?.id],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('activities')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .eq('status', 'completed');
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!user,
+  });
+
   // Combined feed (self + friends)
   const { data: combinedFeed = [], isLoading: feedLoading } = useQuery({
     queryKey: ["combined-feed", user?.id, friendsList],
@@ -430,7 +462,11 @@ const Index = () => {
             challengesCompleted={challengesCompleted}
             badgesEarned={badgesEarned}
             bestLeaderboardRank={bestLeaderboardRank}
+            activitiesCompleted={activitiesCompleted}
+            routesCreated={routesData.length}
+            friendsCount={friendsList.length}
             onStartActivity={() => setShowActivityModal(true)}
+            showStartButton={!activeActivity}
             loading={isLoadingAny}
           />
 
@@ -455,14 +491,23 @@ const Index = () => {
 
           {/* Secondary Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <FriendsPreviewCard />
-            <QuickLineProgress lines={lineProgress} loading={isLoadingAny} />
-            <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
-            <ActivityFeedCard 
-              activities={combinedFeed} 
-              loading={feedLoading}
+            <RecentActivitiesCard 
+              activities={activitiesData.filter(a => a.status === 'completed')} 
+              loading={activitiesLoading}
             />
+            <RecentRoutesCard 
+              routes={routesData} 
+              loading={routesLoading}
+            />
+            <FriendsPreviewCard />
+            <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
           </div>
+
+          {/* Activity Feed */}
+          <ActivityFeedCard 
+            activities={combinedFeed} 
+            loading={feedLoading}
+          />
         </div>
       </AppLayout>
       <Tutorial open={showTutorial} onComplete={handleTutorialComplete} />
