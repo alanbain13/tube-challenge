@@ -28,38 +28,18 @@ export function FriendsPreviewCard() {
       
       if (friendIds.length === 0) return { friends: [], count: 0 };
       
-      // Get friend profiles
+      // Get friend profiles sorted by last_active
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, display_name, avatar_url, last_active')
-        .in('user_id', friendIds);
+        .in('user_id', friendIds)
+        .order('last_active', { ascending: false, nullsFirst: false })
+        .limit(5);
       
       if (profilesError) throw profilesError;
       
-      // Get activity counts for each friend to sort by engagement
-      const friendsWithActivity = await Promise.all(
-        (profiles || []).map(async (profile) => {
-          const { count } = await supabase
-            .from('activities')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', profile.user_id)
-            .eq('status', 'completed');
-          return { ...profile, activityCount: count || 0 };
-        })
-      );
-      
-      // Sort by activity count (descending), then by last_active
-      friendsWithActivity.sort((a, b) => {
-        if (b.activityCount !== a.activityCount) {
-          return b.activityCount - a.activityCount;
-        }
-        const aTime = a.last_active ? new Date(a.last_active).getTime() : 0;
-        const bTime = b.last_active ? new Date(b.last_active).getTime() : 0;
-        return bTime - aTime;
-      });
-      
       return {
-        friends: friendsWithActivity.slice(0, 5),
+        friends: profiles || [],
         count: friendIds.length,
       };
     },
