@@ -14,6 +14,7 @@ interface Badge {
     threshold?: number;
     zone?: string;
     line?: string;
+    time_limit_minutes?: number;
   } | null;
 }
 
@@ -166,6 +167,51 @@ serve(async (req) => {
         const visitedOnLine = lineStations.filter(s => visitedStationIds.has(s));
         shouldAward = lineStations.length > 0 && visitedOnLine.length === lineStations.length;
         console.log(`Line badge "${badge.name}": need ${lineStations.length}, have ${visitedOnLine.length} -> ${shouldAward}`);
+      }
+      else if (badge.badge_type === 'timed' && badge.criteria?.threshold && badge.criteria?.time_limit_minutes && activity_id) {
+        // Timed badge: check if user visited threshold stations within time limit in THIS activity
+        const timeLimitMs = badge.criteria.time_limit_minutes * 60 * 1000;
+        
+        // Get visits for this activity ordered by time
+        const { data: activityVisits, error: activityVisitsError } = await supabase
+          .from('station_visits')
+          .select('station_tfl_id, visited_at')
+          .eq('activity_id', activity_id)
+          .eq('user_id', user_id)
+          .eq('status', 'verified')
+          .order('visited_at', { ascending: true });
+        
+        if (activityVisitsError) {
+          console.error(`Error fetching activity visits for timed badge:`, activityVisitsError);
+          continue;
+        }
+        
+        if (!activityVisits || activityVisits.length < badge.criteria.threshold) {
+          console.log(`Timed badge "${badge.name}": not enough visits (${activityVisits?.length || 0}/${badge.criteria.threshold})`);
+          continue;
+        }
+        
+        // If zone-restricted, filter to zone stations only
+        let relevantVisits = activityVisits;
+        if (badge.criteria.zone) {
+          const zoneStationSet = new Set(stationsByZone[badge.criteria.zone] || []);
+          relevantVisits = activityVisits.filter(v => zoneStationSet.has(v.station_tfl_id));
+          
+          if (relevantVisits.length < badge.criteria.threshold) {
+            console.log(`Timed badge "${badge.name}": not enough zone ${badge.criteria.zone} visits (${relevantVisits.length}/${badge.criteria.threshold})`);
+            continue;
+          }
+        }
+        
+        // Check if threshold was met within time limit
+        // Find the earliest window where threshold stations were visited
+        const firstVisitTime = new Date(relevantVisits[0].visited_at).getTime();
+        const thresholdVisit = relevantVisits[badge.criteria.threshold - 1];
+        const thresholdVisitTime = new Date(thresholdVisit.visited_at).getTime();
+        const duration = thresholdVisitTime - firstVisitTime;
+        
+        shouldAward = duration <= timeLimitMs;
+        console.log(`Timed badge "${badge.name}": ${relevantVisits.length} visits, duration ${Math.round(duration / 60000)}min vs limit ${badge.criteria.time_limit_minutes}min -> ${shouldAward}`);
       }
 
       if (shouldAward) {
