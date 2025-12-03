@@ -16,6 +16,7 @@ import { ActiveMetrosCard } from "@/components/ActiveMetrosCard";
 import { ChallengesCompletedCard } from "@/components/ChallengesCompletedCard";
 import { BadgesEarnedCard } from "@/components/BadgesEarnedCard";
 import { ActivityFeedCard } from "@/components/ActivityFeedCard";
+import { LeaderboardPositionsCard } from "@/components/LeaderboardPositionsCard";
 
 const TOTAL_STATIONS = 272; // Current metro system station count
 
@@ -139,6 +140,79 @@ const Index = () => {
       return count || 0;
     },
     enabled: !!activeActivity?.id,
+  });
+
+  // Challenges completed count
+  const { data: challengesCompleted = 0 } = useQuery({
+    queryKey: ['challenges-completed', user?.id],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('challenge_attempts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .eq('status', 'completed');
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!user,
+  });
+
+  // Badges earned count
+  const { data: badgesEarned = 0 } = useQuery({
+    queryKey: ['badges-earned-count', user?.id],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('user_badges')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!user,
+  });
+
+  // Best leaderboard rank
+  const { data: bestLeaderboardRank } = useQuery({
+    queryKey: ['best-leaderboard-rank', user?.id],
+    queryFn: async () => {
+      // Get user's personal best attempts
+      const { data: attempts, error } = await supabase
+        .from('challenge_attempts')
+        .select('id, challenge_id, duration_minutes, stations_visited, challenges(ranking_metric, challenge_type)')
+        .eq('user_id', user!.id)
+        .eq('status', 'completed')
+        .eq('is_personal_best', true);
+      
+      if (error || !attempts?.length) return null;
+
+      // Calculate rank for each attempt
+      let bestRank: number | null = null;
+      for (const attempt of attempts) {
+        const challenge = attempt.challenges as any;
+        if (!challenge) continue;
+
+        let rankQuery = supabase
+          .from('challenge_attempts')
+          .select('id', { count: 'exact', head: true })
+          .eq('challenge_id', attempt.challenge_id)
+          .eq('status', 'completed')
+          .eq('is_personal_best', true);
+
+        if (challenge.ranking_metric === 'stations' || challenge.challenge_type === 'timed') {
+          rankQuery = rankQuery.gt('stations_visited', attempt.stations_visited || 0);
+        } else {
+          rankQuery = rankQuery.lt('duration_minutes', attempt.duration_minutes);
+        }
+
+        const { count } = await rankQuery;
+        const rank = (count || 0) + 1;
+        if (bestRank === null || rank < bestRank) {
+          bestRank = rank;
+        }
+      }
+      return bestRank;
+    },
+    enabled: !!user,
   });
 
   // Friends list
@@ -352,6 +426,9 @@ const Index = () => {
             totalStations={TOTAL_STATIONS}
             weeklyStations={weeklyStations}
             streak={streak}
+            challengesCompleted={challengesCompleted}
+            badgesEarned={badgesEarned}
+            bestLeaderboardRank={bestLeaderboardRank}
             onStartActivity={() => setShowActivityModal(true)}
             loading={isLoadingAny}
           />
@@ -368,10 +445,11 @@ const Index = () => {
           <QuickActions onStartActivity={() => setShowActivityModal(true)} />
 
           {/* Main Grid Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <ActiveMetrosCard />
             <ChallengesCompletedCard />
             <BadgesEarnedCard />
+            <LeaderboardPositionsCard />
           </div>
 
           {/* Secondary Grid */}
