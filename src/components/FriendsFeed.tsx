@@ -32,18 +32,18 @@ export function FriendsFeed({ activities, loading = false, hasFriends }: Friends
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Friend Activity
+      <Card className="border-border">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Users className="w-3.5 h-3.5" />
+            Friends
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
-              <div className="flex-1 space-y-2">
+        <CardContent className="space-y-2 px-4 pb-4">
+          {[1, 2].map(i => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-muted animate-pulse" />
+              <div className="flex-1 space-y-1">
                 <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
                 <div className="h-2 bg-muted animate-pulse rounded w-1/2" />
               </div>
@@ -58,15 +58,15 @@ export function FriendsFeed({ activities, loading = false, hasFriends }: Friends
 
   if (friendActivities.length === 0) {
     return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Friend Activity
+      <Card className="border-border">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Users className="w-3.5 h-3.5" />
+            Friends
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground text-center py-4">
+        <CardContent className="px-4 pb-4">
+          <p className="text-xs text-muted-foreground text-center py-3">
             No recent friend activity
           </p>
         </CardContent>
@@ -75,17 +75,17 @@ export function FriendsFeed({ activities, loading = false, hasFriends }: Friends
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="border-border">
+      <CardHeader className="pb-3 pt-4 px-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Friend Activity
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Users className="w-3.5 h-3.5" />
+            Friends
           </CardTitle>
           <Button 
             variant="ghost" 
             size="sm" 
-            className="text-xs"
+            className="text-xs h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
             onClick={() => navigate('/activities')}
           >
             See All
@@ -93,27 +93,27 @@ export function FriendsFeed({ activities, loading = false, hasFriends }: Friends
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-1.5 px-4 pb-4">
         {friendActivities.map((activity) => (
           <div 
             key={activity.id}
-            className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+            className="flex items-center gap-2.5 p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
             onClick={() => navigate(`/activities/${activity.id}`)}
           >
-            <Avatar className="h-10 w-10">
+            <Avatar className="h-7 w-7">
               <AvatarImage src={activity.profile?.avatar_url || undefined} />
-              <AvatarFallback>
+              <AvatarFallback className="text-xs">
                 {activity.profile?.display_name?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-sm">
-                <span className="font-semibold">
+              <p className="text-xs">
+                <span className="font-medium text-foreground">
                   {activity.profile?.display_name || 'Unknown'}
                 </span>
                 {' '}
                 <span className="text-muted-foreground">
-                  visited {activity.station_tfl_ids?.length || 0} stations
+                  • {activity.station_tfl_ids?.length || 0} stations
                 </span>
               </p>
               <p className="text-xs text-muted-foreground">

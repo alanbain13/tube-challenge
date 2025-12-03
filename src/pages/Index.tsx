@@ -15,7 +15,7 @@ import { SmartSuggestions } from "@/components/SmartSuggestions";
 import { LatestActivityCard } from "@/components/LatestActivityCard";
 import { FriendsFeed } from "@/components/FriendsFeed";
 
-const TOTAL_STATIONS = 272; // London Underground stations
+const TOTAL_STATIONS = 272; // Current metro system station count
 
 const Index = () => {
   const { user, profile, loading, profileLoading } = useAuth();
@@ -342,7 +342,7 @@ const Index = () => {
   return (
     <>
       <AppLayout>
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Hero Section */}
           <HeroProgress
             displayName={profile.display_name || "Explorer"}
@@ -366,23 +366,18 @@ const Index = () => {
           <QuickActions onStartActivity={() => setShowActivityModal(true)} />
 
           {/* Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-6">
-              <QuickLineProgress lines={lineProgress} loading={isLoadingAny} />
-              <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-6">
-              <LatestActivityCard activity={latestActivity} loading={activitiesLoading} />
-              <FriendsFeed 
-                activities={combinedFeed} 
-                loading={feedLoading}
-                hasFriends={friendsList.length > 0}
-              />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <QuickLineProgress lines={lineProgress} loading={isLoadingAny} />
+            <LatestActivityCard activity={latestActivity} loading={activitiesLoading} />
+            <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
           </div>
+
+          {/* Friends Feed */}
+          <FriendsFeed 
+            activities={combinedFeed} 
+            loading={feedLoading}
+            hasFriends={friendsList.length > 0}
+          />
         </div>
       </AppLayout>
       <Tutorial open={showTutorial} onComplete={handleTutorialComplete} />
