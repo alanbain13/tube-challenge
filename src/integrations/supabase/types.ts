@@ -272,6 +272,7 @@ export type Database = {
           badge_type: string
           challenge_id: string | null
           created_at: string
+          criteria: Json | null
           description: string | null
           id: string
           image_url: string
@@ -283,6 +284,7 @@ export type Database = {
           badge_type?: string
           challenge_id?: string | null
           created_at?: string
+          criteria?: Json | null
           description?: string | null
           id?: string
           image_url: string
@@ -294,6 +296,7 @@ export type Database = {
           badge_type?: string
           challenge_id?: string | null
           created_at?: string
+          criteria?: Json | null
           description?: string | null
           id?: string
           image_url?: string
