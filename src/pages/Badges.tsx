@@ -202,14 +202,24 @@ export default function Badges() {
   // Get earned badge IDs
   const earnedBadgeIds = new Set(userBadges?.map(ub => ub.badge_id) || []);
   
-  // Get unearned badges grouped by metro system
+  // Get unearned badges grouped by badge type
   const unearnedBadges = allBadges?.filter(badge => !earnedBadgeIds.has(badge.id)) || [];
-  const badgesByMetro = unearnedBadges.reduce((acc, badge) => {
-    const metroName = badge.metro_system?.name || "Other";
-    if (!acc[metroName]) {
-      acc[metroName] = [];
+  
+  const badgeTypeLabels: Record<string, string> = {
+    milestone: "Milestone Badges",
+    zone: "Zone Completion Badges",
+    line: "Line Completion Badges",
+    challenge: "Challenge Badges",
+  };
+  
+  const badgeTypeOrder = ["milestone", "zone", "line", "challenge"];
+  
+  const badgesByType = unearnedBadges.reduce((acc, badge) => {
+    const type = badge.badge_type || "challenge";
+    if (!acc[type]) {
+      acc[type] = [];
     }
-    acc[metroName].push(badge);
+    acc[type].push(badge);
     return acc;
   }, {} as Record<string, typeof unearnedBadges>);
 
@@ -455,15 +465,21 @@ export default function Badges() {
         )}
 
         {/* Available Badges Section */}
-        {Object.keys(badgesByMetro).length > 0 && (
+        {Object.keys(badgesByType).length > 0 && (
           <div className="mt-16">
-            {Object.entries(badgesByMetro).map(([metroName, badges]) => (
-              <div key={metroName} className="mb-12">
-                <h2 className="text-2xl font-semibold mb-6">
-                  {metroName}
-                </h2>
+            <h2 className="text-2xl font-semibold flex items-center gap-2 mb-8">
+              <Target className="w-6 h-6 text-gray-400" />
+              Available Badges
+            </h2>
+            {badgeTypeOrder
+              .filter(type => badgesByType[type]?.length > 0)
+              .map((type) => (
+              <div key={type} className="mb-12">
+                <h3 className="text-xl font-semibold mb-6 text-muted-foreground">
+                  {badgeTypeLabels[type] || type}
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {badges.map((badge) => (
+                  {badgesByType[type].map((badge) => (
                     <Card key={badge.id} className="overflow-hidden opacity-60 hover:opacity-75 transition-opacity">
                       <CardContent className="pt-8 pb-6 text-center space-y-4">
                         <div className="text-7xl mb-4 grayscale">
