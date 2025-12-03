@@ -15,30 +15,15 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Fetching GeoJSON data...');
+    console.log('Processing GeoJSON data from request body...');
     
-    // Fetch the GeoJSON file from public storage
-    const geojsonUrl = `${supabaseUrl}/storage/v1/object/public/data/stations.json`;
-    
-    let geojsonData;
-    try {
-      const response = await fetch(geojsonUrl);
-      if (!response.ok) {
-        throw new Error(`GeoJSON not in storage (${response.status}), trying request body`);
-      }
-      geojsonData = await response.json();
-    } catch {
-      // If storage doesn't work, try to get it from the request body
-      const body = await req.json();
-      if (body.geojsonData) {
-        geojsonData = body.geojsonData;
-      } else {
-        throw new Error('Could not load GeoJSON data. Please provide it in the request body as { geojsonData: {...} }');
-      }
+    // Get GeoJSON from request body
+    const body = await req.json();
+    if (!body.geojsonData) {
+      throw new Error('GeoJSON data required in request body as { geojsonData: {...} }');
     }
+    const geojsonData = body.geojsonData;
 
-    console.log('Processing stations from GeoJSON...');
-    
     // Extract station features (Point type) - station-level IDs only
     const stationFeatures = geojsonData.features.filter(
       (feature: any) => feature.geometry.type === 'Point' && 
@@ -55,49 +40,50 @@ Deno.serve(async (req) => {
     const { error: clearError } = await supabase
       .from('stations')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      .neq('id', '00000000-0000-0000-0000-000000000000');
 
     if (clearError) {
       console.error('Error clearing stations:', clearError);
+      throw new Error(`Failed to clear stations: ${clearError.message}`);
     }
 
-    let insertedCount = 0;
-    let errors = 0;
-
-    // Insert stations from GeoJSON
-    for (const feature of stationFeatures) {
+    // Prepare all stations for batch insert
+    const stationsToInsert = stationFeatures.map((feature: any) => {
       const tflId = feature.properties.id;
       const name = feature.properties.name;
       const zone = feature.properties.zone || '1';
       const coordinates = feature.geometry.coordinates;
       const longitude = coordinates[0];
       const latitude = coordinates[1];
-      
-      // Extract line names from the lines array
       const lines = feature.properties.lines?.map((l: any) => l.name) || [];
 
-      try {
-        const { error } = await supabase
-          .from('stations')
-          .insert({
-            tfl_id: tflId,
-            name: name,
-            zone: String(zone),
-            lines: lines,
-            longitude: longitude,
-            latitude: latitude,
-            metro_system_id: null // Will be set later if needed
-          });
+      return {
+        tfl_id: tflId,
+        name: name,
+        zone: String(zone),
+        lines: lines,
+        longitude: longitude,
+        latitude: latitude,
+        metro_system_id: null
+      };
+    });
 
-        if (error) {
-          console.error(`Error inserting station ${tflId}:`, error);
-          errors++;
-        } else {
-          insertedCount++;
-        }
-      } catch (err) {
-        console.error(`Exception inserting station ${tflId}:`, err);
-        errors++;
+    // Batch insert in chunks of 100 to avoid payload limits
+    const CHUNK_SIZE = 100;
+    let insertedCount = 0;
+    let errors = 0;
+
+    for (let i = 0; i < stationsToInsert.length; i += CHUNK_SIZE) {
+      const chunk = stationsToInsert.slice(i, i + CHUNK_SIZE);
+      const { error } = await supabase
+        .from('stations')
+        .insert(chunk);
+
+      if (error) {
+        console.error(`Error inserting chunk ${i / CHUNK_SIZE + 1}:`, error);
+        errors += chunk.length;
+      } else {
+        insertedCount += chunk.length;
       }
     }
 
