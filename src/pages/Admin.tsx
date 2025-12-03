@@ -537,14 +537,18 @@ const Admin = () => {
                         <TableRow key={badge.id}>
                           <TableCell>
                             <div className="flex items-center gap-3">
-                              <img
-                                src={badge.image_url}
-                                alt={badge.name}
-                                className="w-8 h-8 rounded object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = "/placeholder.svg";
-                                }}
-                              />
+                              {badge.image_url && !badge.image_url.startsWith('http') && !badge.image_url.startsWith('/') ? (
+                                <span className="w-8 h-8 flex items-center justify-center text-2xl">{badge.image_url}</span>
+                              ) : (
+                                <img
+                                  src={badge.image_url}
+                                  alt={badge.name}
+                                  className="w-8 h-8 rounded object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = "/placeholder.svg";
+                                  }}
+                                />
+                              )}
                               <span className="font-medium">{badge.name}</span>
                             </div>
                           </TableCell>
