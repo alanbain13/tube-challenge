@@ -56,7 +56,7 @@ export function QuickLineProgress({ lines, loading = false }: QuickLineProgressP
             variant="ghost" 
             size="sm" 
             className="text-xs h-auto py-1 px-2 text-muted-foreground hover:text-foreground"
-            onClick={() => navigate('/metros/london-underground')}
+            onClick={() => navigate('/metros')}
           >
             View All
             <ArrowRight className="w-3 h-3 ml-1" />

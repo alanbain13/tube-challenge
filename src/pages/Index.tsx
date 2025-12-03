@@ -12,8 +12,10 @@ import { ActiveJourneyCard } from "@/components/ActiveJourneyCard";
 import { QuickActions } from "@/components/QuickActions";
 import { QuickLineProgress } from "@/components/QuickLineProgress";
 import { SmartSuggestions } from "@/components/SmartSuggestions";
-import { LatestActivityCard } from "@/components/LatestActivityCard";
-import { FriendsFeed } from "@/components/FriendsFeed";
+import { ActiveMetrosCard } from "@/components/ActiveMetrosCard";
+import { ChallengesCompletedCard } from "@/components/ChallengesCompletedCard";
+import { BadgesEarnedCard } from "@/components/BadgesEarnedCard";
+import { ActivityFeedCard } from "@/components/ActivityFeedCard";
 
 const TOTAL_STATIONS = 272; // Current metro system station count
 
@@ -155,11 +157,11 @@ const Index = () => {
     enabled: !!user,
   });
 
-  // Combined feed
+  // Combined feed (self + friends)
   const { data: combinedFeed = [], isLoading: feedLoading } = useQuery({
     queryKey: ["combined-feed", user?.id, friendsList],
     queryFn: async () => {
-      if (!user || friendsList.length === 0) return [];
+      if (!user) return [];
       const userIds = [user.id, ...friendsList];
 
       const { data: activities, error: activitiesError } = await supabase
@@ -184,7 +186,7 @@ const Index = () => {
         isCurrentUser: activity.user_id === user.id,
       })) || [];
     },
-    enabled: !!user && friendsList.length > 0,
+    enabled: !!user,
   });
 
   // Computed stats
@@ -365,19 +367,22 @@ const Index = () => {
           {/* Quick Actions */}
           <QuickActions onStartActivity={() => setShowActivityModal(true)} />
 
-          {/* Two Column Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <QuickLineProgress lines={lineProgress} loading={isLoadingAny} />
-            <LatestActivityCard activity={latestActivity} loading={activitiesLoading} />
-            <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
+          {/* Main Grid Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <ActiveMetrosCard />
+            <ChallengesCompletedCard />
+            <BadgesEarnedCard />
           </div>
 
-          {/* Friends Feed */}
-          <FriendsFeed 
-            activities={combinedFeed} 
-            loading={feedLoading}
-            hasFriends={friendsList.length > 0}
-          />
+          {/* Secondary Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <QuickLineProgress lines={lineProgress} loading={isLoadingAny} />
+            <SmartSuggestions suggestions={suggestions} loading={isLoadingAny} />
+            <ActivityFeedCard 
+              activities={combinedFeed} 
+              loading={feedLoading}
+            />
+          </div>
         </div>
       </AppLayout>
       <Tutorial open={showTutorial} onComplete={handleTutorialComplete} />
