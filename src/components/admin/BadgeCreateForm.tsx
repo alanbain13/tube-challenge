@@ -382,14 +382,17 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Zone Restriction (Optional)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <Select 
+                        onValueChange={(val) => field.onChange(val === "any" ? undefined : val)} 
+                        value={field.value || "any"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Any zone" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Any zone</SelectItem>
+                          <SelectItem value="any">Any zone</SelectItem>
                           {["1", "2", "3", "4", "5", "6"].map((zone) => (
                             <SelectItem key={zone} value={zone}>Zone {zone} only</SelectItem>
                           ))}
