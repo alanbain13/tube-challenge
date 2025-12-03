@@ -21,11 +21,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Eye } from "lucide-react";
+import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Eye, Edit } from "lucide-react";
 import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
 import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
-import type { Database as DB } from "@/integrations/supabase/types";
+import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
 
@@ -41,6 +41,7 @@ const Admin = () => {
   const [newRoleUserId, setNewRoleUserId] = useState("");
   const [newRole, setNewRole] = useState<AppRole>("user");
   const [challengeToDelete, setChallengeToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [editingChallenge, setEditingChallenge] = useState<Tables<"challenges"> | null>(null);
 
   // Fetch all users with their roles
   const { data: usersWithRoles, isLoading: usersLoading } = useQuery({
@@ -321,7 +322,11 @@ const Admin = () => {
 
           {/* Challenges Tab */}
           <TabsContent value="challenges" className="space-y-4">
-            <ChallengeCreateForm />
+            <ChallengeCreateForm 
+              editingChallenge={editingChallenge}
+              onCancelEdit={() => setEditingChallenge(null)}
+              onSuccess={() => setEditingChallenge(null)}
+            />
             
             <Card>
               <CardHeader>
@@ -388,6 +393,13 @@ const Admin = () => {
                                 <a href={`/challenges/${challenge.id}/leaderboard`} target="_blank">
                                   <Eye className="w-4 h-4" />
                                 </a>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingChallenge(challenge)}
+                              >
+                                <Edit className="w-4 h-4" />
                               </Button>
                               <Button
                                 variant="ghost"

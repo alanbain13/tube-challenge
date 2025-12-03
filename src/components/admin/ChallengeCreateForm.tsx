@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,11 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useStations } from "@/hooks/useStations";
 import SearchStationInput from "@/components/SearchStationInput";
-import { Loader2, Plus, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Loader2, Plus, X, ChevronUp, ChevronDown, Save } from "lucide-react";
+import type { Tables } from "@/integrations/supabase/types";
 
 const challengeTypes = [
   { value: "sequenced", label: "Sequenced Route", description: "Stations must be visited in order" },
@@ -43,11 +43,14 @@ type ChallengeFormData = z.infer<typeof challengeSchema>;
 
 interface ChallengeCreateFormProps {
   onSuccess?: () => void;
+  editingChallenge?: Tables<"challenges"> | null;
+  onCancelEdit?: () => void;
 }
 
-export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => {
+export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit }: ChallengeCreateFormProps) => {
   const queryClient = useQueryClient();
   const { stations, loading: stationsLoading } = useStations();
+  const isEditing = !!editingChallenge;
   
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
   const [startStationId, setStartStationId] = useState<string | null>(null);
@@ -67,6 +70,47 @@ export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => 
     },
   });
 
+  // Pre-populate form when editing
+  useEffect(() => {
+    if (editingChallenge) {
+      form.reset({
+        name: editingChallenge.name,
+        description: editingChallenge.description || "",
+        challenge_type: editingChallenge.challenge_type as ChallengeFormData["challenge_type"],
+        difficulty: (editingChallenge.difficulty as ChallengeFormData["difficulty"]) || "medium",
+        is_sequenced: editingChallenge.is_sequenced || false,
+        time_limit_seconds: editingChallenge.time_limit_seconds || undefined,
+        target_station_count: editingChallenge.target_station_count || undefined,
+        estimated_duration_minutes: editingChallenge.estimated_duration_minutes || undefined,
+      });
+      
+      // Set station data
+      if (editingChallenge.challenge_type === "point_to_point") {
+        setStartStationId(editingChallenge.start_station_tfl_id);
+        setEndStationId(editingChallenge.end_station_tfl_id);
+        setSelectedStations([]);
+      } else {
+        setSelectedStations(editingChallenge.station_tfl_ids || []);
+        setStartStationId(null);
+        setEndStationId(null);
+      }
+    } else {
+      form.reset({
+        name: "",
+        description: "",
+        challenge_type: "sequenced",
+        difficulty: "medium",
+        is_sequenced: true,
+        time_limit_seconds: undefined,
+        target_station_count: undefined,
+        estimated_duration_minutes: undefined,
+      });
+      setSelectedStations([]);
+      setStartStationId(null);
+      setEndStationId(null);
+    }
+  }, [editingChallenge, form]);
+
   const challengeType = form.watch("challenge_type");
 
   // Update is_sequenced based on challenge type
@@ -74,9 +118,56 @@ export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => 
     form.setValue("is_sequenced", type === "sequenced" || type === "point_to_point");
   };
 
+  const validateChallengeData = (data: ChallengeFormData) => {
+    if (["sequenced", "unsequenced"].includes(data.challenge_type)) {
+      if (selectedStations.length < 2) {
+        throw new Error("Please select at least 2 stations");
+      }
+    }
+
+    if (data.challenge_type === "point_to_point") {
+      if (!startStationId || !endStationId) {
+        throw new Error("Please select both start and end stations");
+      }
+    }
+
+    if (data.challenge_type === "timed" && !data.time_limit_seconds) {
+      throw new Error("Please set a time limit for timed challenges");
+    }
+
+    if (data.challenge_type === "station_count" && !data.target_station_count) {
+      throw new Error("Please set a target station count");
+    }
+  };
+
+  const buildChallengePayload = (data: ChallengeFormData, metroSystemId: string) => {
+    let stationTflIds: string[] = [];
+    if (["sequenced", "unsequenced"].includes(data.challenge_type)) {
+      stationTflIds = selectedStations;
+    } else if (data.challenge_type === "point_to_point") {
+      stationTflIds = [startStationId!, endStationId!];
+    }
+
+    return {
+      name: data.name,
+      description: data.description || null,
+      challenge_type: data.challenge_type,
+      difficulty: data.difficulty || null,
+      is_sequenced: data.is_sequenced,
+      is_official: true,
+      metro_system_id: metroSystemId,
+      station_tfl_ids: stationTflIds,
+      start_station_tfl_id: data.challenge_type === "point_to_point" ? startStationId : (selectedStations[0] || null),
+      end_station_tfl_id: data.challenge_type === "point_to_point" ? endStationId : (selectedStations[selectedStations.length - 1] || null),
+      time_limit_seconds: data.time_limit_seconds || null,
+      target_station_count: data.target_station_count || null,
+      estimated_duration_minutes: data.estimated_duration_minutes || null,
+      ranking_metric: data.challenge_type === "timed" ? "stations" : "time",
+    };
+  };
+
   const createChallengeMutation = useMutation({
     mutationFn: async (data: ChallengeFormData) => {
-      // Get the London metro system ID
       const { data: metroSystem, error: metroError } = await supabase
         .from("metro_systems")
         .select("id")
@@ -87,53 +178,10 @@ export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => 
         throw new Error("Failed to find London metro system");
       }
 
-      // Validate based on challenge type
-      if (["sequenced", "unsequenced"].includes(data.challenge_type)) {
-        if (selectedStations.length < 2) {
-          throw new Error("Please select at least 2 stations");
-        }
-      }
+      validateChallengeData(data);
+      const payload = buildChallengePayload(data, metroSystem.id);
 
-      if (data.challenge_type === "point_to_point") {
-        if (!startStationId || !endStationId) {
-          throw new Error("Please select both start and end stations");
-        }
-      }
-
-      if (data.challenge_type === "timed" && !data.time_limit_seconds) {
-        throw new Error("Please set a time limit for timed challenges");
-      }
-
-      if (data.challenge_type === "station_count" && !data.target_station_count) {
-        throw new Error("Please set a target station count");
-      }
-
-      // Build station_tfl_ids array based on challenge type
-      let stationTflIds: string[] = [];
-      if (["sequenced", "unsequenced"].includes(data.challenge_type)) {
-        stationTflIds = selectedStations;
-      } else if (data.challenge_type === "point_to_point") {
-        stationTflIds = [startStationId!, endStationId!];
-      }
-      // For timed and station_count, empty array is fine
-
-      const { error } = await supabase.from("challenges").insert({
-        name: data.name,
-        description: data.description || null,
-        challenge_type: data.challenge_type,
-        difficulty: data.difficulty || null,
-        is_sequenced: data.is_sequenced,
-        is_official: true,
-        metro_system_id: metroSystem.id,
-        station_tfl_ids: stationTflIds,
-        start_station_tfl_id: data.challenge_type === "point_to_point" ? startStationId : (selectedStations[0] || null),
-        end_station_tfl_id: data.challenge_type === "point_to_point" ? endStationId : (selectedStations[selectedStations.length - 1] || null),
-        time_limit_seconds: data.time_limit_seconds || null,
-        target_station_count: data.target_station_count || null,
-        estimated_duration_minutes: data.estimated_duration_minutes || null,
-        ranking_metric: data.challenge_type === "timed" ? "stations" : "time",
-      });
-
+      const { error } = await supabase.from("challenges").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -143,6 +191,49 @@ export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => 
       setSelectedStations([]);
       setStartStationId(null);
       setEndStationId(null);
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const updateChallengeMutation = useMutation({
+    mutationFn: async (data: ChallengeFormData) => {
+      if (!editingChallenge) throw new Error("No challenge to update");
+
+      validateChallengeData(data);
+      
+      const payload = {
+        name: data.name,
+        description: data.description || null,
+        challenge_type: data.challenge_type,
+        difficulty: data.difficulty || null,
+        is_sequenced: data.is_sequenced,
+        station_tfl_ids: ["sequenced", "unsequenced"].includes(data.challenge_type) 
+          ? selectedStations 
+          : data.challenge_type === "point_to_point" 
+            ? [startStationId!, endStationId!] 
+            : [],
+        start_station_tfl_id: data.challenge_type === "point_to_point" ? startStationId : (selectedStations[0] || null),
+        end_station_tfl_id: data.challenge_type === "point_to_point" ? endStationId : (selectedStations[selectedStations.length - 1] || null),
+        time_limit_seconds: data.time_limit_seconds || null,
+        target_station_count: data.target_station_count || null,
+        estimated_duration_minutes: data.estimated_duration_minutes || null,
+        ranking_metric: data.challenge_type === "timed" ? "stations" : "time",
+      };
+
+      const { error } = await supabase
+        .from("challenges")
+        .update(payload)
+        .eq("id", editingChallenge.id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Challenge updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["admin-challenges"] });
+      onCancelEdit?.();
       onSuccess?.();
     },
     onError: (error: Error) => {
@@ -173,22 +264,29 @@ export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => 
   };
 
   const onSubmit = (data: ChallengeFormData) => {
-    createChallengeMutation.mutate(data);
+    if (isEditing) {
+      updateChallengeMutation.mutate(data);
+    } else {
+      createChallengeMutation.mutate(data);
+    }
   };
 
   const showStationList = ["sequenced", "unsequenced"].includes(challengeType);
   const showPointToPoint = challengeType === "point_to_point";
   const showTimeLimit = challengeType === "timed";
   const showTargetCount = challengeType === "station_count";
+  const isPending = createChallengeMutation.isPending || updateChallengeMutation.isPending;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Plus className="w-5 h-5" />
-          Create Official Challenge
+          {isEditing ? <Save className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          {isEditing ? "Edit Challenge" : "Create Official Challenge"}
         </CardTitle>
-        <CardDescription>Create a new challenge for all users</CardDescription>
+        <CardDescription>
+          {isEditing ? `Editing: ${editingChallenge?.name}` : "Create a new challenge for all users"}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -478,16 +576,22 @@ export const ChallengeCreateForm = ({ onSuccess }: ChallengeCreateFormProps) => 
               </div>
             )}
 
-            <Button type="submit" disabled={createChallengeMutation.isPending} className="w-full">
-              {createChallengeMutation.isPending ? (
+            {isEditing && (
+              <Button type="button" variant="outline" onClick={onCancelEdit} className="w-full">
+                Cancel Editing
+              </Button>
+            )}
+
+            <Button type="submit" disabled={isPending} className="w-full">
+              {isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Creating...
+                  {isEditing ? "Updating..." : "Creating..."}
                 </>
               ) : (
                 <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Challenge
+                  {isEditing ? <Save className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                  {isEditing ? "Update Challenge" : "Create Challenge"}
                 </>
               )}
             </Button>
