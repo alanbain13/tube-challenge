@@ -13,9 +13,19 @@ const SyncStationsFromGeoJSON = ({ onComplete }: SyncStationsFromGeoJSONProps) =
   const handleSync = async () => {
     try {
       setLoading(true);
-      toast.info('Syncing stations from GeoJSON...');
+      toast.info('Fetching GeoJSON and syncing stations...');
 
-      const { data: result, error } = await supabase.functions.invoke('sync-stations-from-geojson');
+      // Fetch the GeoJSON data from public folder
+      const response = await fetch('/data/stations.json');
+      if (!response.ok) {
+        throw new Error('Failed to fetch stations GeoJSON file');
+      }
+      const geojsonData = await response.json();
+
+      // Pass the GeoJSON data to the edge function
+      const { data: result, error } = await supabase.functions.invoke('sync-stations-from-geojson', {
+        body: { geojsonData },
+      });
       
       if (error) {
         throw error;
