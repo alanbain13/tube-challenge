@@ -75,3 +75,6 @@ verify_jwt = false
 
 [functions.seed-challenges]
 verify_jwt = false
+
+[functions.evaluate-badges]
+verify_jwt = true
