@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2 } from "lucide-react";
+import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Edit, Eye } from "lucide-react";
 import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
+import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
 import type { Database as DB } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -280,9 +281,11 @@ const Admin = () => {
 
           {/* Challenges Tab */}
           <TabsContent value="challenges" className="space-y-4">
+            <ChallengeCreateForm />
+            
             <Card>
               <CardHeader>
-                <CardTitle>Challenge Management</CardTitle>
+                <CardTitle>Existing Challenges</CardTitle>
                 <CardDescription>View and manage official challenges</CardDescription>
               </CardHeader>
               <CardContent>
@@ -299,21 +302,54 @@ const Admin = () => {
                         <TableHead>Name</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Stations</TableHead>
+                        <TableHead>Difficulty</TableHead>
                         <TableHead>Official</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {challenges?.map((challenge) => (
                         <TableRow key={challenge.id}>
-                          <TableCell className="font-medium">{challenge.name}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{challenge.name}</p>
+                              {challenge.description && (
+                                <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                  {challenge.description}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">{challenge.challenge_type}</Badge>
                           </TableCell>
-                          <TableCell>{challenge.station_tfl_ids?.length || 0}</TableCell>
+                          <TableCell>
+                            {challenge.challenge_type === "timed" 
+                              ? `${Math.floor((challenge.time_limit_seconds || 0) / 60)} min`
+                              : challenge.challenge_type === "station_count"
+                              ? `${challenge.target_station_count} stations`
+                              : `${challenge.station_tfl_ids?.length || 0} stations`}
+                          </TableCell>
+                          <TableCell>
+                            {challenge.difficulty && (
+                              <Badge variant="secondary" className="capitalize">
+                                {challenge.difficulty}
+                              </Badge>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={challenge.is_official ? "default" : "secondary"}>
                               {challenge.is_official ? "Official" : "User"}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="sm" asChild>
+                                <a href={`/challenges/${challenge.id}/leaderboard`} target="_blank">
+                                  <Eye className="w-4 h-4" />
+                                </a>
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
