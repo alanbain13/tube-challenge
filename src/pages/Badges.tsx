@@ -209,10 +209,11 @@ export default function Badges() {
     milestone: "Milestone Badges",
     zone: "Zone Completion Badges",
     line: "Line Completion Badges",
+    timed: "Timed Achievement Badges",
     challenge: "Challenge Badges",
   };
   
-  const badgeTypeOrder = ["milestone", "zone", "line", "challenge"];
+  const badgeTypeOrder = ["milestone", "zone", "line", "timed", "challenge"];
   
   const badgesByType = unearnedBadges.reduce((acc, badge) => {
     const type = badge.badge_type || "challenge";
