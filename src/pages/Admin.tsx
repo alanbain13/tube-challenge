@@ -9,9 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Edit, Eye } from "lucide-react";
+import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Eye } from "lucide-react";
 import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
 import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
@@ -30,6 +40,7 @@ const Admin = () => {
   const queryClient = useQueryClient();
   const [newRoleUserId, setNewRoleUserId] = useState("");
   const [newRole, setNewRole] = useState<AppRole>("user");
+  const [challengeToDelete, setChallengeToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Fetch all users with their roles
   const { data: usersWithRoles, isLoading: usersLoading } = useQuery({
@@ -129,6 +140,35 @@ const Admin = () => {
     },
     onError: (error: Error) => {
       toast.error(`Failed to remove role: ${error.message}`);
+    },
+  });
+
+  // Delete challenge mutation (handles cascade)
+  const deleteChallengeMutation = useMutation({
+    mutationFn: async (challengeId: string) => {
+      // First delete related challenge_attempts
+      const { error: attemptsError } = await supabase
+        .from("challenge_attempts")
+        .delete()
+        .eq("challenge_id", challengeId);
+      
+      if (attemptsError) throw attemptsError;
+
+      // Then delete the challenge itself
+      const { error: challengeError } = await supabase
+        .from("challenges")
+        .delete()
+        .eq("id", challengeId);
+      
+      if (challengeError) throw challengeError;
+    },
+    onSuccess: () => {
+      toast.success("Challenge deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["admin-challenges"] });
+      setChallengeToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete challenge: ${error.message}`);
     },
   });
 
@@ -349,6 +389,13 @@ const Admin = () => {
                                   <Eye className="w-4 h-4" />
                                 </a>
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setChallengeToDelete({ id: challenge.id, name: challenge.name })}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -358,6 +405,32 @@ const Admin = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Delete Challenge Confirmation Dialog */}
+            <AlertDialog open={!!challengeToDelete} onOpenChange={(open) => !open && setChallengeToDelete(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Challenge</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{challengeToDelete?.name}"? This will also delete all 
+                    associated challenge attempts and leaderboard data. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => challengeToDelete && deleteChallengeMutation.mutate(challengeToDelete.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={deleteChallengeMutation.isPending}
+                  >
+                    {deleteChallengeMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </TabsContent>
 
           {/* Badges Tab */}
