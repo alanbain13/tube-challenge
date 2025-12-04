@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, MapPinCheck, Camera, Globe } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, MapPinCheck, Camera, Globe, Hourglass } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
@@ -58,6 +58,9 @@ interface StationVisitWithVerification {
   geofence_distance_m: number | null;
   time_diff_seconds: number | null;
   verification_image_url: string | null;
+  captured_at: string | null;
+  cumulative_duration_seconds: number | null;
+  photo_url: string | null;
 }
 
 // Verification status badge component
@@ -192,7 +195,7 @@ const ActivityDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("station_visits")
-        .select("id, station_tfl_id, visited_at, verification_status, verification_method, pending_reason, seq_actual, geofence_distance_m, time_diff_seconds, verification_image_url")
+        .select("id, station_tfl_id, visited_at, verification_status, verification_method, pending_reason, seq_actual, geofence_distance_m, time_diff_seconds, verification_image_url, captured_at, cumulative_duration_seconds, photo_url")
         .eq("activity_id", id)
         .eq("status", "verified")
         .order("seq_actual", { ascending: true });
@@ -628,85 +631,110 @@ const ActivityDetail = () => {
             </Card>
           )}
 
-          {/* Stations List - Free-order mode */}
+          {/* Station Visits Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Journey Progress</CardTitle>
-              <CardDescription>Check in at any station to continue your activity.</CardDescription>
+              <CardTitle>Station Visits</CardTitle>
+              <CardDescription>Detailed check-in log with verification status</CardDescription>
             </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Actual Visits (chronological order) with verification badges */}
-            {actual_visits && actual_visits.length > 0 && (
-              <div>
-                <h4 className="font-medium mb-3 text-red-700">Visited Stations (in order)</h4>
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {actual_visits.map((visit, index) => {
-                    // Find verification details from station_visits query
-                    const verificationDetails = stationVisits?.find(
-                      sv => sv.station_tfl_id === visit.station_tfl_id
-                    );
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="py-2 px-2 text-left font-medium">#</th>
+                      <th className="py-2 px-2 text-left font-medium">Photo</th>
+                      <th className="py-2 px-2 text-left font-medium">Time</th>
+                      <th className="py-2 px-2 text-left font-medium">Station</th>
+                      <th className="py-2 px-2 text-left font-medium">Check-in</th>
+                      <th className="py-2 px-2 text-left font-medium">Cumulative</th>
+                      <th className="py-2 px-2 text-right font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Visited stations */}
+                    {actual_visits?.map((visit, index) => {
+                      const verificationDetails = stationVisits?.find(
+                        sv => sv.station_tfl_id === visit.station_tfl_id
+                      );
+                      const visitDate = new Date(visit.visited_at);
+                      const capturedAt = verificationDetails?.captured_at ? new Date(verificationDetails.captured_at) : null;
+                      const cumulativeSecs = verificationDetails?.cumulative_duration_seconds || 0;
+                      const cumulativeFormatted = `${String(Math.floor(cumulativeSecs / 3600)).padStart(2, '0')}:${String(Math.floor((cumulativeSecs % 3600) / 60)).padStart(2, '0')}:${String(cumulativeSecs % 60).padStart(2, '0')}`;
+                      
+                      // Status badge mapping
+                      const status = verificationDetails?.verification_status;
+                      let statusLabel = 'PND';
+                      let statusColor = 'bg-gray-400';
+                      if (status === 'location_verified') {
+                        statusLabel = 'GPS';
+                        statusColor = 'bg-green-500';
+                      } else if (status === 'photo_verified') {
+                        statusLabel = 'PIC';
+                        statusColor = 'bg-yellow-500';
+                      } else if (status === 'remote_verified') {
+                        statusLabel = 'SIM';
+                        statusColor = 'bg-orange-500';
+                      }
+                      
+                      return (
+                        <tr key={`visit-${visit.station_tfl_id}-${index}`} className="border-b last:border-0">
+                          <td className="py-3 px-2 font-medium">{visit.sequence}</td>
+                          <td className="py-3 px-2">
+                            {verificationDetails?.photo_url ? (
+                              <Camera className="w-4 h-4 text-muted-foreground" />
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-muted-foreground">
+                            {capturedAt ? capturedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </td>
+                          <td className="py-3 px-2 font-medium">{getStationName(visit.station_tfl_id)}</td>
+                          <td className="py-3 px-2 text-muted-foreground text-xs">
+                            {visitDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} {visitDate.toLocaleTimeString('en-GB')}
+                          </td>
+                          <td className="py-3 px-2 font-mono text-xs">{cumulativeFormatted}</td>
+                          <td className="py-3 px-2 text-right">
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium text-white px-2 py-0.5 rounded ${statusColor}`}>
+                              <span className="w-2 h-2 rounded-full bg-white/30"></span>
+                              {statusLabel}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     
-                    console.log('Visit badge debug:', visit.station_tfl_id, verificationDetails?.verification_status);
+                    {/* Planned stations (not yet visited) */}
+                    {plan.filter(s => s.status !== 'verified').map((station, index) => (
+                      <tr key={`plan-${station.station_tfl_id}-${index}`} className="border-b last:border-0 text-muted-foreground">
+                        <td className="py-3 px-2">{(actual_visits?.length || 0) + index + 1}</td>
+                        <td className="py-3 px-2">
+                          <Hourglass className="w-4 h-4 text-muted-foreground/50" />
+                        </td>
+                        <td className="py-3 px-2">—</td>
+                        <td className="py-3 px-2 font-medium text-foreground">{getStationName(station.station_tfl_id)}</td>
+                        <td className="py-3 px-2">—</td>
+                        <td className="py-3 px-2">—</td>
+                        <td className="py-3 px-2 text-right">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                            <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                            Planned
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                     
-                    return (
-                      <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-medium">
-                            {visit.sequence}
-                          </div>
-                          <div>
-                            <div className="font-medium">{getStationName(visit.station_tfl_id)}</div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-2">
-                              <span>Visited {new Date(visit.visited_at).toLocaleTimeString()}</span>
-                              {verificationDetails?.geofence_distance_m != null && (
-                                <span className="text-muted-foreground/70">
-                                  • {Math.round(verificationDetails.geofence_distance_m)}m
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <VerificationBadge status={verificationDetails?.verification_status || 'pending'} compact />
-                      </div>
-                    );
-                  })}
-                </div>
+                    {plan.length === 0 && (!actual_visits || actual_visits.length === 0) && (
+                      <tr>
+                        <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                          No stations visited or planned for this activity
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
-
-            {/* Planned Route (if exists) */}
-            {plan.length > 0 && (
-              <div>
-                <h4 className="font-medium mb-3 text-blue-700">Planned Route {plan.length > 0 ? '(reference only)' : ''}</h4>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
-                  {plan.map((station) => {
-                    const statusColor = station.status === 'verified' ? 'bg-red-500' : 'bg-blue-500';
-                    const textColor = station.status === 'verified' ? 'text-white' : 'text-white';
-                    const bgColor = station.status === 'verified' ? 'bg-red-50' : 'bg-blue-50';
-                    
-                    return (
-                      <div key={`plan-${station.station_tfl_id}-${station.sequence}`} className={`flex items-center justify-between p-3 border rounded-lg ${bgColor}`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${statusColor} ${textColor}`}>
-                            {station.sequence}
-                          </div>
-                          <div>
-                            <div className="font-medium">{getStationName(station.station_tfl_id)}</div>
-                          </div>
-                        </div>
-                        <Badge variant={station.status === 'verified' ? 'default' : 'outline'} className={station.status === 'verified' ? 'bg-red-500 text-white' : 'bg-blue-100 text-blue-700 border-blue-300'}>
-                          {station.status === 'verified' ? 'Visited' : 'Not visited'}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {plan.length === 0 && (!actual_visits || actual_visits.length === 0) && (
-              <p className="text-muted-foreground">No stations visited or planned for this activity</p>
-            )}
             </CardContent>
           </Card>
 
