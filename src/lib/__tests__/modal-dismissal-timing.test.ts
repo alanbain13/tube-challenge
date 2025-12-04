@@ -52,14 +52,7 @@ vi.mock('@/config/geofence', () => ({
   getGeofenceRadiusMeters: () => 750,
 }));
 
-vi.mock('@/components/DevPanel', () => ({
-  DevPanel: () => null,
-  useSimulationMode: () => ({
-    simulationModeEnv: false,
-    simulationModeUser: false,
-    simulationModeEffective: false,
-  }),
-}));
+// DevPanel removed in v2.0 verification system refactor
 
 vi.mock('@/hooks/useImageUpload', () => ({
   useImageUpload: () => ({
