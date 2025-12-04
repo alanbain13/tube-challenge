@@ -536,6 +536,31 @@ const ActivityCheckin = () => {
           </CardContent>
         </Card>
 
+        {/* Next Expected Station - for planned routes */}
+        {activityState?.plan && activityState.plan.length > 0 && (() => {
+          const nextStation = activityState.plan.find(s => s.status === 'not_visited');
+          if (!nextStation) return null;
+          
+          return (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                    {nextStation.sequence}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-muted-foreground">Next expected station</p>
+                    <p className="font-medium">{nextStation.display_name}</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {activityState.counts.visited_actual}/{activityState.plan.length}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Camera/Upload Section */}
         <Card>
           <CardContent className="pt-6 space-y-4">
