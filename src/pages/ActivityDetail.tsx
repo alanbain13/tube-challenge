@@ -684,7 +684,7 @@ const ActivityDetail = () => {
                         <tr key={`visit-${visit.station_tfl_id}-${index}`} className="border-b last:border-0">
                           <td className="py-3 px-2 font-medium">{visit.sequence}</td>
                           <td className="py-3 px-2">
-                            {verificationDetails?.photo_url ? (
+                            {(verificationDetails?.photo_url || verificationDetails?.verification_image_url) ? (
                               <Camera className="w-4 h-4 text-muted-foreground" />
                             ) : (
                               <span className="text-muted-foreground">—</span>
