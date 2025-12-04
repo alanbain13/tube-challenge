@@ -662,19 +662,22 @@ const ActivityDetail = () => {
                       const cumulativeSecs = verificationDetails?.cumulative_duration_seconds || 0;
                       const cumulativeFormatted = `${String(Math.floor(cumulativeSecs / 3600)).padStart(2, '0')}:${String(Math.floor((cumulativeSecs % 3600) / 60)).padStart(2, '0')}:${String(cumulativeSecs % 60).padStart(2, '0')}`;
                       
-                      // Status badge mapping
+                      // Status badge mapping per spec
                       const status = verificationDetails?.verification_status;
-                      let statusLabel = 'PND';
+                      let statusLabel = 'Pending';
                       let statusColor = 'bg-gray-400';
                       if (status === 'location_verified') {
-                        statusLabel = 'GPS';
+                        statusLabel = 'Location';
                         statusColor = 'bg-green-500';
                       } else if (status === 'photo_verified') {
-                        statusLabel = 'PIC';
+                        statusLabel = 'Photo';
                         statusColor = 'bg-yellow-500';
                       } else if (status === 'remote_verified') {
-                        statusLabel = 'SIM';
-                        statusColor = 'bg-orange-500';
+                        statusLabel = 'Remote';
+                        statusColor = 'bg-blue-500';
+                      } else if (status === 'failed') {
+                        statusLabel = 'Failed';
+                        statusColor = 'bg-red-500';
                       }
                       
                       return (
