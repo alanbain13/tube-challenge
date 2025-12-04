@@ -646,6 +646,8 @@ const ActivityDetail = () => {
                       sv => sv.station_tfl_id === visit.station_tfl_id
                     );
                     
+                    console.log('Visit badge debug:', visit.station_tfl_id, verificationDetails?.verification_status);
+                    
                     return (
                       <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
                         <div className="flex items-center gap-3">
@@ -664,7 +666,7 @@ const ActivityDetail = () => {
                             </div>
                           </div>
                         </div>
-                        <VerificationBadge status={verificationDetails?.verification_status || 'verified'} compact />
+                        <VerificationBadge status={verificationDetails?.verification_status || 'pending'} compact />
                       </div>
                     );
                   })}
