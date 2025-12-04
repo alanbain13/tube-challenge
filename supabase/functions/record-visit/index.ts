@@ -132,7 +132,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
     return {
       verificationStatus: 'failed',
       pendingReason: !ocrPassed ? 'ocr_failed' : 'station_mismatch',
-      verificationMethod: 'ai_image',
+      verificationMethod: 'image',
       timeDiffSeconds: null,
       gpsDistanceMeters: null,
       gpsSource: 'none'
@@ -143,8 +143,8 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
   if (!photoTimestamp) {
     return {
       verificationStatus: 'remote_verified',
-      pendingReason: null,
-      verificationMethod: 'ai_image_no_timestamp',
+      pendingReason: 'no_exif_timestamp',
+      verificationMethod: 'image',
       timeDiffSeconds: null,
       gpsDistanceMeters: null,
       gpsSource: 'none'
@@ -158,8 +158,8 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
   if (timeDiffSeconds > photoMaxAgeSeconds) {
     return {
       verificationStatus: 'remote_verified',
-      pendingReason: null,
-      verificationMethod: 'ai_image_time_exceeded',
+      pendingReason: 'time_exceeded',
+      verificationMethod: 'image',
       timeDiffSeconds: Math.round(timeDiffSeconds),
       gpsDistanceMeters: null,
       gpsSource: photoGps ? 'exif' : (loadGps ? 'device' : 'none')
@@ -209,7 +209,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
     return {
       verificationStatus: 'location_verified',
       pendingReason: null,
-      verificationMethod: `gps_${gpsSource}`,
+      verificationMethod: 'gps',
       timeDiffSeconds: Math.round(timeDiffSeconds),
       gpsDistanceMeters,
       gpsSource
@@ -220,7 +220,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
   return {
     verificationStatus: 'photo_verified',
     pendingReason: null,
-    verificationMethod: 'ai_image',
+    verificationMethod: 'image',
     timeDiffSeconds: Math.round(timeDiffSeconds),
     gpsDistanceMeters,
     gpsSource
