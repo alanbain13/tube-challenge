@@ -678,21 +678,21 @@ const ActivityDetail = () => {
               <CardTitle>Station Visits</CardTitle>
               <CardDescription>Detailed check-in log with verification status</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
-                    <tr className="border-b text-muted-foreground">
-                      <th className="py-2 px-2 text-left font-medium">#</th>
-                      <th className="py-2 px-2 text-left font-medium">Photo</th>
-                      <th className="py-2 px-2 text-left font-medium">Visit Time</th>
-                      <th className="py-2 px-2 text-left font-medium">Load Time</th>
-                      <th className="py-2 px-2 text-left font-medium">Station Name</th>
-                      <th className="py-2 px-2 text-left font-medium">Elapsed Time</th>
-                      <th className="py-2 px-2 text-right font-medium">Status</th>
+                    <tr className="border-b bg-muted/30">
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-12">#</th>
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-14">Photo</th>
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Station Name</th>
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-36">Visit Time</th>
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-24">Elapsed</th>
+                      <th className="py-3 px-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-36">Load Time</th>
+                      <th className="py-3 px-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider w-24">Status</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border">
                     {/* Visited stations */}
                     {actual_visits?.map((visit, index) => {
                       const verificationDetails = stationVisits?.find(
@@ -707,54 +707,53 @@ const ActivityDetail = () => {
                       // Status badge mapping per spec
                       const status = verificationDetails?.verification_status;
                       let statusLabel = 'Pending';
-                      let statusColor = 'bg-gray-400';
+                      let statusColor = 'bg-muted text-muted-foreground';
                       if (status === 'location_verified') {
                         statusLabel = 'Location';
-                        statusColor = 'bg-green-500';
+                        statusColor = 'bg-green-500/15 text-green-700 dark:text-green-400';
                       } else if (status === 'photo_verified') {
                         statusLabel = 'Photo';
-                        statusColor = 'bg-yellow-500';
+                        statusColor = 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400';
                       } else if (status === 'remote_verified') {
                         statusLabel = 'Remote';
-                        statusColor = 'bg-blue-500';
+                        statusColor = 'bg-blue-500/15 text-blue-700 dark:text-blue-400';
                       } else if (status === 'failed') {
                         statusLabel = 'Failed';
-                        statusColor = 'bg-red-500';
+                        statusColor = 'bg-red-500/15 text-red-700 dark:text-red-400';
                       }
                       
                       return (
-                        <tr key={`visit-${visit.station_tfl_id}-${index}`} className="border-b last:border-0">
-                          <td className="py-3 px-2 font-medium">{visit.sequence}</td>
-                          <td className="py-3 px-2">
+                        <tr key={`visit-${visit.station_tfl_id}-${index}`} className="hover:bg-muted/20 transition-colors">
+                          <td className="py-3 px-3 font-mono text-sm text-muted-foreground">{visit.sequence}</td>
+                          <td className="py-3 px-3">
                             {(() => {
                               const imageUrl = verificationDetails?.photo_url || verificationDetails?.verification_image_url;
                               if (imageUrl) {
                                 return (
                                   <button 
                                     onClick={() => setLightboxImage(imageUrl)}
-                                    className="w-8 h-8 rounded overflow-hidden hover:ring-2 hover:ring-primary transition-all"
+                                    className="w-9 h-9 rounded-md overflow-hidden ring-1 ring-border hover:ring-2 hover:ring-primary transition-all shadow-sm"
                                   >
                                     <img src={imageUrl} alt="Station photo" className="w-full h-full object-cover" />
                                   </button>
                                 );
                               }
-                              return <span className="text-muted-foreground">—</span>;
+                              return <span className="text-muted-foreground/50">—</span>;
                             })()}
                           </td>
-                          <td className="py-3 px-2 text-muted-foreground text-xs">
+                          <td className="py-3 px-3 font-medium text-sm text-foreground">{getStationName(visit.station_tfl_id)}</td>
+                          <td className="py-3 px-3 font-mono text-xs text-muted-foreground tabular-nums">
                             {capturedAt ? `${capturedAt.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${capturedAt.toLocaleTimeString('en-GB')}` : '—'}
                           </td>
-                          <td className="py-3 px-2 text-muted-foreground text-xs">
+                          <td className="py-3 px-3 font-mono text-xs tabular-nums">{cumulativeFormatted}</td>
+                          <td className="py-3 px-3 font-mono text-xs text-muted-foreground tabular-nums">
                             {visitDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} {visitDate.toLocaleTimeString('en-GB')}
                           </td>
-                          <td className="py-3 px-2 font-medium">{getStationName(visit.station_tfl_id)}</td>
-                          <td className="py-3 px-2 font-mono text-xs">{cumulativeFormatted}</td>
-                          <td className="py-3 px-2 text-right">
+                          <td className="py-3 px-3 text-right">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium text-white px-2 py-0.5 rounded cursor-help ${statusColor}`}>
-                                    <span className="w-2 h-2 rounded-full bg-white/30"></span>
+                                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md cursor-help ${statusColor}`}>
                                     {statusLabel}
                                   </span>
                                 </TooltipTrigger>
@@ -775,18 +774,19 @@ const ActivityDetail = () => {
                     
                     {/* Planned stations (not yet visited) */}
                     {plan.filter(s => s.status !== 'verified').map((station, index) => (
-                      <tr key={`plan-${station.station_tfl_id}-${index}`} className="border-b last:border-0 text-muted-foreground">
-                        <td className="py-3 px-2">{(actual_visits?.length || 0) + index + 1}</td>
-                        <td className="py-3 px-2">
-                          <Hourglass className="w-4 h-4 text-muted-foreground/50" />
+                      <tr key={`plan-${station.station_tfl_id}-${index}`} className="bg-muted/10">
+                        <td className="py-3 px-3 font-mono text-sm text-muted-foreground/50">{(actual_visits?.length || 0) + index + 1}</td>
+                        <td className="py-3 px-3">
+                          <div className="w-9 h-9 rounded-md bg-muted/50 flex items-center justify-center">
+                            <Hourglass className="w-4 h-4 text-muted-foreground/40" />
+                          </div>
                         </td>
-                        <td className="py-3 px-2">—</td>
-                        <td className="py-3 px-2">—</td>
-                        <td className="py-3 px-2 font-medium text-foreground">{getStationName(station.station_tfl_id)}</td>
-                        <td className="py-3 px-2">—</td>
-                        <td className="py-3 px-2 text-right">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                        <td className="py-3 px-3 font-medium text-sm text-muted-foreground">{getStationName(station.station_tfl_id)}</td>
+                        <td className="py-3 px-3 font-mono text-xs text-muted-foreground/50">—</td>
+                        <td className="py-3 px-3 font-mono text-xs text-muted-foreground/50">—</td>
+                        <td className="py-3 px-3 font-mono text-xs text-muted-foreground/50">—</td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="inline-flex items-center text-xs font-medium text-muted-foreground/60 bg-muted/50 px-2 py-1 rounded-md">
                             Planned
                           </span>
                         </td>
