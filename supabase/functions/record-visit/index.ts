@@ -12,160 +12,279 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Default settings
+const DEFAULT_GPS_RADIUS_METERS = 750;
+const DEFAULT_PHOTO_MAX_AGE_SECONDS = 600;
+
 /**
- * Status decision matrix based on A3.4 requirements
+ * Fetch app settings from database
  */
-interface StatusDecisionInputs {
-  ocrResult?: {
-    success: boolean;
-    confidence: number;
-    station_text_raw?: string;
-  };
-  geofenceResult?: {
-    withinGeofence: boolean;
-    distance: number | null;
-    gpsSource: string;
-  };
-  simulationMode: boolean;
-  aiEnabled: boolean;
-  hasConnectivity: boolean;
-}
+async function getAppSettings(): Promise<{ gpsRadiusMeters: number; photoMaxAgeSeconds: number }> {
+  try {
+    const { data: settings, error } = await supabase
+      .from('app_settings')
+      .select('key, value');
 
-interface StatusDecision {
-  status: 'verified' | 'pending';
-  pending_reason: string | null;
-  verification_method: string;
-}
-
-function deriveVisitStatus(inputs: StatusDecisionInputs): StatusDecision {
-  const { ocrResult, geofenceResult, simulationMode, aiEnabled, hasConnectivity } = inputs;
-  
-  // Simulation mode always verified
-  if (simulationMode) {
-    return {
-      status: 'verified',
-      pending_reason: null,
-      verification_method: 'simulation'
-    };
-  }
-  
-  // No connectivity - mark as pending
-  if (!hasConnectivity) {
-    return {
-      status: 'pending',
-      pending_reason: 'no_connectivity',
-      verification_method: 'offline'
-    };
-  }
-  
-  // AI disabled - force pending status (A3.6.2 requirement)
-  if (!aiEnabled) {
-    return {
-      status: 'pending',
-      pending_reason: 'ai_disabled',
-      verification_method: 'manual'
-    };
-  }
-  
-  // Check geofence first (location-based validation)
-  if (geofenceResult && !geofenceResult.withinGeofence) {
-    if (geofenceResult.gpsSource === 'none') {
+    if (error) {
+      console.warn('⚠️ Could not fetch app settings, using defaults:', error.message);
       return {
-        status: 'pending',
-        pending_reason: 'no_gps_data',
-        verification_method: 'ai_image'
-      };
-    } else {
-      return {
-        status: 'pending',
-        pending_reason: 'geofence_failed',
-        verification_method: 'ai_image'
+        gpsRadiusMeters: DEFAULT_GPS_RADIUS_METERS,
+        photoMaxAgeSeconds: DEFAULT_PHOTO_MAX_AGE_SECONDS
       };
     }
-  }
-  
-  // Check OCR result (AI-based validation)
-  if (ocrResult && !ocrResult.success) {
+
+    const gpsRadius = settings?.find(s => s.key === 'GPS_RADIUS_METERS')?.value;
+    const photoMaxAge = settings?.find(s => s.key === 'PHOTO_MAX_AGE_SECONDS')?.value;
+
     return {
-      status: 'pending',
-      pending_reason: 'ocr_failed',
-      verification_method: 'ai_image'
+      gpsRadiusMeters: gpsRadius ? parseInt(gpsRadius, 10) : DEFAULT_GPS_RADIUS_METERS,
+      photoMaxAgeSeconds: photoMaxAge ? parseInt(photoMaxAge, 10) : DEFAULT_PHOTO_MAX_AGE_SECONDS
+    };
+  } catch (e) {
+    console.warn('⚠️ Error fetching app settings:', e);
+    return {
+      gpsRadiusMeters: DEFAULT_GPS_RADIUS_METERS,
+      photoMaxAgeSeconds: DEFAULT_PHOTO_MAX_AGE_SECONDS
     };
   }
+}
+
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ */
+function calculateDistanceMeters(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
+): number {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * New verification status types
+ */
+type VerificationStatus = 'location_verified' | 'photo_verified' | 'remote_verified' | 'pending' | 'failed';
+
+/**
+ * Verification decision inputs
+ */
+interface VerificationInputs {
+  // OCR results
+  ocrPassed: boolean;
+  stationNameMatched: boolean;
   
-  // Low confidence OCR
-  if (ocrResult && ocrResult.confidence < 0.7) {
+  // Timestamps
+  photoTimestamp: Date | null;      // EXIF DateTimeOriginal
+  loadTimestamp: Date;              // When uploaded to app
+  
+  // GPS coordinates
+  photoGps: { lat: number; lng: number } | null;  // EXIF GPS
+  loadGps: { lat: number; lng: number } | null;   // Device GPS at load time
+  
+  // Station target
+  stationCoords: { lat: number; lng: number };
+  
+  // Configurable thresholds
+  gpsRadiusMeters: number;
+  photoMaxAgeSeconds: number;
+}
+
+interface VerificationDecision {
+  verificationStatus: VerificationStatus;
+  pendingReason: string | null;
+  verificationMethod: string;
+  timeDiffSeconds: number | null;
+  gpsDistanceMeters: number | null;
+  gpsSource: 'exif' | 'device' | 'none';
+}
+
+/**
+ * New verification logic based on updated requirements:
+ * 
+ * 1. OCR + station name match must pass first (otherwise: failed)
+ * 2. Check EXIF timestamp - if missing: remote_verified
+ * 3. Calculate time diff between EXIF capture and load
+ * 4. If time > PHOTO_MAX_AGE_SECONDS: remote_verified
+ * 5. Check GPS (EXIF OR load GPS within GPS_RADIUS_METERS): location_verified
+ * 6. Otherwise: photo_verified
+ */
+function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecision {
+  const {
+    ocrPassed,
+    stationNameMatched,
+    photoTimestamp,
+    loadTimestamp,
+    photoGps,
+    loadGps,
+    stationCoords,
+    gpsRadiusMeters,
+    photoMaxAgeSeconds
+  } = inputs;
+
+  // Step 1: OCR + Station Name must pass
+  if (!ocrPassed || !stationNameMatched) {
     return {
-      status: 'pending',
-      pending_reason: 'low_confidence',
-      verification_method: 'ai_image'
+      verificationStatus: 'failed',
+      pendingReason: !ocrPassed ? 'ocr_failed' : 'station_mismatch',
+      verificationMethod: 'ai_image',
+      timeDiffSeconds: null,
+      gpsDistanceMeters: null,
+      gpsSource: 'none'
     };
   }
-  
-  // All checks passed
+
+  // Step 2: Check EXIF timestamp presence
+  if (!photoTimestamp) {
+    return {
+      verificationStatus: 'remote_verified',
+      pendingReason: null,
+      verificationMethod: 'ai_image_no_timestamp',
+      timeDiffSeconds: null,
+      gpsDistanceMeters: null,
+      gpsSource: 'none'
+    };
+  }
+
+  // Step 3: Calculate time difference
+  const timeDiffSeconds = Math.abs(loadTimestamp.getTime() - photoTimestamp.getTime()) / 1000;
+
+  // Step 4: Check time limit
+  if (timeDiffSeconds > photoMaxAgeSeconds) {
+    return {
+      verificationStatus: 'remote_verified',
+      pendingReason: null,
+      verificationMethod: 'ai_image_time_exceeded',
+      timeDiffSeconds: Math.round(timeDiffSeconds),
+      gpsDistanceMeters: null,
+      gpsSource: photoGps ? 'exif' : (loadGps ? 'device' : 'none')
+    };
+  }
+
+  // Step 5: Check GPS (EITHER EXIF GPS or Load GPS within radius)
+  let gpsSource: 'exif' | 'device' | 'none' = 'none';
+  let gpsDistanceMeters: number | null = null;
+  let gpsWithinRadius = false;
+
+  // Check EXIF GPS first (preferred)
+  if (photoGps && photoGps.lat && photoGps.lng) {
+    const exifDistance = calculateDistanceMeters(
+      photoGps.lat, photoGps.lng,
+      stationCoords.lat, stationCoords.lng
+    );
+    gpsDistanceMeters = Math.round(exifDistance);
+    gpsSource = 'exif';
+    
+    if (exifDistance <= gpsRadiusMeters) {
+      gpsWithinRadius = true;
+    }
+  }
+
+  // Check device GPS at load time (fallback)
+  if (!gpsWithinRadius && loadGps && loadGps.lat && loadGps.lng) {
+    const loadDistance = calculateDistanceMeters(
+      loadGps.lat, loadGps.lng,
+      stationCoords.lat, stationCoords.lng
+    );
+    
+    // Update distance if we didn't have EXIF GPS or if device GPS is closer
+    if (gpsSource === 'none' || loadDistance < (gpsDistanceMeters || Infinity)) {
+      gpsDistanceMeters = Math.round(loadDistance);
+      gpsSource = 'device';
+    }
+    
+    if (loadDistance <= gpsRadiusMeters) {
+      gpsWithinRadius = true;
+      gpsSource = 'device';
+    }
+  }
+
+  // Return location_verified if GPS is within radius
+  if (gpsWithinRadius) {
+    return {
+      verificationStatus: 'location_verified',
+      pendingReason: null,
+      verificationMethod: `gps_${gpsSource}`,
+      timeDiffSeconds: Math.round(timeDiffSeconds),
+      gpsDistanceMeters,
+      gpsSource
+    };
+  }
+
+  // Step 6: Photo verified (OCR passed, time OK, but no GPS match)
   return {
-    status: 'verified',
-    pending_reason: null,
-    verification_method: ocrResult ? 'ai_image' : 'gps'
+    verificationStatus: 'photo_verified',
+    pendingReason: null,
+    verificationMethod: 'ai_image',
+    timeDiffSeconds: Math.round(timeDiffSeconds),
+    gpsDistanceMeters,
+    gpsSource
   };
 }
 
 /**
- * Record visit interface
+ * Record visit request interface - updated with new fields
  */
 interface RecordVisitRequest {
   activity_id: string;
   station_tfl_id: string;
   user_id: string;
   
-  // Location data
+  // OCR/AI verification results
+  ocr_passed?: boolean;
+  station_name_matched?: boolean;
+  ai_station_text?: string;
+  ai_confidence?: number;
+  ai_verification_result?: any;
+  
+  // Photo timestamp (EXIF DateTimeOriginal)
+  captured_at?: string | null;
+  exif_time_present?: boolean;
+  
+  // Load timestamp (when photo was uploaded)
+  loaded_at?: string;
+  
+  // EXIF GPS coordinates
+  exif_lat?: number | null;
+  exif_lng?: number | null;
+  exif_gps_present?: boolean;
+  
+  // Device GPS at load time
+  load_lat?: number | null;
+  load_lon?: number | null;
+  
+  // Legacy location fields (for backward compatibility)
   latitude?: number | null;
   longitude?: number | null;
   visit_lat?: number | null;
   visit_lon?: number | null;
   
-  // EXIF and image data
-  captured_at?: string;
-  exif_time_present?: boolean;
-  exif_gps_present?: boolean;
-  gps_source?: 'exif' | 'device' | 'none';
+  // Image URL
   verification_image_url?: string;
   
-  // Geofence data
-  geofence_distance_m?: number | null;
-  geofence_result?: {
-    withinGeofence: boolean;
-    distance: number | null;
-    gpsSource: string;
-  };
-  
-  // OCR/AI data
-  ocr_result?: {
-    success: boolean;
-    confidence: number;
-    station_text_raw?: string;
-  };
-  ai_verification_result?: any;
-  ai_station_text?: string;
-  ai_confidence?: number;
-  
-  // Resolver metadata
-  resolver_rule?: string;
-  resolver_score?: number;
-  
   // Context flags
+  verifier_version?: string;
+  checkin_type?: 'gps' | 'image' | 'manual';
+  
+  // Legacy flags (for backward compatibility)
   simulation_mode?: boolean;
   ai_enabled?: boolean;
   has_connectivity?: boolean;
-  checkin_type?: 'gps' | 'image' | 'manual';
-  verifier_version?: string;
+  geofence_result?: any;
+  ocr_result?: any;
 }
 
 interface RecordVisitResponse {
   success: boolean;
   visit_id?: string;
   seq_actual?: number;
-  status?: string;
+  verification_status?: VerificationStatus;
+  verification_method?: string;
   error?: string;
   error_code?: string;
   duplicate?: {
@@ -188,7 +307,9 @@ serve(async (req) => {
       activity_id: visitData.activity_id,
       station_tfl_id: visitData.station_tfl_id,
       user_id: visitData.user_id,
-      simulation_mode: visitData.simulation_mode,
+      ocr_passed: visitData.ocr_passed,
+      exif_time_present: visitData.exif_time_present,
+      exif_gps_present: visitData.exif_gps_present,
       timestamp: new Date().toISOString()
     });
 
@@ -207,22 +328,25 @@ serve(async (req) => {
       );
     }
 
-    // Check for duplicate visit (before any processing)
+    // Fetch app settings
+    const appSettings = await getAppSettings();
+    console.log('⚙️ App Settings:', appSettings);
+
+    // Check for duplicate visit
     const { data: existingVisit, error: duplicateError } = await supabase
       .from('station_visits')
       .select('id, visited_at, station_tfl_id')
       .eq('activity_id', visitData.activity_id)
       .eq('station_tfl_id', visitData.station_tfl_id)
       .eq('user_id', visitData.user_id)
-      .single();
+      .maybeSingle();
 
-    if (existingVisit && !duplicateError) {
-      // Get station name for user-friendly error
+    if (existingVisit) {
       const { data: stationData } = await supabase
         .from('stations')
         .select('name')
         .eq('tfl_id', visitData.station_tfl_id)
-        .single();
+        .maybeSingle();
       
       const stationName = stationData?.name || visitData.station_tfl_id;
       
@@ -244,11 +368,40 @@ serve(async (req) => {
           }
         }),
         { 
-          status: 409, // Conflict
+          status: 409,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
+
+    // Get station coordinates for geofence check
+    const { data: stationData, error: stationError } = await supabase
+      .from('stations')
+      .select('latitude, longitude, name')
+      .eq('tfl_id', visitData.station_tfl_id)
+      .maybeSingle();
+
+    if (stationError || !stationData) {
+      console.error('🚨 Station not found:', visitData.station_tfl_id);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Station not found: ${visitData.station_tfl_id}`,
+          error_code: 'station_not_found'
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Get activity for cumulative duration calculation
+    const { data: activityData } = await supabase
+      .from('activities')
+      .select('gate_start_at, started_at')
+      .eq('id', visitData.activity_id)
+      .maybeSingle();
 
     // Get next sequence number atomically
     const { data: maxSeqResult, error: seqError } = await supabase
@@ -267,36 +420,73 @@ serve(async (req) => {
       ? maxSeqResult[0].seq_actual + 1 
       : 1;
 
-    console.log('🔢 Sequence assignment:', {
-      activity_id: visitData.activity_id,
-      next_seq_actual: nextSeqActual,
-      max_existing: maxSeqResult?.[0]?.seq_actual || 0
-    });
-
-    // Derive status and pending reason
-    const statusDecision = deriveVisitStatus({
-      ocrResult: visitData.ocr_result,
-      geofenceResult: visitData.geofence_result,
-      simulationMode: visitData.simulation_mode || false,
-      aiEnabled: visitData.ai_enabled !== false, // Default to true
-      hasConnectivity: visitData.has_connectivity !== false // Default to true
-    });
-
-    console.log('📊 Status Decision:', {
-      inputs: {
-        ocr_success: visitData.ocr_result?.success,
-        ocr_confidence: visitData.ocr_result?.confidence,
-        geofence_within: visitData.geofence_result?.withinGeofence,
-        geofence_distance: visitData.geofence_result?.distance,
-        simulation_mode: visitData.simulation_mode,
-        ai_enabled: visitData.ai_enabled
-      },
-      decision: statusDecision
-    });
-
-    // Prepare visit record with simulation-aware GPS handling
-    const simulationMode = visitData.simulation_mode || false;
+    // Parse timestamps
+    const loadTimestamp = visitData.loaded_at 
+      ? new Date(visitData.loaded_at) 
+      : new Date();
     
+    const photoTimestamp = visitData.captured_at 
+      ? new Date(visitData.captured_at) 
+      : null;
+
+    // Handle legacy OCR result format
+    const ocrPassed = visitData.ocr_passed ?? visitData.ocr_result?.success ?? false;
+    const stationNameMatched = visitData.station_name_matched ?? 
+      (visitData.ai_station_text ? true : ocrPassed);
+
+    // Parse GPS coordinates (support both new and legacy formats)
+    const exifGps = (visitData.exif_lat && visitData.exif_lng) 
+      ? { lat: visitData.exif_lat, lng: visitData.exif_lng }
+      : (visitData.latitude && visitData.longitude && visitData.exif_gps_present)
+        ? { lat: visitData.latitude, lng: visitData.longitude }
+        : null;
+
+    const loadGps = (visitData.load_lat && visitData.load_lon)
+      ? { lat: visitData.load_lat, lng: visitData.load_lon }
+      : (visitData.visit_lat && visitData.visit_lon)
+        ? { lat: visitData.visit_lat, lng: visitData.visit_lon }
+        : null;
+
+    // Derive verification status
+    const verificationDecision = deriveVerificationStatus({
+      ocrPassed,
+      stationNameMatched,
+      photoTimestamp,
+      loadTimestamp,
+      photoGps: exifGps,
+      loadGps,
+      stationCoords: { 
+        lat: Number(stationData.latitude), 
+        lng: Number(stationData.longitude) 
+      },
+      gpsRadiusMeters: appSettings.gpsRadiusMeters,
+      photoMaxAgeSeconds: appSettings.photoMaxAgeSeconds
+    });
+
+    console.log('📊 Verification Decision:', {
+      inputs: {
+        ocr_passed: ocrPassed,
+        station_matched: stationNameMatched,
+        photo_timestamp: photoTimestamp?.toISOString(),
+        load_timestamp: loadTimestamp.toISOString(),
+        exif_gps: exifGps,
+        load_gps: loadGps,
+        station_coords: { lat: stationData.latitude, lng: stationData.longitude }
+      },
+      decision: verificationDecision,
+      settings: appSettings
+    });
+
+    // Calculate cumulative duration from activity start
+    let cumulativeDurationSeconds: number | null = null;
+    const activityStartTime = activityData?.gate_start_at || activityData?.started_at;
+    if (activityStartTime) {
+      const startTime = new Date(activityStartTime);
+      cumulativeDurationSeconds = Math.round((loadTimestamp.getTime() - startTime.getTime()) / 1000);
+      if (cumulativeDurationSeconds < 0) cumulativeDurationSeconds = 0;
+    }
+
+    // Prepare visit record with new verification fields
     const visitRecord = {
       id: crypto.randomUUID(),
       activity_id: visitData.activity_id,
@@ -304,30 +494,39 @@ serve(async (req) => {
       user_id: visitData.user_id,
       seq_actual: nextSeqActual,
       
-      // Status and verification
-      status: statusDecision.status,
-      pending_reason: statusDecision.pending_reason,
-      verification_method: statusDecision.verification_method,
-      verifier_version: visitData.verifier_version || '1.0',
+      // New verification status system
+      verification_status: verificationDecision.verificationStatus,
+      verification_method: verificationDecision.verificationMethod,
       
-      // Location data - suppress GPS coordinates in simulation mode (A3.6.2)
-      latitude: simulationMode ? null : visitData.latitude,
-      longitude: simulationMode ? null : visitData.longitude,
-      visit_lat: simulationMode ? null : visitData.visit_lat,
-      visit_lon: simulationMode ? null : visitData.visit_lon,
+      // Legacy status field (for backward compatibility)
+      status: verificationDecision.verificationStatus === 'failed' ? 'failed' : 'verified',
+      pending_reason: verificationDecision.pendingReason,
       
       // Timestamps
-      visited_at: new Date().toISOString(),
-      captured_at: visitData.captured_at || new Date().toISOString(),
+      visited_at: loadTimestamp.toISOString(),
+      captured_at: photoTimestamp?.toISOString() || null,
+      loaded_at: loadTimestamp.toISOString(),
       created_at: new Date().toISOString(),
       
-      // EXIF and GPS metadata - handle simulation mode (A3.6.2)
-      exif_time_present: visitData.exif_time_present || false,
-      exif_gps_present: visitData.exif_gps_present || false,
-      gps_source: simulationMode ? 'none' : (visitData.gps_source || 'none'),
-      geofence_distance_m: simulationMode ? null : visitData.geofence_distance_m,
+      // Time tracking
+      time_diff_seconds: verificationDecision.timeDiffSeconds,
+      cumulative_duration_seconds: cumulativeDurationSeconds,
       
-      // AI and verification metadata
+      // GPS data
+      latitude: exifGps?.lat || null,
+      longitude: exifGps?.lng || null,
+      load_lat: loadGps?.lat || null,
+      load_lon: loadGps?.lng || null,
+      visit_lat: loadGps?.lat || null,
+      visit_lon: loadGps?.lng || null,
+      geofence_distance_m: verificationDecision.gpsDistanceMeters,
+      gps_source: verificationDecision.gpsSource,
+      
+      // EXIF flags
+      exif_time_present: !!photoTimestamp,
+      exif_gps_present: !!exifGps,
+      
+      // AI/OCR metadata
       ai_verification_result: visitData.ai_verification_result,
       ai_station_text: visitData.ai_station_text,
       ai_confidence: visitData.ai_confidence,
@@ -335,34 +534,26 @@ serve(async (req) => {
       
       // Context
       checkin_type: visitData.checkin_type || 'image',
-      is_simulation: visitData.simulation_mode || false
+      verifier_version: visitData.verifier_version || '2.0',
+      is_simulation: false  // No longer supporting simulation mode in v2
     };
 
     // Insert the visit record
     const { data: insertedVisit, error: insertError } = await supabase
       .from('station_visits')
       .insert([visitRecord])
-      .select('id, seq_actual, status, visited_at')
+      .select('id, seq_actual, verification_status, status, visited_at')
       .single();
 
     if (insertError) {
       console.error('🚨 Insert error:', insertError);
       
-      // Check if it's a duplicate constraint violation
+      // Check for duplicate constraint violation (race condition)
       if (insertError.code === '23505') {
-        // Race condition - another insert happened
-        const { data: stationData } = await supabase
-          .from('stations')
-          .select('name')
-          .eq('tfl_id', visitData.station_tfl_id)
-          .single();
-        
-        const stationName = stationData?.name || visitData.station_tfl_id;
-        
         return new Response(
           JSON.stringify({
             success: false,
-            error: `Already checked in to ${stationName} for this activity.`,
+            error: `Already checked in to ${stationData.name} for this activity.`,
             error_code: 'duplicate_visit_race',
           }),
           { 
@@ -375,19 +566,29 @@ serve(async (req) => {
       throw new Error(`Failed to insert visit: ${insertError.message}`);
     }
 
+    // Update activity gate_start_at if this is the first visit
+    if (nextSeqActual === 1 && !activityData?.gate_start_at) {
+      await supabase
+        .from('activities')
+        .update({ gate_start_at: loadTimestamp.toISOString() })
+        .eq('id', visitData.activity_id);
+      
+      console.log('⏱️ Set activity gate_start_at:', loadTimestamp.toISOString());
+    }
+
     console.log('✅ Visit recorded successfully:', {
       visit_id: insertedVisit.id,
       seq_actual: insertedVisit.seq_actual,
-      status: insertedVisit.status,
-      activity_id: visitData.activity_id,
-      station_tfl_id: visitData.station_tfl_id
+      verification_status: insertedVisit.verification_status,
+      station: stationData.name
     });
 
     const response: RecordVisitResponse = {
       success: true,
       visit_id: insertedVisit.id,
       seq_actual: insertedVisit.seq_actual,
-      status: insertedVisit.status
+      verification_status: insertedVisit.verification_status as VerificationStatus,
+      verification_method: verificationDecision.verificationMethod
     };
 
     return new Response(
