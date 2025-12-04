@@ -7,13 +7,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, MapPinCheck, Camera, Globe, Hourglass } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, MapPinCheck, Camera, Globe, Hourglass, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
 import { ActivityComments } from "@/components/ActivityComments";
 import { ChallengeContextCard } from "@/components/ChallengeContextCard";
 import { ChallengeLeaderboard } from "@/components/ChallengeLeaderboard";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 // Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
@@ -114,6 +116,7 @@ const ActivityDetail = () => {
     title: ""
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Helper function to get station name by TfL ID
   const getStationName = (tflId: string) => {
@@ -684,11 +687,20 @@ const ActivityDetail = () => {
                         <tr key={`visit-${visit.station_tfl_id}-${index}`} className="border-b last:border-0">
                           <td className="py-3 px-2 font-medium">{visit.sequence}</td>
                           <td className="py-3 px-2">
-                            {(verificationDetails?.photo_url || verificationDetails?.verification_image_url) ? (
-                              <Camera className="w-4 h-4 text-muted-foreground" />
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            {(() => {
+                              const imageUrl = verificationDetails?.photo_url || verificationDetails?.verification_image_url;
+                              if (imageUrl) {
+                                return (
+                                  <button 
+                                    onClick={() => setLightboxImage(imageUrl)}
+                                    className="w-8 h-8 rounded overflow-hidden hover:ring-2 hover:ring-primary transition-all"
+                                  >
+                                    <img src={imageUrl} alt="Station photo" className="w-full h-full object-cover" />
+                                  </button>
+                                );
+                              }
+                              return <span className="text-muted-foreground">—</span>;
+                            })()}
                           </td>
                           <td className="py-3 px-2 text-muted-foreground">
                             {capturedAt ? capturedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -699,10 +711,24 @@ const ActivityDetail = () => {
                           </td>
                           <td className="py-3 px-2 font-mono text-xs">{cumulativeFormatted}</td>
                           <td className="py-3 px-2 text-right">
-                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium text-white px-2 py-0.5 rounded ${statusColor}`}>
-                              <span className="w-2 h-2 rounded-full bg-white/30"></span>
-                              {statusLabel}
-                            </span>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium text-white px-2 py-0.5 rounded cursor-help ${statusColor}`}>
+                                    <span className="w-2 h-2 rounded-full bg-white/30"></span>
+                                    {statusLabel}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="max-w-[200px]">
+                                  {status === 'location_verified' && <p>GPS within radius + time OK</p>}
+                                  {status === 'photo_verified' && <p>OCR passed + time OK, no GPS match</p>}
+                                  {status === 'remote_verified' && <p>OCR passed, time exceeded (future: virtual mode)</p>}
+                                  {status === 'pending' && <p>Awaiting processing</p>}
+                                  {status === 'failed' && <p>OCR/station match failed</p>}
+                                  {!status && <p>Awaiting processing</p>}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </td>
                         </tr>
                       );
@@ -814,6 +840,25 @@ const ActivityDetail = () => {
           onConfirm={handleDeleteActivity}
           isDeleting={isDeleting}
         />
+
+        {/* Photo Lightbox */}
+        <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
+          <DialogContent className="max-w-3xl p-0 overflow-hidden bg-black/90 border-none">
+            <button 
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-2 right-2 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {lightboxImage && (
+              <img 
+                src={lightboxImage} 
+                alt="Verification photo" 
+                className="w-full h-auto max-h-[80vh] object-contain"
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
