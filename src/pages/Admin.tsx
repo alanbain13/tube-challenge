@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Eye, Edit } from "lucide-react";
+import { Shield, Users, Trophy, Award, Database, Plus, Trash2, Loader2, Eye, Edit, Settings } from "lucide-react";
 import SyncStationsFromGeoJSON from "@/components/SyncStationsFromGeoJSON";
 import UpdateStationZones from "@/components/UpdateStationZones";
 import { ChallengeCreateForm } from "@/components/admin/ChallengeCreateForm";
@@ -29,6 +29,7 @@ import { ChallengeDetailModal } from "@/components/admin/ChallengeDetailModal";
 import { BadgeCreateForm } from "@/components/admin/BadgeCreateForm";
 import { BadgeIcon } from "@/components/admin/IconPicker";
 import { UserSearchInput } from "@/components/admin/UserSearchInput";
+import { AppSettingsForm } from "@/components/admin/AppSettingsForm";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -243,7 +244,7 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="users" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               <span className="hidden sm:inline">Users & Roles</span>
@@ -259,6 +260,10 @@ const Admin = () => {
             <TabsTrigger value="stations" className="flex items-center gap-2">
               <Database className="w-4 h-4" />
               <span className="hidden sm:inline">Stations</span>
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Settings</span>
             </TabsTrigger>
           </TabsList>
 
@@ -656,6 +661,11 @@ const Admin = () => {
                 </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings" className="space-y-4">
+            <AppSettingsForm />
           </TabsContent>
         </Tabs>
       </div>
