@@ -117,6 +117,33 @@ const Activities = () => {
     staleTime: 30000, // 30 seconds - allow some staleness for better UX
   });
 
+  // Fetch likes/comments counts for activity - must be before any early returns
+  const { data: socialCounts } = useQuery({
+    queryKey: ["activity-social-counts", activities.map((a: any) => a.id).join(',')],
+    queryFn: async () => {
+      const activityIds = activities.map((a: any) => a.id);
+      
+      const counts: Record<string, { likes: number; comments: number }> = {};
+      
+      await Promise.all(
+        activityIds.map(async (id) => {
+          const [likesResult, commentsResult] = await Promise.all([
+            supabase.from("activity_likes").select("id").eq("activity_id", id),
+            supabase.from("activity_comments").select("id").eq("activity_id", id),
+          ]);
+          
+          counts[id] = {
+            likes: likesResult.data?.length || 0,
+            comments: commentsResult.data?.length || 0,
+          };
+        })
+      );
+      
+      return counts;
+    },
+    enabled: activities.length > 0,
+  });
+
   // Listen for activity state changes from check-ins
   useEffect(() => {
     const handleActivityChange = () => {
@@ -211,33 +238,6 @@ const Activities = () => {
       </div>
     );
   }
-
-  // Fetch likes/comments counts for activity
-  const { data: socialCounts } = useQuery({
-    queryKey: ["activity-social-counts"],
-    queryFn: async () => {
-      const activityIds = activities.map((a: any) => a.id);
-      
-      const counts: Record<string, { likes: number; comments: number }> = {};
-      
-      await Promise.all(
-        activityIds.map(async (id) => {
-          const [likesResult, commentsResult] = await Promise.all([
-            supabase.from("activity_likes").select("id").eq("activity_id", id),
-            supabase.from("activity_comments").select("id").eq("activity_id", id),
-          ]);
-          
-          counts[id] = {
-            likes: likesResult.data?.length || 0,
-            comments: commentsResult.data?.length || 0,
-          };
-        })
-      );
-      
-      return counts;
-    },
-    enabled: activities.length > 0,
-  });
 
   return (
     <>
