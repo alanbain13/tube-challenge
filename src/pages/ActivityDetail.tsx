@@ -647,9 +647,9 @@ const ActivityDetail = () => {
                     <tr className="border-b text-muted-foreground">
                       <th className="py-2 px-2 text-left font-medium">#</th>
                       <th className="py-2 px-2 text-left font-medium">Photo</th>
-                      <th className="py-2 px-2 text-left font-medium">Time</th>
+                      <th className="py-2 px-2 text-left font-medium">EXIF</th>
                       <th className="py-2 px-2 text-left font-medium">Station</th>
-                      <th className="py-2 px-2 text-left font-medium">Check-in</th>
+                      <th className="py-2 px-2 text-left font-medium">Load Time</th>
                       <th className="py-2 px-2 text-left font-medium">Cumulative</th>
                       <th className="py-2 px-2 text-right font-medium">Status</th>
                     </tr>
@@ -662,7 +662,8 @@ const ActivityDetail = () => {
                       );
                       const visitDate = new Date(visit.visited_at);
                       const capturedAt = verificationDetails?.captured_at ? new Date(verificationDetails.captured_at) : null;
-                      const cumulativeSecs = verificationDetails?.cumulative_duration_seconds || 0;
+                      // First station should always be 00:00:00
+                      const cumulativeSecs = index === 0 ? 0 : (verificationDetails?.cumulative_duration_seconds || 0);
                       const cumulativeFormatted = `${String(Math.floor(cumulativeSecs / 3600)).padStart(2, '0')}:${String(Math.floor((cumulativeSecs % 3600) / 60)).padStart(2, '0')}:${String(cumulativeSecs % 60).padStart(2, '0')}`;
                       
                       // Status badge mapping per spec
@@ -702,12 +703,12 @@ const ActivityDetail = () => {
                               return <span className="text-muted-foreground">—</span>;
                             })()}
                           </td>
-                          <td className="py-3 px-2 text-muted-foreground">
-                            {capturedAt ? capturedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          <td className="py-3 px-2 text-muted-foreground text-xs">
+                            {capturedAt ? `${capturedAt.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${capturedAt.toLocaleTimeString('en-GB')}` : '—'}
                           </td>
                           <td className="py-3 px-2 font-medium">{getStationName(visit.station_tfl_id)}</td>
                           <td className="py-3 px-2 text-muted-foreground text-xs">
-                            {visitDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} {visitDate.toLocaleTimeString('en-GB')}
+                            {visitDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                           </td>
                           <td className="py-3 px-2 font-mono text-xs">{cumulativeFormatted}</td>
                           <td className="py-3 px-2 text-right">
