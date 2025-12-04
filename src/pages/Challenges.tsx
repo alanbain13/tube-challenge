@@ -3,12 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation } from "lucide-react";
+import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { VERIFICATION_LEVEL_CONFIG, RequiredVerification } from "@/lib/challengeVerification";
 
 interface Challenge {
   id: string;
@@ -25,6 +26,7 @@ interface Challenge {
   time_limit_seconds: number | null;
   target_station_count: number | null;
   ranking_metric: string | null;
+  required_verification: string | null;
 }
 
 interface ChallengeAttempt {
@@ -325,6 +327,19 @@ export default function Challenges() {
                               </div>
                             </div>
                           )}
+                          {(() => {
+                            const verificationLevel = (challenge.required_verification || 'remote_verified') as RequiredVerification;
+                            const config = VERIFICATION_LEVEL_CONFIG[verificationLevel];
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Shield className={`w-4 h-4 ${config.color}`} />
+                                <div className="text-sm">
+                                  <p className="text-muted-foreground">Verification</p>
+                                  <p className={`font-semibold ${config.color}`}>{config.shortLabel}</p>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex gap-2">
                           <Button className="flex-1" onClick={() => handleStartChallenge(challenge)}>

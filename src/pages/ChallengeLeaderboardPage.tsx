@@ -90,6 +90,7 @@ export default function ChallengeLeaderboardPage() {
           challengeId={challenge.id}
           challengeType={challenge.challenge_type}
           rankingMetric={challenge.ranking_metric}
+          requiredVerification={challenge.required_verification}
         />
       </div>
     </AppLayout>
