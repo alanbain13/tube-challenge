@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2 } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, MapPinCheck, Camera, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
@@ -45,6 +45,59 @@ interface DerivedActivityState {
     empty_plan?: boolean;
   };
 }
+
+// Station visit with verification details
+interface StationVisitWithVerification {
+  id: string;
+  station_tfl_id: string;
+  visited_at: string;
+  verification_status: string | null;
+  verification_method: string | null;
+  pending_reason: string | null;
+  seq_actual: number | null;
+  geofence_distance_m: number | null;
+  time_diff_seconds: number | null;
+  verification_image_url: string | null;
+}
+
+// Verification status badge component
+const VerificationBadge = ({ status, compact = false }: { status: string | null; compact?: boolean }) => {
+  const statusConfig: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
+    location_verified: { 
+      label: compact ? "Location" : "Location Verified", 
+      icon: <MapPinCheck className="h-3 w-3" />,
+      className: "bg-green-500/20 text-green-700 border-green-300" 
+    },
+    photo_verified: { 
+      label: compact ? "Photo" : "Photo Verified", 
+      icon: <Camera className="h-3 w-3" />,
+      className: "bg-yellow-500/20 text-yellow-700 border-yellow-300" 
+    },
+    remote_verified: { 
+      label: compact ? "Remote" : "Remote Verified", 
+      icon: <Globe className="h-3 w-3" />,
+      className: "bg-blue-500/20 text-blue-700 border-blue-300" 
+    },
+    failed: { 
+      label: "Failed", 
+      icon: null,
+      className: "bg-red-500/20 text-red-700 border-red-300" 
+    },
+    pending: { 
+      label: "Pending", 
+      icon: null,
+      className: "bg-gray-500/20 text-gray-700 border-gray-300" 
+    },
+  };
+  
+  const config = statusConfig[status || 'pending'] || statusConfig.pending;
+  return (
+    <Badge variant="outline" className={`${config.className} gap-1`}>
+      {config.icon}
+      {config.label}
+    </Badge>
+  );
+};
 
 const ActivityDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -133,6 +186,21 @@ const ActivityDetail = () => {
     enabled: !!activity?.challenge_id,
   });
 
+  // Fetch station visits with verification details
+  const { data: stationVisits } = useQuery({
+    queryKey: ["station_visits", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("station_visits")
+        .select("id, station_tfl_id, visited_at, verification_status, verification_method, pending_reason, seq_actual, geofence_distance_m, time_diff_seconds, verification_image_url")
+        .eq("activity_id", id)
+        .eq("status", "verified")
+        .order("seq_actual", { ascending: true });
+      if (error) throw error;
+      return data as StationVisitWithVerification[];
+    },
+    enabled: !!user && !!id,
+  });
   // Auto-refetch when returning to this page (especially from check-in)
   useEffect(() => {
     const handleFocus = () => {
@@ -567,27 +635,39 @@ const ActivityDetail = () => {
               <CardDescription>Check in at any station to continue your activity.</CardDescription>
             </CardHeader>
           <CardContent className="space-y-6">
-            {/* Actual Visits (chronological order) */}
+            {/* Actual Visits (chronological order) with verification badges */}
             {actual_visits && actual_visits.length > 0 && (
               <div>
                 <h4 className="font-medium mb-3 text-red-700">Visited Stations (in order)</h4>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
-                  {actual_visits.map((visit, index) => (
-                    <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-medium">
-                          {visit.sequence}
-                        </div>
-                        <div>
-                          <div className="font-medium">{getStationName(visit.station_tfl_id)}</div>
-                          <div className="text-xs text-muted-foreground">
-                            Visited {new Date(visit.visited_at).toLocaleTimeString()}
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {actual_visits.map((visit, index) => {
+                    // Find verification details from station_visits query
+                    const verificationDetails = stationVisits?.find(
+                      sv => sv.station_tfl_id === visit.station_tfl_id
+                    );
+                    
+                    return (
+                      <div key={`visit-${visit.station_tfl_id}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-red-50">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center text-sm font-medium">
+                            {visit.sequence}
+                          </div>
+                          <div>
+                            <div className="font-medium">{getStationName(visit.station_tfl_id)}</div>
+                            <div className="text-xs text-muted-foreground flex items-center gap-2">
+                              <span>Visited {new Date(visit.visited_at).toLocaleTimeString()}</span>
+                              {verificationDetails?.geofence_distance_m != null && (
+                                <span className="text-muted-foreground/70">
+                                  • {Math.round(verificationDetails.geofence_distance_m)}m
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <VerificationBadge status={verificationDetails?.verification_status || 'verified'} compact />
                       </div>
-                      <Badge className="bg-red-500 text-white">Visited</Badge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
