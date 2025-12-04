@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Trophy, Medal, Award, Clock, MapPin, User } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Trophy, Medal, Award, Clock, MapPin, User, Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { VERIFICATION_LEVEL_CONFIG, RequiredVerification } from '@/lib/challengeVerification';
 
 interface LeaderboardEntry {
   id: string;
@@ -12,6 +15,8 @@ interface LeaderboardEntry {
   duration_minutes: number;
   stations_visited: number | null;
   completed_at: string;
+  activity_id: string;
+  verification_level?: RequiredVerification | null;
   profile?: {
     display_name: string | null;
     username: string | null;
@@ -24,13 +29,23 @@ interface ChallengeLeaderboardProps {
   challengeId: string;
   challengeType: string;
   rankingMetric?: string | null;
+  requiredVerification?: string | null;
 }
 
-export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric }: ChallengeLeaderboardProps) {
+type FilterOption = 'all' | RequiredVerification;
+
+export function ChallengeLeaderboard({ 
+  challengeId, 
+  challengeType, 
+  rankingMetric,
+  requiredVerification = 'remote_verified'
+}: ChallengeLeaderboardProps) {
   const { user } = useAuth();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [userEntry, setUserEntry] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
+  const [verificationFilter, setVerificationFilter] = useState<FilterOption>('all');
 
   // Determine if ranking is by time (lower is better) or stations (higher is better)
   const isTimeRanked = rankingMetric === 'time' || 
@@ -43,7 +58,7 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
       // Fetch personal best attempts for this challenge
       let query = supabase
         .from('challenge_attempts')
-        .select('id, user_id, duration_seconds, duration_minutes, stations_visited, completed_at')
+        .select('id, user_id, duration_seconds, duration_minutes, stations_visited, completed_at, activity_id')
         .eq('challenge_id', challengeId)
         .eq('is_personal_best', true)
         .eq('status', 'completed');
@@ -56,7 +71,7 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
         query = query.order('stations_visited', { ascending: false, nullsFirst: false });
       }
 
-      const { data: attempts, error } = await query.limit(50);
+      const { data: attempts, error } = await query.limit(100);
 
       if (error) {
         console.error('Error fetching leaderboard:', error);
@@ -66,9 +81,19 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
 
       if (!attempts || attempts.length === 0) {
         setLeaderboard([]);
+        setFilteredLeaderboard([]);
         setLoading(false);
         return;
       }
+
+      // Fetch activity verification levels
+      const activityIds = [...new Set(attempts.map(a => a.activity_id))];
+      const { data: activities } = await supabase
+        .from('activities')
+        .select('id, verification_level')
+        .in('id', activityIds);
+
+      const activityVerificationMap = new Map(activities?.map(a => [a.id, a.verification_level]) || []);
 
       // Fetch profiles for all users
       const userIds = [...new Set(attempts.map(a => a.user_id))];
@@ -79,32 +104,60 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
 
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
 
-      // Add ranks and profiles
+      // Add ranks, profiles, and verification levels
       const rankedEntries: LeaderboardEntry[] = attempts.map((attempt, index) => ({
         ...attempt,
         rank: index + 1,
         profile: profileMap.get(attempt.user_id),
+        verification_level: activityVerificationMap.get(attempt.activity_id) as RequiredVerification | null,
       }));
 
-      // Get top 10 for display
-      const top10 = rankedEntries.slice(0, 10);
-      setLeaderboard(top10);
+      setLeaderboard(rankedEntries);
+      setLoading(false);
+    }
 
-      // Find current user's entry if not in top 10
+    fetchLeaderboard();
+  }, [challengeId, challengeType, rankingMetric, isTimeRanked]);
+
+  // Apply verification filter
+  useEffect(() => {
+    if (verificationFilter === 'all') {
+      const top10 = leaderboard.slice(0, 10);
+      setFilteredLeaderboard(top10);
+      
       if (user) {
-        const userRankedEntry = rankedEntries.find(e => e.user_id === user.id);
+        const userRankedEntry = leaderboard.find(e => e.user_id === user.id);
         if (userRankedEntry && userRankedEntry.rank > 10) {
           setUserEntry(userRankedEntry);
         } else {
           setUserEntry(null);
         }
       }
+    } else {
+      // Filter by verification level (only show entries that meet or exceed the filter level)
+      const acceptableLevels: RequiredVerification[] = verificationFilter === 'location_verified' 
+        ? ['location_verified']
+        : verificationFilter === 'photo_verified'
+        ? ['location_verified', 'photo_verified']
+        : ['location_verified', 'photo_verified', 'remote_verified'];
 
-      setLoading(false);
+      const filtered = leaderboard
+        .filter(entry => entry.verification_level && acceptableLevels.includes(entry.verification_level))
+        .map((entry, index) => ({ ...entry, rank: index + 1 })); // Re-rank after filtering
+
+      const top10 = filtered.slice(0, 10);
+      setFilteredLeaderboard(top10);
+
+      if (user) {
+        const userRankedEntry = filtered.find(e => e.user_id === user.id);
+        if (userRankedEntry && userRankedEntry.rank > 10) {
+          setUserEntry(userRankedEntry);
+        } else {
+          setUserEntry(null);
+        }
+      }
     }
-
-    fetchLeaderboard();
-  }, [challengeId, challengeType, rankingMetric, isTimeRanked, user]);
+  }, [leaderboard, verificationFilter, user]);
 
   const formatDuration = (seconds: number | null, minutes: number) => {
     const totalSeconds = seconds ?? minutes * 60;
@@ -140,6 +193,19 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
     return name.slice(0, 2).toUpperCase();
   };
 
+  const getVerificationBadge = (level: RequiredVerification | null | undefined) => {
+    if (!level) return null;
+    const config = VERIFICATION_LEVEL_CONFIG[level];
+    if (!config) return null;
+    
+    return (
+      <Badge variant="outline" className={`text-xs ${config.bgColor} ${config.color} border`}>
+        <Shield className="h-3 w-3 mr-1" />
+        {config.shortLabel}
+      </Badge>
+    );
+  };
+
   const renderEntry = (entry: LeaderboardEntry, isCurrentUser: boolean) => (
     <div
       key={entry.id}
@@ -157,10 +223,13 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
       </Avatar>
       
       <div className="flex-1 min-w-0">
-        <p className={`font-medium truncate ${isCurrentUser ? 'text-primary' : ''}`}>
-          {getDisplayName(entry)}
-          {isCurrentUser && <span className="text-xs ml-1 text-muted-foreground">(You)</span>}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={`font-medium truncate ${isCurrentUser ? 'text-primary' : ''}`}>
+            {getDisplayName(entry)}
+            {isCurrentUser && <span className="text-xs ml-1 text-muted-foreground">(You)</span>}
+          </p>
+          {getVerificationBadge(entry.verification_level)}
+        </div>
       </div>
       
       <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -202,13 +271,26 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-yellow-500" />
-          Leaderboard
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            Leaderboard
+          </CardTitle>
+          <Select value={verificationFilter} onValueChange={(v) => setVerificationFilter(v as FilterOption)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="location_verified">GPS Only</SelectItem>
+              <SelectItem value="photo_verified">Photo+</SelectItem>
+              <SelectItem value="remote_verified">Remote+</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
-        {leaderboard.length === 0 ? (
+        {filteredLeaderboard.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <User className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p>No completions yet</p>
@@ -216,7 +298,7 @@ export function ChallengeLeaderboard({ challengeId, challengeType, rankingMetric
           </div>
         ) : (
           <div className="space-y-1">
-            {leaderboard.map(entry => 
+            {filteredLeaderboard.map(entry => 
               renderEntry(entry, user?.id === entry.user_id)
             )}
             
