@@ -79,6 +79,7 @@ export type Database = {
           timing_mode: string | null
           title: string | null
           user_id: string
+          verification_level: string | null
         }
         Insert: {
           activity_type?: string | null
@@ -111,6 +112,7 @@ export type Database = {
           timing_mode?: string | null
           title?: string | null
           user_id: string
+          verification_level?: string | null
         }
         Update: {
           activity_type?: string | null
@@ -143,6 +145,7 @@ export type Database = {
           timing_mode?: string | null
           title?: string | null
           user_id?: string
+          verification_level?: string | null
         }
         Relationships: [
           {
@@ -266,6 +269,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_settings: {
+        Row: {
+          description: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: []
       }
       badges: {
         Row: {
@@ -400,6 +430,7 @@ export type Database = {
           metro_system_id: string
           name: string
           ranking_metric: string | null
+          required_verification: string | null
           start_station_tfl_id: string | null
           station_tfl_ids: string[]
           target_station_count: number | null
@@ -421,6 +452,7 @@ export type Database = {
           metro_system_id: string
           name: string
           ranking_metric?: string | null
+          required_verification?: string | null
           start_station_tfl_id?: string | null
           station_tfl_ids: string[]
           target_station_count?: number | null
@@ -442,6 +474,7 @@ export type Database = {
           metro_system_id?: string
           name?: string
           ranking_metric?: string | null
+          required_verification?: string | null
           start_station_tfl_id?: string | null
           station_tfl_ids?: string[]
           target_station_count?: number | null
@@ -834,6 +867,7 @@ export type Database = {
           captured_at: string | null
           checkin_type: string | null
           created_at: string
+          cumulative_duration_seconds: number | null
           exif_gps_present: boolean | null
           exif_time_present: boolean | null
           geofence_distance_m: number | null
@@ -844,6 +878,9 @@ export type Database = {
           is_simulation: boolean | null
           is_start_station: boolean | null
           latitude: number | null
+          load_lat: number | null
+          load_lon: number | null
+          loaded_at: string | null
           longitude: number | null
           pending_reason: string | null
           photo_url: string | null
@@ -853,9 +890,11 @@ export type Database = {
           station_tfl_id: string | null
           status: string
           thumb_url: string | null
+          time_diff_seconds: number | null
           user_id: string
           verification_image_url: string | null
           verification_method: string | null
+          verification_status: string | null
           verified_at: string | null
           verifier_version: string | null
           visit_lat: number | null
@@ -870,6 +909,7 @@ export type Database = {
           captured_at?: string | null
           checkin_type?: string | null
           created_at?: string
+          cumulative_duration_seconds?: number | null
           exif_gps_present?: boolean | null
           exif_time_present?: boolean | null
           geofence_distance_m?: number | null
@@ -880,6 +920,9 @@ export type Database = {
           is_simulation?: boolean | null
           is_start_station?: boolean | null
           latitude?: number | null
+          load_lat?: number | null
+          load_lon?: number | null
+          loaded_at?: string | null
           longitude?: number | null
           pending_reason?: string | null
           photo_url?: string | null
@@ -889,9 +932,11 @@ export type Database = {
           station_tfl_id?: string | null
           status?: string
           thumb_url?: string | null
+          time_diff_seconds?: number | null
           user_id: string
           verification_image_url?: string | null
           verification_method?: string | null
+          verification_status?: string | null
           verified_at?: string | null
           verifier_version?: string | null
           visit_lat?: number | null
@@ -906,6 +951,7 @@ export type Database = {
           captured_at?: string | null
           checkin_type?: string | null
           created_at?: string
+          cumulative_duration_seconds?: number | null
           exif_gps_present?: boolean | null
           exif_time_present?: boolean | null
           geofence_distance_m?: number | null
@@ -916,6 +962,9 @@ export type Database = {
           is_simulation?: boolean | null
           is_start_station?: boolean | null
           latitude?: number | null
+          load_lat?: number | null
+          load_lon?: number | null
+          loaded_at?: string | null
           longitude?: number | null
           pending_reason?: string | null
           photo_url?: string | null
@@ -925,9 +974,11 @@ export type Database = {
           station_tfl_id?: string | null
           status?: string
           thumb_url?: string | null
+          time_diff_seconds?: number | null
           user_id?: string
           verification_image_url?: string | null
           verification_method?: string | null
+          verification_status?: string | null
           verified_at?: string | null
           verifier_version?: string | null
           visit_lat?: number | null
