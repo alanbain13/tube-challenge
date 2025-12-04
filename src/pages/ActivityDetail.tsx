@@ -562,27 +562,65 @@ const ActivityDetail = () => {
                 </div>
               </div>
               
-              {/* Timestamps Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center mt-4 pt-4 border-t border-border">
-                <div>
-                  <div className="text-sm text-muted-foreground">Created</div>
-                  <div className="font-medium text-sm">
-                    {new Date(activity.created_at).toLocaleString()}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Started</div>
-                  <div className="font-medium text-sm">
-                    {timerStartTime ? new Date(timerStartTime).toLocaleString() : '—'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Completed</div>
-                  <div className="font-medium text-sm">
-                    {activity.ended_at ? new Date(activity.ended_at).toLocaleString() : '—'}
-                  </div>
-                </div>
-              </div>
+              {/* Journey Timing - from first/last visit EXIF times */}
+              {(() => {
+                // Get first and last visit EXIF times from stationVisits
+                const sortedVisits = stationVisits?.slice().sort((a, b) => 
+                  (a.seq_actual || 0) - (b.seq_actual || 0)
+                );
+                const firstVisitExif = sortedVisits?.[0]?.captured_at;
+                const lastVisitExif = sortedVisits && sortedVisits.length > 0 
+                  ? sortedVisits[sortedVisits.length - 1]?.captured_at 
+                  : null;
+                
+                return (
+                  <>
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="text-xs font-medium text-muted-foreground mb-2">Journey Timing</div>
+                      <div className="grid grid-cols-2 gap-4 text-center">
+                        <div>
+                          <div className="text-xs text-muted-foreground">Start Time</div>
+                          <div className="font-medium text-sm">
+                            {firstVisitExif ? new Date(firstVisitExif).toLocaleString('en-GB') : '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">End Time</div>
+                          <div className="font-medium text-sm">
+                            {lastVisitExif && activity.status === 'completed' ? new Date(lastVisitExif).toLocaleString('en-GB') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="text-xs font-medium text-muted-foreground mb-2">Activity Record</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div>
+                          <div className="text-xs text-muted-foreground">Activity Create Time</div>
+                          <div className="font-medium text-sm">
+                            {new Date(activity.created_at).toLocaleString('en-GB')}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Completion Time</div>
+                          <div className="font-medium text-sm">
+                            {activity.ended_at ? new Date(activity.ended_at).toLocaleString('en-GB') : '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Status</div>
+                          <div className="font-medium text-sm">
+                            <Badge variant={activity.status === 'completed' ? 'default' : 'outline'} className="mt-1">
+                              {statusText}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -647,10 +685,10 @@ const ActivityDetail = () => {
                     <tr className="border-b text-muted-foreground">
                       <th className="py-2 px-2 text-left font-medium">#</th>
                       <th className="py-2 px-2 text-left font-medium">Photo</th>
-                      <th className="py-2 px-2 text-left font-medium">EXIF</th>
-                      <th className="py-2 px-2 text-left font-medium">Station</th>
+                      <th className="py-2 px-2 text-left font-medium">Visit Time</th>
                       <th className="py-2 px-2 text-left font-medium">Load Time</th>
-                      <th className="py-2 px-2 text-left font-medium">Cumulative</th>
+                      <th className="py-2 px-2 text-left font-medium">Station Name</th>
+                      <th className="py-2 px-2 text-left font-medium">Elapsed Time</th>
                       <th className="py-2 px-2 text-right font-medium">Status</th>
                     </tr>
                   </thead>
@@ -706,10 +744,10 @@ const ActivityDetail = () => {
                           <td className="py-3 px-2 text-muted-foreground text-xs">
                             {capturedAt ? `${capturedAt.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} ${capturedAt.toLocaleTimeString('en-GB')}` : '—'}
                           </td>
-                          <td className="py-3 px-2 font-medium">{getStationName(visit.station_tfl_id)}</td>
                           <td className="py-3 px-2 text-muted-foreground text-xs">
-                            {visitDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                            {visitDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })} {visitDate.toLocaleTimeString('en-GB')}
                           </td>
+                          <td className="py-3 px-2 font-medium">{getStationName(visit.station_tfl_id)}</td>
                           <td className="py-3 px-2 font-mono text-xs">{cumulativeFormatted}</td>
                           <td className="py-3 px-2 text-right">
                             <TooltipProvider>
@@ -743,8 +781,8 @@ const ActivityDetail = () => {
                           <Hourglass className="w-4 h-4 text-muted-foreground/50" />
                         </td>
                         <td className="py-3 px-2">—</td>
-                        <td className="py-3 px-2 font-medium text-foreground">{getStationName(station.station_tfl_id)}</td>
                         <td className="py-3 px-2">—</td>
+                        <td className="py-3 px-2 font-medium text-foreground">{getStationName(station.station_tfl_id)}</td>
                         <td className="py-3 px-2">—</td>
                         <td className="py-3 px-2 text-right">
                           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
