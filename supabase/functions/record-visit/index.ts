@@ -132,7 +132,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
     return {
       verificationStatus: 'failed',
       pendingReason: !ocrPassed ? 'ocr_failed' : 'station_mismatch',
-      verificationMethod: 'image',
+      verificationMethod: 'ai_image',
       timeDiffSeconds: null,
       gpsDistanceMeters: null,
       gpsSource: 'none'
@@ -144,7 +144,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
     return {
       verificationStatus: 'remote_verified',
       pendingReason: 'no_exif_timestamp',
-      verificationMethod: 'image',
+      verificationMethod: 'ai_image',
       timeDiffSeconds: null,
       gpsDistanceMeters: null,
       gpsSource: 'none'
@@ -159,7 +159,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
     return {
       verificationStatus: 'remote_verified',
       pendingReason: 'time_exceeded',
-      verificationMethod: 'image',
+      verificationMethod: 'ai_image',
       timeDiffSeconds: Math.round(timeDiffSeconds),
       gpsDistanceMeters: null,
       gpsSource: photoGps ? 'exif' : (loadGps ? 'device' : 'none')
@@ -220,7 +220,7 @@ function deriveVerificationStatus(inputs: VerificationInputs): VerificationDecis
   return {
     verificationStatus: 'photo_verified',
     pendingReason: null,
-    verificationMethod: 'image',
+    verificationMethod: 'ai_image',
     timeDiffSeconds: Math.round(timeDiffSeconds),
     gpsDistanceMeters,
     gpsSource
