@@ -16,15 +16,25 @@ import {
   Settings, 
   Calendar,
   TrendingUp,
-  Target
+  Target,
+  MapPinCheck,
+  Camera,
+  Globe
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { VerificationLevelBadge } from '@/components/VerificationLevelBadge';
 
 interface UserStats {
   totalStationsVisited: number;
   totalActivities: number;
   totalBadges: number;
   totalRoutes: number;
+}
+
+interface VerificationStats {
+  locationVerified: number;
+  photoVerified: number;
+  remoteVerified: number;
 }
 
 interface RecentActivity {
@@ -50,6 +60,7 @@ export default function Profile() {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [verificationStats, setVerificationStats] = useState<VerificationStats | null>(null);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +87,8 @@ export default function Profile() {
         badgesResult,
         routesResult,
         recentActivitiesResult,
-        earnedBadgesResult
+        earnedBadgesResult,
+        verificationResult
       ] = await Promise.all([
         // Unique stations visited
         supabase
@@ -117,7 +129,13 @@ export default function Profile() {
           `)
           .eq('user_id', user.id)
           .order('earned_at', { ascending: false })
-          .limit(6)
+          .limit(6),
+        // Verification stats - all verified visits
+        supabase
+          .from('station_visits')
+          .select('verification_status')
+          .eq('user_id', user.id)
+          .eq('status', 'verified')
       ]);
 
       // Calculate unique stations
@@ -131,6 +149,18 @@ export default function Profile() {
         totalBadges: badgesResult.count || 0,
         totalRoutes: routesResult.count || 0
       });
+
+      // Calculate verification breakdown
+      const verificationCounts = (verificationResult.data || []).reduce(
+        (acc, visit) => {
+          if (visit.verification_status === 'location_verified') acc.locationVerified++;
+          else if (visit.verification_status === 'photo_verified') acc.photoVerified++;
+          else acc.remoteVerified++; // Default to remote for null/other
+          return acc;
+        },
+        { locationVerified: 0, photoVerified: 0, remoteVerified: 0 }
+      );
+      setVerificationStats(verificationCounts);
 
       setRecentActivities(
         recentActivitiesResult.data?.map(a => ({
@@ -260,6 +290,34 @@ export default function Profile() {
             <p className="text-xs text-muted-foreground">Routes Created</p>
           </Card>
         </div>
+
+        {/* Verification Stats */}
+        {verificationStats && (verificationStats.locationVerified > 0 || verificationStats.photoVerified > 0 || verificationStats.remoteVerified > 0) && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Verification Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="flex flex-col items-center text-center p-3 rounded-lg bg-green-500/10">
+                  <MapPinCheck className="h-6 w-6 text-green-600 mb-2" />
+                  <p className="text-2xl font-bold text-green-600">{verificationStats.locationVerified}</p>
+                  <p className="text-xs text-muted-foreground">Location Verified</p>
+                </div>
+                <div className="flex flex-col items-center text-center p-3 rounded-lg bg-amber-500/10">
+                  <Camera className="h-6 w-6 text-amber-600 mb-2" />
+                  <p className="text-2xl font-bold text-amber-600">{verificationStats.photoVerified}</p>
+                  <p className="text-xs text-muted-foreground">Photo Verified</p>
+                </div>
+                <div className="flex flex-col items-center text-center p-3 rounded-lg bg-blue-500/10">
+                  <Globe className="h-6 w-6 text-blue-600 mb-2" />
+                  <p className="text-2xl font-bold text-blue-600">{verificationStats.remoteVerified}</p>
+                  <p className="text-xs text-muted-foreground">Remote Verified</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Recent Activities */}
