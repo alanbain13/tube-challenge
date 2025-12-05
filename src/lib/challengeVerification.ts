@@ -60,6 +60,23 @@ export const VERIFICATION_LEVEL_CONFIG: Record<RequiredVerification, {
 };
 
 /**
+ * Challenge type configuration for display
+ */
+export const CHALLENGE_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
+  sequenced_route: { label: "Sequenced Route", color: "bg-blue-500" },
+  unsequenced_route: { label: "Any Order", color: "bg-green-500" },
+  timed: { label: "Timed", color: "bg-orange-500" },
+  station_count: { label: "Station Count", color: "bg-purple-500" },
+  point_to_point: { label: "Point to Point", color: "bg-red-500" },
+  // Legacy types
+  "Single Line": { label: "Single Line", color: "bg-cyan-500" },
+  "Multi-Line": { label: "Multi-Line", color: "bg-indigo-500" },
+  "Zone Challenge": { label: "Zone Challenge", color: "bg-teal-500" },
+  "line": { label: "Line Challenge", color: "bg-cyan-500" },
+  "zone": { label: "Zone Challenge", color: "bg-teal-500" },
+};
+
+/**
  * Validates if all station visits meet the challenge's verification requirements
  * @param visits Array of station visit objects with verification_status
  * @param requiredVerification The minimum verification level required by the challenge

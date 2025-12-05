@@ -1,15 +1,17 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield } from "lucide-react";
+import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
+import { CHALLENGE_TYPE_CONFIG } from "@/lib/challengeVerification";
 
 interface Challenge {
   id: string;
@@ -41,17 +43,20 @@ interface ChallengeAttempt {
   is_personal_best: boolean | null;
 }
 
-const CHALLENGE_TYPE_CONFIG: Record<string, { label: string; icon: typeof Trophy; color: string }> = {
-  sequenced_route: { label: "Sequenced Route", icon: Route, color: "bg-blue-500" },
-  unsequenced_route: { label: "Any Order", icon: MapPin, color: "bg-green-500" },
-  timed: { label: "Timed", icon: Timer, color: "bg-orange-500" },
-  station_count: { label: "Station Count", icon: Hash, color: "bg-purple-500" },
-  point_to_point: { label: "Point to Point", icon: Navigation, color: "bg-red-500" },
+type VerificationFilter = "all" | "location_verified" | "photo_verified" | "remote_verified";
+
+const ICON_MAP: Record<string, typeof Trophy> = {
+  sequenced_route: Route,
+  unsequenced_route: MapPin,
+  timed: Timer,
+  station_count: Hash,
+  point_to_point: Navigation,
 };
 
 export default function Challenges() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>("all");
 
   const { data: challenges = [], isLoading } = useQuery({
     queryKey: ["challenges"],
@@ -220,8 +225,19 @@ export default function Challenges() {
   };
 
   const getChallengeTypeConfig = (type: string) => {
-    return CHALLENGE_TYPE_CONFIG[type] || { label: type, icon: Trophy, color: "bg-muted" };
+    const config = CHALLENGE_TYPE_CONFIG[type] || { label: type, color: "bg-muted" };
+    const icon = ICON_MAP[type] || Trophy;
+    return { ...config, icon };
   };
+
+  // Filter challenges by verification level
+  const filteredChallenges = challenges.filter(c => {
+    if (verificationFilter === "all") return true;
+    const reqLevel = c.required_verification || "remote_verified";
+    if (verificationFilter === "location_verified") return reqLevel === "location_verified";
+    if (verificationFilter === "photo_verified") return reqLevel === "location_verified" || reqLevel === "photo_verified";
+    return true;
+  });
 
   const completedChallengeIds = new Set(
     userAttempts.filter((a) => a.status === "completed").map((a) => a.challenge_id)
@@ -242,20 +258,29 @@ export default function Challenges() {
           </TabsList>
 
           <TabsContent value="available" className="mt-6">
+            {/* Verification Filter */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              <span className="text-sm text-muted-foreground mr-2 flex items-center"><Filter className="w-4 h-4 mr-1" />Filter:</span>
+              <Button size="sm" variant={verificationFilter === "all" ? "default" : "outline"} onClick={() => setVerificationFilter("all")}>All</Button>
+              <Button size="sm" variant={verificationFilter === "location_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("location_verified")}>Location Only</Button>
+              <Button size="sm" variant={verificationFilter === "photo_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("photo_verified")}>Photo+</Button>
+              <Button size="sm" variant={verificationFilter === "remote_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("remote_verified")}>Remote+</Button>
+            </div>
+            
             {isLoading ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">Loading challenges...</p>
               </div>
-            ) : challenges.length === 0 ? (
+            ) : filteredChallenges.length === 0 ? (
               <Card>
                 <CardContent className="p-12 text-center">
                   <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No challenges available yet.</p>
+                  <p className="text-muted-foreground">No challenges available for the selected filter.</p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-6">
-                {challenges.map((challenge) => {
+                {filteredChallenges.map((challenge) => {
                   const typeConfig = getChallengeTypeConfig(challenge.challenge_type);
                   const TypeIcon = typeConfig.icon;
                   const counts = attemptCounts[challenge.id] || { total: 0, completed: 0 };
@@ -382,6 +407,12 @@ export default function Challenges() {
                                 <Badge className={`${typeConfig.color} text-white text-xs`}>
                                   {typeConfig.label}
                                 </Badge>
+                                <VerificationLevelBadge 
+                                  level={challenge.required_verification} 
+                                  compact 
+                                  showIcon
+                                  showTooltip={false}
+                                />
                                 {attempt.is_personal_best && (
                                   <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">
                                     Personal Best

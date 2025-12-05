@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, Map, Activity, Trophy, Route, Award, Users, Menu, Shield, Settings, LogOut, User } from "lucide-react";
+import { Home, Map, Activity, Trophy, Route, Award, Users, Menu, Shield, Settings, LogOut, User, Medal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ const navItems = [
   { name: "Activities", path: "/activities", icon: Activity },
   { name: "Routes", path: "/routes", icon: Route },
   { name: "Challenges", path: "/challenges", icon: Trophy },
+  { name: "Leaderboards", path: "/leaderboards", icon: Medal },
   { name: "Badges", path: "/badges", icon: Award },
   { name: "Friends", path: "/friends", icon: Users },
 ];

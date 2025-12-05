@@ -353,13 +353,11 @@ const Activities = () => {
                                 <span>{activityCounts.comments}</span>
                               </div>
                             </div>
-                            {activity.verification_level && (
-                              <VerificationLevelBadge 
-                                level={activity.verification_level} 
-                                compact 
-                                showTooltip={false}
-                              />
-                            )}
+                            <VerificationLevelBadge 
+                              level={activity.verification_level || 'remote_verified'} 
+                              compact 
+                              showTooltip={false}
+                            />
                           </div>
                         )}
                         

@@ -31,6 +31,7 @@ import { BadgeIcon } from "@/components/admin/IconPicker";
 import { UserSearchInput } from "@/components/admin/UserSearchInput";
 import { AppSettingsForm } from "@/components/admin/AppSettingsForm";
 import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
+import { CHALLENGE_TYPE_CONFIG } from "@/lib/challengeVerification";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -422,7 +423,14 @@ const Admin = () => {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{challenge.challenge_type}</Badge>
+                            {(() => {
+                              const config = CHALLENGE_TYPE_CONFIG[challenge.challenge_type];
+                              return (
+                                <Badge className={`${config?.color || 'bg-muted'} text-white`}>
+                                  {config?.label || challenge.challenge_type}
+                                </Badge>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             {challenge.challenge_type === "timed" 
