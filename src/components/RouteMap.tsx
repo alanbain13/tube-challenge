@@ -308,9 +308,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 4, 2.5],
-          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 10.5, 7],
-          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 16.5, 11]
+          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 4, 2.5],
+          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 10.5, 7],
+          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 16.5, 11]
         ],
         'circle-color': [
           'case',
@@ -519,9 +519,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
       'interpolate',
       ['linear'],
       ['zoom'],
-      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 4, 2.5],
-      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 10.5, 7],
-      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 16.5, 11]
+      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 4, 2.5],
+      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 10.5, 7],
+      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 16.5, 11]
     ]);
 
     map.current.setPaintProperty('stations', 'circle-color', [
@@ -718,7 +718,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
               type: 'line',
               source: 'preview-path',
               paint: {
-                'line-color': '#9ca3af', // Light grey for planned preview
+                'line-color': '#dc143c', // Crimson red for planned preview (same as visited path)
                 'line-width': 4,
                 'line-opacity': 0.7,
                 'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
