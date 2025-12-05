@@ -403,6 +403,7 @@ const Admin = () => {
                         <TableHead>Type</TableHead>
                         <TableHead>Stations</TableHead>
                         <TableHead>Difficulty</TableHead>
+                        <TableHead>Verification</TableHead>
                         <TableHead>Official</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -436,6 +437,13 @@ const Admin = () => {
                                 {challenge.difficulty}
                               </Badge>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <VerificationLevelBadge 
+                              level={challenge.required_verification} 
+                              compact 
+                              showTooltip 
+                            />
                           </TableCell>
                           <TableCell>
                             <Badge variant={challenge.is_official ? "default" : "secondary"}>
