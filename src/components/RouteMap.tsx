@@ -310,9 +310,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 4, 2.5],
-          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 10.5, 7],
-          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 16.5, 11]
+          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited'], ['get', 'isSelected']], 4, 2.5],
+          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited'], ['get', 'isSelected']], 10.5, 7],
+          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited'], ['get', 'isSelected']], 16.5, 11]
         ],
         'circle-color': [
           'case',
@@ -521,9 +521,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
       'interpolate',
       ['linear'],
       ['zoom'],
-      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 4, 2.5],
-      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 10.5, 7],
-      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited']], 16.5, 11]
+      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited'], ['get', 'isSelected']], 4, 2.5],
+      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited'], ['get', 'isSelected']], 10.5, 7],
+      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending'], ['==', ['get', 'visitStatus'], 'not_visited'], ['get', 'isSelected']], 16.5, 11]
     ]);
 
     map.current.setPaintProperty('stations', 'circle-color', [
@@ -601,7 +601,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
       type: 'line',
       source: 'route-line',
       paint: {
-        'line-color': '#9ca3af', // Light grey
+        'line-color': '#4169e1', // Blue to match selected station dots
         'line-width': 3,
         'line-dasharray': [4, 6], // Short dashes for clear dotted appearance
         'line-opacity': 0.8
