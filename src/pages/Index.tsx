@@ -455,7 +455,7 @@ const Index = () => {
           {/* Page Header */}
           <div className="mb-8 text-center">
             <h1 className="text-4xl font-black mb-2">Welcome back, {profile.display_name || "Explorer"}</h1>
-            <p className="text-muted-foreground">Track your journey across the London Underground</p>
+            <p className="text-muted-foreground">Track your journey across the world's metro stations</p>
           </div>
           {/* Hero Section */}
           <HeroProgress
