@@ -64,7 +64,7 @@ export const MainNavigation = () => {
 
           {/* Desktop Navigation */}
           <TooltipProvider delayDuration={100}>
-            <div className="hidden xl:flex items-center gap-1 xl:gap-4">
+            <div className="hidden lg:flex items-center gap-0.5 xl:gap-4">
               {navItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 const Icon = item.icon;
@@ -156,7 +156,7 @@ export const MainNavigation = () => {
           </TooltipProvider>
 
           {/* Mobile Navigation */}
-          <div className="xl:hidden flex items-center gap-2">
+          <div className="lg:hidden flex items-center gap-2">
             {!loading && user && <NotificationBell />}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
