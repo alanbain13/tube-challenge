@@ -78,3 +78,6 @@ verify_jwt = true
 
 [functions.evaluate-badges]
 verify_jwt = true
+
+[functions.record-visit]
+verify_jwt = true
