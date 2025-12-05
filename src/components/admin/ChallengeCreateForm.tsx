@@ -130,13 +130,19 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
 
   const validateChallengeData = (data: ChallengeFormData) => {
     if (["sequenced", "unsequenced"].includes(data.challenge_type)) {
-      if (selectedStations.length < 2) {
+      // When editing, use existing stations if selectedStations state is empty
+      const stationsToUse = selectedStations.length > 0 
+        ? selectedStations 
+        : (isEditing && editingChallenge?.station_tfl_ids) || [];
+      if (stationsToUse.length < 2) {
         throw new Error("Please select at least 2 stations");
       }
     }
 
     if (data.challenge_type === "point_to_point") {
-      if (!startStationId || !endStationId) {
+      const start = startStationId || (isEditing && editingChallenge?.start_station_tfl_id) || null;
+      const end = endStationId || (isEditing && editingChallenge?.end_station_tfl_id) || null;
+      if (!start || !end) {
         throw new Error("Please select both start and end stations");
       }
     }
@@ -215,6 +221,13 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
 
       validateChallengeData(data);
       
+      // Use current state if available, otherwise fall back to editingChallenge data
+      const stationsToUse = selectedStations.length > 0 
+        ? selectedStations 
+        : (editingChallenge.station_tfl_ids || []);
+      const startStation = startStationId || editingChallenge.start_station_tfl_id;
+      const endStation = endStationId || editingChallenge.end_station_tfl_id;
+      
       const payload = {
         name: data.name,
         description: data.description || null,
@@ -222,12 +235,12 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
         difficulty: data.difficulty || null,
         is_sequenced: data.is_sequenced,
         station_tfl_ids: ["sequenced", "unsequenced"].includes(data.challenge_type) 
-          ? selectedStations 
+          ? stationsToUse 
           : data.challenge_type === "point_to_point" 
-            ? [startStationId!, endStationId!] 
+            ? [startStation!, endStation!] 
             : [],
-        start_station_tfl_id: data.challenge_type === "point_to_point" ? startStationId : (selectedStations[0] || null),
-        end_station_tfl_id: data.challenge_type === "point_to_point" ? endStationId : (selectedStations[selectedStations.length - 1] || null),
+        start_station_tfl_id: data.challenge_type === "point_to_point" ? startStation : (stationsToUse[0] || null),
+        end_station_tfl_id: data.challenge_type === "point_to_point" ? endStation : (stationsToUse[stationsToUse.length - 1] || null),
         time_limit_seconds: data.time_limit_seconds || null,
         target_station_count: data.target_station_count || null,
         estimated_duration_minutes: data.estimated_duration_minutes || null,
