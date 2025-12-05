@@ -514,14 +514,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
     console.log(`🗺️ Updated ${updatedFeatures.filter(f => f.properties.sequence > 0).length} stations with sequence numbers`);
 
     // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
-    // Visited stations (red) are slightly larger than unvisited
+    // Visited stations (red) are 50% larger than unvisited
     map.current.setPaintProperty('stations', 'circle-radius', [
       'interpolate',
       ['linear'],
       ['zoom'],
-      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 3.5, 2.5],
-      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 9, 7],
-      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 14, 11]
+      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 4.5, 2.5],
+      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 12, 7],
+      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 18, 11]
     ]);
 
     map.current.setPaintProperty('stations', 'circle-color', [
@@ -670,9 +670,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
           type: 'line',
           source: 'actual-path',
           paint: {
-            'line-color': '#9ca3af', // Light grey for visited path
+            'line-color': '#dc143c', // Crimson red for visited path (distinct from Central Line #E32017)
             'line-width': 4,
-            'line-opacity': 1
+            'line-opacity': 0.8
           }
         });
       }
