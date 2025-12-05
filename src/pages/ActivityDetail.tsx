@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, Hourglass, X } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Play, Square, Trash2, Hourglass, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
@@ -17,6 +17,7 @@ import { ChallengeLeaderboard } from "@/components/ChallengeLeaderboard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VerificationLevelBadge, VerificationStatusBadge } from "@/components/VerificationLevelBadge";
+import RouteMap from "@/components/RouteMap";
 
 // Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
@@ -79,6 +80,10 @@ const ActivityDetail = () => {
     activityId: "",
     title: ""
   });
+  
+  // Map state for embedded RouteMap
+  const [mapSelectedStations, setMapSelectedStations] = useState<string[]>([]);
+  const [mapVisits, setMapVisits] = useState<Array<{ station_tfl_id: string; status: 'verified' | 'pending'; sequence_number: number }>>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
@@ -204,6 +209,28 @@ const ActivityDetail = () => {
       clearTimeout(timeoutId);
     };
   }, [refetchActivityState, refetchActivity]);
+
+  // Prepare map data from activity state
+  useEffect(() => {
+    if (activityState) {
+      // Get all stations (visited + remaining planned)
+      const visitedStationIds = activityState.actual_visits?.map(v => v.station_tfl_id) || [];
+      const plannedStationIds = activityState.plan
+        .filter(p => p.status !== 'verified')
+        .map(p => p.station_tfl_id);
+      
+      const allStations = [...visitedStationIds, ...plannedStationIds];
+      setMapSelectedStations(Array.from(new Set(allStations)));
+      
+      // Convert visits for RouteMap
+      const visits = (activityState.actual_visits || []).map((visit, index) => ({
+        station_tfl_id: visit.station_tfl_id,
+        status: 'verified' as const,
+        sequence_number: index + 1
+      }));
+      setMapVisits(visits);
+    }
+  }, [activityState]);
 
   const handleStartJourney = async () => {
     if (!activity) return;
@@ -783,6 +810,52 @@ const ActivityDetail = () => {
             </CardContent>
           </Card>
 
+          {/* Route Map */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Route Map</CardTitle>
+              <CardDescription>Visual representation of your journey</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="h-[400px]">
+                <RouteMap
+                  selectedStations={mapSelectedStations}
+                  onStationSelect={() => {}}
+                  onStationRemove={() => {}}
+                  onSequenceChange={() => {}}
+                  readOnly={true}
+                  activityStations={mapSelectedStations}
+                  visits={mapVisits}
+                  activityMode={counts.planned_total > 0 ? 'planned' : 'unplanned'}
+                  isSequenced={challenge?.is_sequenced !== false}
+                />
+              </div>
+              {/* Map Legend */}
+              <div className="border-t p-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#dc143c' }}></div>
+                  <span>Visited</span>
+                </div>
+                {counts.planned_total > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#4169e1' }}></div>
+                    <span>Planned</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5" style={{ backgroundColor: '#dc143c' }}></div>
+                  <span>Visited path</span>
+                </div>
+                {counts.planned_total > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-0.5" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #4169e1 0, #4169e1 3px, transparent 3px, transparent 6px)' }}></div>
+                    <span>Planned path</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Actions - Free-order mode */}
           <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4">
             <div className="flex gap-2 justify-center">
@@ -809,14 +882,6 @@ const ActivityDetail = () => {
                     ✓ Completed
                   </Badge>
                 )}
-              <Button 
-                variant="outline" 
-                onClick={() => navigate(`/activities/${activity.id}/map`)}
-                className="flex items-center gap-2"
-              >
-                <Eye className="w-4 h-4" />
-                View on Map
-              </Button>
               <Button 
                 variant="outline" 
                 onClick={() => setDeleteModal({ 
