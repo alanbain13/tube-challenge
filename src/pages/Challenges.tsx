@@ -82,7 +82,7 @@ export default function Challenges() {
 
   const { data: challenges = [], isLoading } = useQuery({
     queryKey: ["challenges", user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<Challenge[]> => {
       // Fetch official challenges
       const { data: officialChallenges, error: officialError } = await supabase
         .from("challenges")
@@ -97,16 +97,28 @@ export default function Challenges() {
       if (user?.id) {
         const { data: social, error: socialError } = await supabase
           .from("challenges")
-          .select("*, profiles:created_by_user_id(display_name, username, avatar_url)")
+          .select("*")
           .eq("is_official", false)
           .order("created_at", { ascending: false });
 
-        if (!socialError && social) {
-          socialChallenges = social as any;
+        if (!socialError && social && social.length > 0) {
+          // Fetch profiles for creators
+          const creatorIds = [...new Set(social.map(c => c.created_by_user_id).filter(Boolean))];
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, display_name, username, avatar_url")
+            .in("user_id", creatorIds);
+
+          const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+
+          socialChallenges = social.map(c => ({
+            ...c,
+            profiles: c.created_by_user_id ? profileMap.get(c.created_by_user_id) || null : null
+          }));
         }
       }
 
-      return [...(officialChallenges || []), ...socialChallenges] as Challenge[];
+      return [...(officialChallenges || []).map(c => ({ ...c, profiles: null })), ...socialChallenges];
     },
   });
 
@@ -468,20 +480,26 @@ export default function Challenges() {
           </TabsList>
 
           <TabsContent value="available" className="mt-6">
-            {/* Challenge Type Filter */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="text-sm text-muted-foreground mr-2 flex items-center"><Shield className="w-4 h-4 mr-1" />Type:</span>
-              <Button size="sm" variant={challengeFilter === "all" ? "default" : "outline"} onClick={() => setChallengeFilter("all")}>All</Button>
-              <Button size="sm" variant={challengeFilter === "official" ? "default" : "outline"} onClick={() => setChallengeFilter("official")}>Official</Button>
-              <Button size="sm" variant={challengeFilter === "social" ? "default" : "outline"} onClick={() => setChallengeFilter("social")}>Social</Button>
-            </div>
-            {/* Verification Filter */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              <span className="text-sm text-muted-foreground mr-2 flex items-center"><Filter className="w-4 h-4 mr-1" />Verification:</span>
-              <Button size="sm" variant={verificationFilter === "all" ? "default" : "outline"} onClick={() => setVerificationFilter("all")}>All</Button>
-              <Button size="sm" variant={verificationFilter === "location_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("location_verified")}>Location Only</Button>
-              <Button size="sm" variant={verificationFilter === "photo_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("photo_verified")}>Photo+</Button>
-              <Button size="sm" variant={verificationFilter === "remote_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("remote_verified")}>Remote+</Button>
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-4 mb-6 p-3 bg-muted/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium">Type:</span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant={challengeFilter === "all" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setChallengeFilter("all")}>All</Button>
+                  <Button size="sm" variant={challengeFilter === "official" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setChallengeFilter("official")}>Official</Button>
+                  <Button size="sm" variant={challengeFilter === "social" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setChallengeFilter("social")}>Social</Button>
+                </div>
+              </div>
+              <div className="h-4 w-px bg-border hidden sm:block" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium">Verification:</span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant={verificationFilter === "all" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("all")}>All</Button>
+                  <Button size="sm" variant={verificationFilter === "location_verified" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("location_verified")}>Location</Button>
+                  <Button size="sm" variant={verificationFilter === "photo_verified" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("photo_verified")}>Photo+</Button>
+                  <Button size="sm" variant={verificationFilter === "remote_verified" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("remote_verified")}>Remote+</Button>
+                </div>
+              </div>
             </div>
             
             {isLoading ? (
