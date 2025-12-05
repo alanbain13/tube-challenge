@@ -100,9 +100,12 @@ const Activities = () => {
         .order("started_at", { ascending: false });
       if (error) throw error;
       
+      // Filter to only current user's activities (safety check - RLS may include friends' completed activities)
+      const ownActivities = data.filter(activity => activity.user_id === user!.id);
+      
       // Get unified state for each activity
       const activitiesWithState = await Promise.all(
-        data.map(async (activity) => {
+        ownActivities.map(async (activity) => {
           const unifiedState = await getUnifiedActivityState(activity.id);
           return {
             ...activity,
