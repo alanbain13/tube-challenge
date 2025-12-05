@@ -658,10 +658,15 @@ export default function Challenges() {
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
                             <div>
-                              <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1">
                                 <Badge className={`${typeConfig.color} text-white text-xs`}>
                                   {typeConfig.label}
                                 </Badge>
+                                {!challenge.is_official && (
+                                  <Badge variant="outline" className="text-purple-600 border-purple-600 text-xs">
+                                    Social
+                                  </Badge>
+                                )}
                                 <VerificationLevelBadge 
                                   level={challenge.required_verification} 
                                   compact 

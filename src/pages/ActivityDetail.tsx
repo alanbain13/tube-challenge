@@ -786,7 +786,7 @@ const ActivityDetail = () => {
           {/* Actions - Free-order mode */}
           <div className="sticky bottom-4 bg-background/80 backdrop-blur-sm border rounded-lg p-4">
             <div className="flex gap-2 justify-center">
-                {activity.status === 'draft' && (
+              {activity.status === 'draft' && (
                   <Button onClick={handleStartJourney} className="flex items-center gap-2">
                     <Play className="w-4 h-4" />
                     Start Journey
@@ -796,13 +796,18 @@ const ActivityDetail = () => {
                   <>
                     <Button onClick={() => navigate(`/activities/${activity.id}/checkin`)} className="flex items-center gap-2">
                       <Play className="w-4 h-4" />
-                      {activityState.counts.planned_total === 0 ? 'Continue Check-in' : 'Continue Check-in'}
+                      Continue Check-in
                     </Button>
                     <Button onClick={handleFinishJourney} variant="outline" className="flex items-center gap-2">
                       <Square className="w-4 h-4" />
                       Finish Activity
                     </Button>
                   </>
+                )}
+                {activity.status === 'completed' && (
+                  <Badge variant="outline" className="text-green-600 border-green-600 px-4 py-2">
+                    ✓ Completed
+                  </Badge>
                 )}
               <Button 
                 variant="outline" 
