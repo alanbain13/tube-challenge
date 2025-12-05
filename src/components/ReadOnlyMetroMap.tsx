@@ -159,10 +159,11 @@ export default function ReadOnlyMetroMap({
     };
   }, [center, zoom]);
 
-  // Add tube lines to map
+  // Add tube lines and stations to map - combined to ensure proper layer ordering
   useEffect(() => {
-    if (!map.current || !mapLoaded || lineFeatures.length === 0) return;
+    if (!map.current || !mapLoaded || lineFeatures.length === 0 || stations.length === 0) return;
 
+    // Add all tube lines first
     lineFeatures.forEach((lineFeature, index) => {
       const lineName = lineFeature.properties.line_name || `Line-${index}`;
       const lineColor = lineFeature.properties.color || lineFeature.properties.stroke || '#666666';
@@ -173,7 +174,9 @@ export default function ReadOnlyMetroMap({
       try {
         // Check if source already exists and remove it
         if (map.current!.getSource(sourceId)) {
-          map.current!.removeLayer(layerId);
+          if (map.current!.getLayer(layerId)) {
+            map.current!.removeLayer(layerId);
+          }
           map.current!.removeSource(sourceId);
         }
 
@@ -204,19 +207,26 @@ export default function ReadOnlyMetroMap({
         console.error(`Error adding line layer ${layerId}:`, error);
       }
     });
-  }, [mapLoaded, lineFeatures]);
 
-  // Add station markers as GeoJSON layers (AFTER lines so they appear on top)
-  useEffect(() => {
-    if (!map.current || !mapLoaded || stations.length === 0) return;
+    // Now add stations on top
+    addStationsToMap();
 
-    // Wait for lines to be added first
-    const timer = setTimeout(() => {
-      addStationsToMap();
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [mapLoaded, stations, verifiedVisits, lineFeatures]);
+    // After map settles, ensure station layers are on top
+    map.current.once('idle', () => {
+      if (!map.current) return;
+      const visitedLayerId = 'visited-stations';
+      const unvisitedLayerId = 'unvisited-stations';
+      const labelsLayerId = 'station-labels';
+      
+      try {
+        if (map.current.getLayer(unvisitedLayerId)) map.current.moveLayer(unvisitedLayerId);
+        if (map.current.getLayer(visitedLayerId)) map.current.moveLayer(visitedLayerId);
+        if (map.current.getLayer(labelsLayerId)) map.current.moveLayer(labelsLayerId);
+      } catch (e) {
+        // Layers may not exist yet
+      }
+    });
+  }, [mapLoaded, lineFeatures, stations, verifiedVisits]);
 
   const addStationsToMap = () => {
     if (!map.current) return;
