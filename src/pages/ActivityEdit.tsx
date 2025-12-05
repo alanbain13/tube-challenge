@@ -24,7 +24,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { ActivityPhotoManager } from '@/components/ActivityPhotoManager';
 
 const activitySchema = z.object({
@@ -180,15 +180,26 @@ const ActivityEdit = () => {
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-lg mx-auto">
-          <header className="flex items-center gap-4 mb-8">
+          <header className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => navigate(`/activities/${activityId}`)}
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <h1 className="text-2xl font-bold text-foreground">Edit Activity</h1>
+            </div>
             <Button 
-              variant="outline" 
-              size="icon"
+              variant="ghost" 
+              size="sm"
               onClick={() => navigate(`/activities/${activityId}`)}
+              className="text-muted-foreground hover:text-foreground"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <X className="w-4 h-4 mr-1" />
+              Close
             </Button>
-            <h1 className="text-3xl font-bold text-foreground">Edit Activity</h1>
           </header>
 
           <Card>

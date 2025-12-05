@@ -5,8 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ImagePlus, Trash2, Upload, X, Camera } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ImagePlus, X, Camera, Check } from 'lucide-react';
 
 interface ActivityPhoto {
   id: string;
@@ -23,6 +23,11 @@ interface ActivityPhotoManagerProps {
   activityId: string;
 }
 
+interface PreviewPhoto {
+  file: File;
+  previewUrl: string;
+}
+
 const MAX_PHOTOS = 10;
 
 export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ activityId }) => {
@@ -31,7 +36,7 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<PreviewPhoto | null>(null);
 
   // Fetch existing photos
   const { data: photos = [], isLoading } = useQuery({
@@ -75,6 +80,7 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activity-photos', activityId] });
+      queryClient.invalidateQueries({ queryKey: ['activity-extra-photos', 'activity', activityId] });
       toast({ title: 'Photo deleted' });
     },
     onError: (error) => {
@@ -97,159 +103,211 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
       return;
     }
 
-    const filesToUpload = Array.from(files).slice(0, remainingSlots);
+    // Take the first file and show preview
+    const file = files[0];
+    const previewUrl = URL.createObjectURL(file);
+    setPreviewPhoto({ file, previewUrl });
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCancelPreview = () => {
+    if (previewPhoto) {
+      URL.revokeObjectURL(previewPhoto.previewUrl);
+    }
+    setPreviewPhoto(null);
+  };
+
+  const handleSavePhoto = async () => {
+    if (!previewPhoto || !user) return;
+
     setIsUploading(true);
 
     try {
-      for (let i = 0; i < filesToUpload.length; i++) {
-        const file = filesToUpload[i];
-        setUploadProgress(`Uploading ${i + 1} of ${filesToUpload.length}...`);
+      const file = previewPhoto.file;
+      
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+      const filePath = `${user.id}/${activityId}/extras/${fileName}`;
 
-        // Generate unique filename
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-        const filePath = `${user.id}/${activityId}/extras/${fileName}`;
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('activity-photos')
+        .upload(filePath, file, { 
+          cacheControl: '3600',
+          upsert: false 
+        });
 
-        // Upload to storage
-        const { error: uploadError } = await supabase.storage
-          .from('activity-photos')
-          .upload(filePath, file, { 
-            cacheControl: '3600',
-            upsert: false 
-          });
+      if (uploadError) throw uploadError;
 
-        if (uploadError) throw uploadError;
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('activity-photos')
+        .getPublicUrl(filePath);
 
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('activity-photos')
-          .getPublicUrl(filePath);
+      // Get next sequence number
+      const nextSequence = photos.length + 1;
 
-        // Get next sequence number
-        const nextSequence = photos.length + i + 1;
+      // Insert into database
+      const { error: insertError } = await supabase
+        .from('activity_photos')
+        .insert({
+          activity_id: activityId,
+          user_id: user.id,
+          photo_url: publicUrl,
+          sequence_number: nextSequence
+        });
 
-        // Insert into database
-        const { error: insertError } = await supabase
-          .from('activity_photos')
-          .insert({
-            activity_id: activityId,
-            user_id: user.id,
-            photo_url: publicUrl,
-            sequence_number: nextSequence
-          });
-
-        if (insertError) throw insertError;
-      }
+      if (insertError) throw insertError;
 
       queryClient.invalidateQueries({ queryKey: ['activity-photos', activityId] });
-      toast({ 
-        title: 'Photos uploaded', 
-        description: `${filesToUpload.length} photo(s) added successfully.` 
-      });
+      queryClient.invalidateQueries({ queryKey: ['activity-extra-photos', 'activity', activityId] });
+      toast({ title: 'Photo saved' });
+
+      // Clean up preview
+      URL.revokeObjectURL(previewPhoto.previewUrl);
+      setPreviewPhoto(null);
 
     } catch (error) {
-      console.error('Error uploading photos:', error);
+      console.error('Error uploading photo:', error);
       toast({ 
         title: 'Upload failed', 
-        description: 'Failed to upload one or more photos.',
+        description: 'Failed to save the photo.',
         variant: 'destructive' 
       });
     } finally {
       setIsUploading(false);
-      setUploadProgress(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
   };
 
   const canAddMore = photos.length < MAX_PHOTOS;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Camera className="w-5 h-5" />
-          Additional Photos
-        </CardTitle>
-        <CardDescription>
-          Add up to {MAX_PHOTOS} photos to document your journey ({photos.length}/{MAX_PHOTOS} used)
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Upload area */}
-        {canAddMore && (
-          <div 
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-              isUploading ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-              disabled={isUploading}
-            />
-            
-            {isUploading ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-muted-foreground">{uploadProgress}</p>
-              </div>
-            ) : (
-              <div 
-                className="flex flex-col items-center gap-2 cursor-pointer"
+    <>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Camera className="w-5 h-5" />
+            Additional Photos
+          </CardTitle>
+          <CardDescription>
+            Add up to {MAX_PHOTOS} photos to document your journey ({photos.length}/{MAX_PHOTOS} used)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Upload button */}
+          {canAddMore && (
+            <div className="flex justify-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={isUploading}
+              />
+              <Button 
+                variant="outline" 
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="gap-2"
               >
-                <ImagePlus className="w-10 h-10 text-muted-foreground" />
-                <p className="text-sm font-medium">Click to add photos</p>
-                <p className="text-xs text-muted-foreground">
-                  or drag and drop • Max {MAX_PHOTOS - photos.length} more
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+                <ImagePlus className="w-4 h-4" />
+                Add Photo
+              </Button>
+            </div>
+          )}
 
-        {/* Photo grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-3 gap-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="aspect-square bg-muted animate-pulse rounded-lg" />
-            ))}
-          </div>
-        ) : photos.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2">
-            {photos.map((photo) => (
-              <div 
-                key={photo.id} 
-                className="relative aspect-square group"
-              >
-                <img
-                  src={photo.thumb_url || photo.photo_url}
-                  alt={photo.caption || 'Activity photo'}
-                  className="w-full h-full object-cover rounded-lg"
-                />
-                <button
-                  onClick={() => deleteMutation.mutate(photo.id)}
-                  disabled={deleteMutation.isPending}
-                  className="absolute top-1 right-1 p-1.5 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/90"
+          {/* Photo thumbnail grid */}
+          {isLoading ? (
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="aspect-square bg-muted animate-pulse rounded-lg" />
+              ))}
+            </div>
+          ) : photos.length > 0 ? (
+            <div className="grid grid-cols-4 gap-2">
+              {photos.map((photo) => (
+                <div 
+                  key={photo.id} 
+                  className="relative aspect-square group"
                 >
-                  <X className="w-3 h-3" />
-                </button>
+                  <img
+                    src={photo.thumb_url || photo.photo_url}
+                    alt={photo.caption || 'Activity photo'}
+                    className="w-full h-full object-cover rounded-lg border border-border"
+                  />
+                  <button
+                    onClick={() => deleteMutation.mutate(photo.id)}
+                    disabled={deleteMutation.isPending}
+                    className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/90"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No additional photos yet
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Preview Dialog */}
+      <Dialog open={!!previewPhoto} onOpenChange={(open) => !open && handleCancelPreview()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Preview Photo</DialogTitle>
+          </DialogHeader>
+          
+          {previewPhoto && (
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-full max-h-[60vh] overflow-hidden rounded-lg">
+                <img
+                  src={previewPhoto.previewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-contain"
+                />
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No additional photos yet. Add some to document your journey!
-          </p>
-        )}
-      </CardContent>
-    </Card>
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelPreview}
+              disabled={isUploading}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSavePhoto}
+              disabled={isUploading}
+              className="flex-1 gap-2"
+            >
+              {isUploading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Save
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
