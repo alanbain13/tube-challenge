@@ -264,21 +264,7 @@ export default function ReadOnlyMetroMap({
           data: stationsGeoJSON
         });
 
-        // Add visited stations layer (filled red circles) - ON TOP of lines
-        map.current.addLayer({
-          id: visitedLayerId,
-          type: 'circle',
-          source: sourceId,
-          filter: ['==', ['get', 'visited'], true],
-          paint: {
-            'circle-radius': 7,
-            'circle-color': '#E32017',
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
-          }
-        });
-
-        // Add unvisited stations layer (white circles with red stroke)
+        // Add unvisited stations layer (white circles with red stroke) - add first so visited appears on top
         map.current.addLayer({
           id: unvisitedLayerId,
           type: 'circle',
@@ -288,9 +274,31 @@ export default function ReadOnlyMetroMap({
             'circle-radius': 6,
             'circle-color': '#ffffff',
             'circle-stroke-width': 3,
-            'circle-stroke-color': '#E32017'
+            'circle-stroke-color': '#E32017',
+            'circle-opacity': 1,
+            'circle-stroke-opacity': 1
           }
         });
+
+        // Add visited stations layer (filled red circles)
+        map.current.addLayer({
+          id: visitedLayerId,
+          type: 'circle',
+          source: sourceId,
+          filter: ['==', ['get', 'visited'], true],
+          paint: {
+            'circle-radius': 7,
+            'circle-color': '#E32017',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': 1,
+            'circle-stroke-opacity': 1
+          }
+        });
+
+        // Move station layers to the very top to ensure they render above all line layers
+        map.current.moveLayer(unvisitedLayerId);
+        map.current.moveLayer(visitedLayerId);
 
         // Add station name labels
         map.current.addLayer({
@@ -313,6 +321,9 @@ export default function ReadOnlyMetroMap({
             'text-halo-width': 1.5
           }
         });
+
+        // Move labels layer to the very top
+        map.current.moveLayer(labelsLayerId);
 
         // Add fit bounds control
         map.current.addControl(new FitBoundsControl(), 'top-left');
