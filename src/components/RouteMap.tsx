@@ -304,7 +304,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
       type: 'circle',
       source: 'stations',
       paint: {
-        'circle-radius': 7, // Fixed size for all stations
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8, 2.5,
+          12, 7,
+          16, 11
+        ],
         'circle-color': [
           'case',
           ['==', ['get', 'visitStatus'], 'verified'], '#dc143c', // Red - verified visited
@@ -313,7 +320,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
           ['get', 'isSelected'], '#4169e1', // Blue - selected in route creation
           '#9ca3af' // Grey - default
         ],
-        'circle-stroke-width': 2,
+        'circle-stroke-width': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          8, 0.5,
+          12, 2,
+          16, 3
+        ],
         'circle-stroke-color': '#ffffff',
         'circle-opacity': 1
       }
