@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trophy, Medal, Award, MapPin, Users } from "lucide-react";
+import { Trophy, Medal, Award, MapPin, Users, Filter, MapPinCheck, Camera, Globe, Shield } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -318,18 +318,45 @@ export default function Leaderboards() {
                     </Select>
                   </div>
                   <div className="flex-1">
-                    <label className="text-sm font-medium mb-1 block">Verification Level</label>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                      <Shield className="w-4 h-4" />
+                      <span>Verification Level</span>
+                    </div>
                     <div className="flex gap-2 flex-wrap">
-                      {VERIFICATION_FILTERS.map(filter => (
-                        <Button
-                          key={filter.value}
-                          size="sm"
-                          variant={verificationFilter === filter.value ? "default" : "outline"}
-                          onClick={() => setVerificationFilter(filter.value)}
-                        >
-                          {filter.label}
-                        </Button>
-                      ))}
+                      <Button
+                        size="sm"
+                        variant={verificationFilter === "all" ? "default" : "outline"}
+                        onClick={() => setVerificationFilter("all")}
+                      >
+                        All
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={verificationFilter === "location_verified" ? "default" : "outline"}
+                        onClick={() => setVerificationFilter("location_verified")}
+                        className="gap-1"
+                      >
+                        <MapPinCheck className="w-3 h-3" />
+                        Location Only
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={verificationFilter === "photo_verified" ? "default" : "outline"}
+                        onClick={() => setVerificationFilter("photo_verified")}
+                        className="gap-1"
+                      >
+                        <Camera className="w-3 h-3" />
+                        Photo+
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={verificationFilter === "remote_verified" ? "default" : "outline"}
+                        onClick={() => setVerificationFilter("remote_verified")}
+                        className="gap-1"
+                      >
+                        <Globe className="w-3 h-3" />
+                        Remote+
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -529,19 +556,48 @@ export default function Leaderboards() {
           <TabsContent value="stations">
             {/* Station Verification Filter */}
             <Card className="mb-6">
-              <CardContent className="p-4">
-                <label className="text-sm font-medium mb-2 block">Verification Level</label>
-                <div className="flex gap-2 flex-wrap">
-                  {VERIFICATION_FILTERS.map(filter => (
+              <CardContent className="py-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Filter className="w-4 h-4" />
+                    <span>Filter by Verification:</span>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
                     <Button
-                      key={filter.value}
                       size="sm"
-                      variant={verificationFilter === filter.value ? "default" : "outline"}
-                      onClick={() => setVerificationFilter(filter.value)}
+                      variant={verificationFilter === "all" ? "default" : "outline"}
+                      onClick={() => setVerificationFilter("all")}
                     >
-                      {filter.label}
+                      All
                     </Button>
-                  ))}
+                    <Button
+                      size="sm"
+                      variant={verificationFilter === "location_verified" ? "default" : "outline"}
+                      onClick={() => setVerificationFilter("location_verified")}
+                      className="gap-1"
+                    >
+                      <MapPinCheck className="w-3 h-3" />
+                      Location Only
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={verificationFilter === "photo_verified" ? "default" : "outline"}
+                      onClick={() => setVerificationFilter("photo_verified")}
+                      className="gap-1"
+                    >
+                      <Camera className="w-3 h-3" />
+                      Photo+
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={verificationFilter === "remote_verified" ? "default" : "outline"}
+                      onClick={() => setVerificationFilter("remote_verified")}
+                      className="gap-1"
+                    >
+                      <Globe className="w-3 h-3" />
+                      Remote+
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
