@@ -8,6 +8,8 @@ import { Button } from "./ui/button";
 import { MessageCircle } from "lucide-react";
 import { useStations } from "@/hooks/useStations";
 import { MiniMapSnapshot } from "./MiniMapSnapshot";
+import { RoundelGallery } from "./RoundelGallery";
+import { ActivityExtraPhotos } from "./ActivityExtraPhotos";
 import { formatDistanceToNow } from "date-fns";
 
 interface FriendActivityCardProps {
@@ -90,6 +92,10 @@ export const FriendActivityCard = ({
           stationSequence={activity.station_tfl_ids || []}
           updatedAt={activity.ended_at || new Date().toISOString()}
         />
+        
+        {/* Photo Thumbnails */}
+        <RoundelGallery type="activity" id={activity.id} />
+        <ActivityExtraPhotos activityId={activity.id} />
 
         {/* Stats */}
         <div className="flex items-center justify-between text-sm text-muted-foreground">
