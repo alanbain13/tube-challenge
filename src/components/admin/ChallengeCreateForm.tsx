@@ -28,6 +28,12 @@ const challengeTypes = [
 
 const difficultyLevels = ["easy", "medium", "hard", "expert"] as const;
 
+const verificationLevels = [
+  { value: "location_verified", label: "Location", description: "All stations must be verified by GPS location" },
+  { value: "photo_verified", label: "Photo", description: "Stations can be verified by photo or GPS" },
+  { value: "remote_verified", label: "Remote", description: "Any verification method accepted" },
+] as const;
+
 const challengeSchema = z.object({
   name: z.string().trim().min(3, "Name must be at least 3 characters").max(100, "Name must be less than 100 characters"),
   description: z.string().trim().max(500, "Description must be less than 500 characters").optional(),
@@ -37,6 +43,7 @@ const challengeSchema = z.object({
   time_limit_seconds: z.number().min(60, "Minimum 1 minute").max(86400, "Maximum 24 hours").optional(),
   target_station_count: z.number().min(2, "Minimum 2 stations").max(300, "Maximum 300 stations").optional(),
   estimated_duration_minutes: z.number().min(1).max(1440).optional(),
+  required_verification: z.enum(["location_verified", "photo_verified", "remote_verified"]).default("remote_verified"),
 });
 
 type ChallengeFormData = z.infer<typeof challengeSchema>;
@@ -66,6 +73,7 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
       is_sequenced: true,
       time_limit_seconds: undefined,
       target_station_count: undefined,
+      required_verification: "remote_verified",
       estimated_duration_minutes: undefined,
     },
   });
@@ -82,6 +90,7 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
         time_limit_seconds: editingChallenge.time_limit_seconds || undefined,
         target_station_count: editingChallenge.target_station_count || undefined,
         estimated_duration_minutes: editingChallenge.estimated_duration_minutes || undefined,
+        required_verification: (editingChallenge.required_verification as ChallengeFormData["required_verification"]) || "remote_verified",
       });
       
       // Set station data
@@ -104,6 +113,7 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
         time_limit_seconds: undefined,
         target_station_count: undefined,
         estimated_duration_minutes: undefined,
+        required_verification: "remote_verified",
       });
       setSelectedStations([]);
       setStartStationId(null);
@@ -161,6 +171,7 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
       end_station_tfl_id: data.challenge_type === "point_to_point" ? endStationId : (selectedStations[selectedStations.length - 1] || null),
       time_limit_seconds: data.time_limit_seconds || null,
       target_station_count: data.target_station_count || null,
+      required_verification: data.required_verification || "remote_verified",
       estimated_duration_minutes: data.estimated_duration_minutes || null,
       ranking_metric: data.challenge_type === "timed" ? "stations" : "time",
     };
@@ -221,6 +232,7 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
         target_station_count: data.target_station_count || null,
         estimated_duration_minutes: data.estimated_duration_minutes || null,
         ranking_metric: data.challenge_type === "timed" ? "stations" : "time",
+        required_verification: data.required_verification || "remote_verified",
       };
 
       const { error } = await supabase
@@ -410,6 +422,38 @@ export const ChallengeCreateForm = ({ onSuccess, editingChallenge, onCancelEdit 
                 )}
               />
             </div>
+
+            {/* Required Verification Level */}
+            <FormField
+              control={form.control}
+              name="required_verification"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Required Verification Level</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select verification level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {verificationLevels.map((level) => (
+                        <SelectItem key={level.value} value={level.value}>
+                          <div>
+                            <div className="font-medium">{level.label}</div>
+                            <div className="text-xs text-muted-foreground">{level.description}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Determines what verification level is required for challenge completion
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Time Limit for Timed Challenges */}
             {showTimeLimit && (

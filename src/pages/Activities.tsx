@@ -16,6 +16,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FriendActivityFeed } from "@/components/FriendActivityFeed";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
+import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 
 const Activities = () => {
   const { user, loading } = useAuth();
@@ -339,17 +340,26 @@ const Activities = () => {
                           {activity.status === 'active' ? 'Updated' : 'Created'} {new Date(activity.started_at).toLocaleDateString()}
                         </div>
                       </div>
-                        {/* Social Stats */}
+                        {/* Social Stats and Verification */}
                         {activity.status === 'completed' && (
-                          <div className="flex items-center gap-4 pt-2 border-t text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Heart className="w-4 h-4" />
-                              <span>{activityCounts.likes}</span>
+                          <div className="flex items-center justify-between pt-2 border-t text-sm text-muted-foreground">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-1">
+                                <Heart className="w-4 h-4" />
+                                <span>{activityCounts.likes}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <MessageCircle className="w-4 h-4" />
+                                <span>{activityCounts.comments}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <MessageCircle className="w-4 h-4" />
-                              <span>{activityCounts.comments}</span>
-                            </div>
+                            {activity.verification_level && (
+                              <VerificationLevelBadge 
+                                level={activity.verification_level} 
+                                compact 
+                                showTooltip={false}
+                              />
+                            )}
                           </div>
                         )}
                         

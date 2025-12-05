@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, MapPinCheck, Camera, Globe, Hourglass, X } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Play, Square, Eye, Trash2, Hourglass, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { ActivityLikeButton } from "@/components/ActivityLikeButton";
@@ -16,6 +16,7 @@ import { ChallengeContextCard } from "@/components/ChallengeContextCard";
 import { ChallengeLeaderboard } from "@/components/ChallengeLeaderboard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { VerificationLevelBadge, VerificationStatusBadge } from "@/components/VerificationLevelBadge";
 
 // Interface for derived activity state (free-order mode)
 interface DerivedActivityState {
@@ -65,44 +66,7 @@ interface StationVisitWithVerification {
   photo_url: string | null;
 }
 
-// Verification status badge component
-const VerificationBadge = ({ status, compact = false }: { status: string | null; compact?: boolean }) => {
-  const statusConfig: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
-    location_verified: { 
-      label: compact ? "Location" : "Location Verified", 
-      icon: <MapPinCheck className="h-3 w-3" />,
-      className: "bg-green-500/20 text-green-700 border-green-300" 
-    },
-    photo_verified: { 
-      label: compact ? "Photo" : "Photo Verified", 
-      icon: <Camera className="h-3 w-3" />,
-      className: "bg-yellow-500/20 text-yellow-700 border-yellow-300" 
-    },
-    remote_verified: { 
-      label: compact ? "Remote" : "Remote Verified", 
-      icon: <Globe className="h-3 w-3" />,
-      className: "bg-blue-500/20 text-blue-700 border-blue-300" 
-    },
-    failed: { 
-      label: "Failed", 
-      icon: null,
-      className: "bg-red-500/20 text-red-700 border-red-300" 
-    },
-    pending: { 
-      label: "Pending", 
-      icon: null,
-      className: "bg-gray-500/20 text-gray-700 border-gray-300" 
-    },
-  };
-  
-  const config = statusConfig[status || 'pending'] || statusConfig.pending;
-  return (
-    <Badge variant="outline" className={`${config.className} gap-1`}>
-      {config.icon}
-      {config.label}
-    </Badge>
-  );
-};
+// Use shared VerificationLevelBadge and VerificationStatusBadge from components
 
 const ActivityDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -704,22 +668,22 @@ const ActivityDetail = () => {
                       const cumulativeSecs = index === 0 ? 0 : (verificationDetails?.cumulative_duration_seconds || 0);
                       const cumulativeFormatted = `${String(Math.floor(cumulativeSecs / 3600)).padStart(2, '0')}:${String(Math.floor((cumulativeSecs % 3600) / 60)).padStart(2, '0')}:${String(cumulativeSecs % 60).padStart(2, '0')}`;
                       
-                      // Status badge mapping per spec
+                      // Status badge mapping per unified design spec
                       const status = verificationDetails?.verification_status;
                       let statusLabel = 'Pending';
                       let statusColor = 'bg-muted text-muted-foreground';
                       if (status === 'location_verified') {
-                        statusLabel = 'Location';
-                        statusColor = 'bg-green-500/15 text-green-700 dark:text-green-400';
+                        statusLabel = 'LOCATION';
+                        statusColor = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
                       } else if (status === 'photo_verified') {
-                        statusLabel = 'Photo';
-                        statusColor = 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400';
+                        statusLabel = 'PHOTO';
+                        statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
                       } else if (status === 'remote_verified') {
-                        statusLabel = 'Remote';
-                        statusColor = 'bg-blue-500/15 text-blue-700 dark:text-blue-400';
+                        statusLabel = 'REMOTE';
+                        statusColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
                       } else if (status === 'failed') {
                         statusLabel = 'Failed';
-                        statusColor = 'bg-red-500/15 text-red-700 dark:text-red-400';
+                        statusColor = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
                       }
                       
                       return (

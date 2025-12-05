@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trophy, Medal, Award, Clock, MapPin, User, Shield } from 'lucide-react';
+import { Trophy, Medal, Award, Clock, MapPin, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { VERIFICATION_LEVEL_CONFIG, RequiredVerification } from '@/lib/challengeVerification';
+import { RequiredVerification } from '@/lib/challengeVerification';
+import { VerificationLevelBadge } from '@/components/VerificationLevelBadge';
 
 interface LeaderboardEntry {
   id: string;
@@ -195,15 +195,7 @@ export function ChallengeLeaderboard({
 
   const getVerificationBadge = (level: RequiredVerification | null | undefined) => {
     if (!level) return null;
-    const config = VERIFICATION_LEVEL_CONFIG[level];
-    if (!config) return null;
-    
-    return (
-      <Badge variant="outline" className={`text-xs ${config.bgColor} ${config.color} border`}>
-        <Shield className="h-3 w-3 mr-1" />
-        {config.shortLabel}
-      </Badge>
-    );
+    return <VerificationLevelBadge level={level} compact showTooltip={false} className="text-xs" />;
   };
 
   const renderEntry = (entry: LeaderboardEntry, isCurrentUser: boolean) => (
@@ -277,12 +269,12 @@ export function ChallengeLeaderboard({
             Leaderboard
           </CardTitle>
           <Select value={verificationFilter} onValueChange={(v) => setVerificationFilter(v as FilterOption)}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[150px]">
               <SelectValue placeholder="Filter" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              <SelectItem value="location_verified">GPS Only</SelectItem>
+              <SelectItem value="location_verified">Location Only</SelectItem>
               <SelectItem value="photo_verified">Photo+</SelectItem>
               <SelectItem value="remote_verified">Remote+</SelectItem>
             </SelectContent>
