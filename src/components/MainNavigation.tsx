@@ -23,8 +23,8 @@ const navItems = [
   { name: "Activities", path: "/activities", icon: Activity },
   { name: "Routes", path: "/routes", icon: Route },
   { name: "Challenges", path: "/challenges", icon: Trophy },
-  { name: "Leaderboards", path: "/leaderboards", icon: Medal },
   { name: "Badges", path: "/badges", icon: Award },
+  { name: "Leaderboards", path: "/leaderboards", icon: Medal },
   { name: "Friends", path: "/friends", icon: Users },
 ];
 
