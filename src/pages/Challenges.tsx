@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter, Award, Target, Zap } from "lucide-react";
+import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter, Award, Target, Zap, MapPinCheck, Camera, Globe } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -481,26 +481,41 @@ export default function Challenges() {
 
           <TabsContent value="available" className="mt-6">
             {/* Filters */}
-            <div className="flex flex-wrap items-center gap-4 mb-6 p-3 bg-muted/30 rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-medium">Type:</span>
-                <div className="flex gap-1">
-                  <Button size="sm" variant={challengeFilter === "all" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setChallengeFilter("all")}>All</Button>
-                  <Button size="sm" variant={challengeFilter === "official" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setChallengeFilter("official")}>Official</Button>
-                  <Button size="sm" variant={challengeFilter === "social" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setChallengeFilter("social")}>Social</Button>
+            <Card className="mb-6">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Filter className="w-4 h-4" />
+                    <span>Type:</span>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant={challengeFilter === "all" ? "default" : "outline"} onClick={() => setChallengeFilter("all")}>All</Button>
+                    <Button size="sm" variant={challengeFilter === "official" ? "default" : "outline"} onClick={() => setChallengeFilter("official")}>Official</Button>
+                    <Button size="sm" variant={challengeFilter === "social" ? "default" : "outline"} onClick={() => setChallengeFilter("social")}>Social</Button>
+                  </div>
+                  <div className="h-6 w-px bg-border hidden sm:block" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Shield className="w-4 h-4" />
+                    <span>Verification:</span>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant={verificationFilter === "all" ? "default" : "outline"} onClick={() => setVerificationFilter("all")}>All</Button>
+                    <Button size="sm" variant={verificationFilter === "location_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("location_verified")} className="gap-1">
+                      <MapPinCheck className="w-3 h-3" />
+                      Location Only
+                    </Button>
+                    <Button size="sm" variant={verificationFilter === "photo_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("photo_verified")} className="gap-1">
+                      <Camera className="w-3 h-3" />
+                      Photo+
+                    </Button>
+                    <Button size="sm" variant={verificationFilter === "remote_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("remote_verified")} className="gap-1">
+                      <Globe className="w-3 h-3" />
+                      Remote+
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="h-4 w-px bg-border hidden sm:block" />
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-medium">Verification:</span>
-                <div className="flex gap-1">
-                  <Button size="sm" variant={verificationFilter === "all" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("all")}>All</Button>
-                  <Button size="sm" variant={verificationFilter === "location_verified" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("location_verified")}>Location</Button>
-                  <Button size="sm" variant={verificationFilter === "photo_verified" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("photo_verified")}>Photo+</Button>
-                  <Button size="sm" variant={verificationFilter === "remote_verified" ? "default" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setVerificationFilter("remote_verified")}>Remote+</Button>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
             
             {isLoading ? (
               <div className="text-center py-12">
