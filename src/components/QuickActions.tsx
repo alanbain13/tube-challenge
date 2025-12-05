@@ -51,7 +51,7 @@ export function QuickActions({ onStartActivity }: QuickActionsProps) {
         icon={<Globe className="w-4 h-4" />}
         title="Explore Map"
         description="Find stations"
-        onClick={() => navigate('/map')}
+        onClick={() => navigate('/metros/london')}
       />
     </div>
   );
