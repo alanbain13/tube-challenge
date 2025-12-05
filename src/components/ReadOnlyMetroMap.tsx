@@ -281,9 +281,23 @@ export default function ReadOnlyMetroMap({
           source: sourceId,
           filter: ['==', ['get', 'visited'], false],
           paint: {
-            'circle-radius': 6,
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              8, 2,
+              12, 6,
+              16, 10
+            ],
             'circle-color': '#ffffff',
-            'circle-stroke-width': 3,
+            'circle-stroke-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              8, 1,
+              12, 3,
+              16, 4
+            ],
             'circle-stroke-color': '#E32017',
             'circle-opacity': 1,
             'circle-stroke-opacity': 1
@@ -297,9 +311,23 @@ export default function ReadOnlyMetroMap({
           source: sourceId,
           filter: ['==', ['get', 'visited'], true],
           paint: {
-            'circle-radius': 7,
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              8, 2.5,
+              12, 7,
+              16, 11
+            ],
             'circle-color': '#E32017',
-            'circle-stroke-width': 2,
+            'circle-stroke-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              8, 0.5,
+              12, 2,
+              16, 3
+            ],
             'circle-stroke-color': '#ffffff',
             'circle-opacity': 1,
             'circle-stroke-opacity': 1
