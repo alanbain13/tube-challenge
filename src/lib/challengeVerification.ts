@@ -19,6 +19,7 @@ const ACCEPTABLE_STATUSES: Record<RequiredVerification, VerificationStatus[]> = 
 
 /**
  * Verification level display configuration
+ * Uses LOCATION, PHOTO, REMOTE labels with consistent color theming
  */
 export const VERIFICATION_LEVEL_CONFIG: Record<RequiredVerification, {
   label: string;
@@ -26,27 +27,35 @@ export const VERIFICATION_LEVEL_CONFIG: Record<RequiredVerification, {
   description: string;
   color: string;
   bgColor: string;
+  borderColor: string;
+  icon: 'MapPinCheck' | 'Camera' | 'Globe';
 }> = {
   'location_verified': {
-    label: 'GPS Verified',
-    shortLabel: 'GPS',
+    label: 'Location Verified',
+    shortLabel: 'LOCATION',
     description: 'All stations must be verified by GPS location',
-    color: 'text-green-600',
-    bgColor: 'bg-green-100 border-green-300',
+    color: 'text-green-700',
+    bgColor: 'bg-green-100',
+    borderColor: 'border-green-300',
+    icon: 'MapPinCheck',
   },
   'photo_verified': {
     label: 'Photo Verified',
-    shortLabel: 'PIC',
+    shortLabel: 'PHOTO',
     description: 'Stations can be verified by photo or GPS',
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100 border-blue-300',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-100',
+    borderColor: 'border-amber-300',
+    icon: 'Camera',
   },
   'remote_verified': {
-    label: 'Remote OK',
-    shortLabel: 'REM',
+    label: 'Remote Verified',
+    shortLabel: 'REMOTE',
     description: 'Any verification method accepted',
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-100 border-gray-300',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-100',
+    borderColor: 'border-blue-300',
+    icon: 'Globe',
   },
 };
 

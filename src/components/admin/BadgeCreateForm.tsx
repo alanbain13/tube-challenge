@@ -15,11 +15,19 @@ import { Loader2, Plus, Save, X } from "lucide-react";
 import { IconPicker } from "./IconPicker";
 import type { Tables, Json } from "@/integrations/supabase/types";
 
+// Verification level options
+const verificationLevels = [
+  { value: "location_verified", label: "Location", description: "GPS location verification required" },
+  { value: "photo_verified", label: "Photo", description: "Photo or GPS verification required" },
+  { value: "remote_verified", label: "Remote", description: "Any verification method accepted" },
+] as const;
+
 const badgeSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   image_url: z.string().min(1, "Icon is required"),
   badge_type: z.enum(["milestone", "zone", "line", "timed", "challenge"]),
+  required_verification: z.enum(["location_verified", "photo_verified", "remote_verified"]).default("remote_verified"),
   // Criteria fields
   threshold: z.coerce.number().optional(),
   zone: z.string().optional(),
@@ -61,6 +69,7 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
       description: "",
       image_url: "",
       badge_type: "milestone",
+      required_verification: "remote_verified",
       threshold: undefined,
       zone: undefined,
       line: undefined,
@@ -73,12 +82,13 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
   // Pre-populate form when editing
   useEffect(() => {
     if (editingBadge) {
-      const criteria = editingBadge.criteria as { threshold?: number; zone?: string; line?: string; time_limit_minutes?: number } | null;
+      const criteria = editingBadge.criteria as { threshold?: number; zone?: string; line?: string; time_limit_minutes?: number; required_verification?: string } | null;
       form.reset({
         name: editingBadge.name,
         description: editingBadge.description || "",
         image_url: editingBadge.image_url,
         badge_type: editingBadge.badge_type as BadgeFormValues["badge_type"],
+        required_verification: (criteria?.required_verification as BadgeFormValues["required_verification"]) || "remote_verified",
         threshold: criteria?.threshold,
         zone: criteria?.zone,
         line: criteria?.line,
@@ -90,6 +100,7 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
         description: "",
         image_url: "",
         badge_type: "milestone",
+        required_verification: "remote_verified",
         threshold: undefined,
         zone: undefined,
         line: undefined,
@@ -100,26 +111,31 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
 
   // Build criteria object based on badge type
   const buildCriteria = (values: BadgeFormValues): Json | null => {
+    const baseCriteria = {
+      required_verification: values.required_verification || "remote_verified",
+    };
+    
     switch (values.badge_type) {
       case "milestone":
-        return values.threshold ? { threshold: values.threshold } : null;
+        return values.threshold ? { ...baseCriteria, threshold: values.threshold } as Json : baseCriteria as Json;
       case "zone":
-        return values.zone ? { zone: values.zone } : null;
+        return values.zone ? { ...baseCriteria, zone: values.zone } as Json : baseCriteria as Json;
       case "line":
-        return values.line ? { line: values.line } : null;
+        return values.line ? { ...baseCriteria, line: values.line } as Json : baseCriteria as Json;
       case "timed":
         if (values.threshold && values.time_limit_minutes) {
-          const criteria: { threshold: number; time_limit_minutes: number; zone?: string } = {
+          const criteria = {
+            ...baseCriteria,
             threshold: values.threshold,
             time_limit_minutes: values.time_limit_minutes,
+            ...(values.zone && { zone: values.zone }),
           };
-          if (values.zone) criteria.zone = values.zone;
-          return criteria;
+          return criteria as Json;
         }
-        return null;
+        return baseCriteria as Json;
       case "challenge":
       default:
-        return null;
+        return baseCriteria as Json;
     }
   };
 
@@ -242,6 +258,38 @@ export function BadgeCreateForm({ editingBadge, onCancelEdit, onSuccess }: Badge
                 )}
               />
             </div>
+
+            {/* Required Verification Level */}
+            <FormField
+              control={form.control}
+              name="required_verification"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Required Verification Level</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select verification level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {verificationLevels.map((level) => (
+                        <SelectItem key={level.value} value={level.value}>
+                          <div>
+                            <div className="font-medium">{level.label}</div>
+                            <div className="text-xs text-muted-foreground">{level.description}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Station visits must meet this verification level to count toward this badge
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

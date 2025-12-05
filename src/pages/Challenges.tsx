@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { VERIFICATION_LEVEL_CONFIG, RequiredVerification } from "@/lib/challengeVerification";
+import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 
 interface Challenge {
   id: string;
@@ -327,19 +327,18 @@ export default function Challenges() {
                               </div>
                             </div>
                           )}
-                          {(() => {
-                            const verificationLevel = (challenge.required_verification || 'remote_verified') as RequiredVerification;
-                            const config = VERIFICATION_LEVEL_CONFIG[verificationLevel];
-                            return (
-                              <div className="flex items-center gap-2">
-                                <Shield className={`w-4 h-4 ${config.color}`} />
-                                <div className="text-sm">
-                                  <p className="text-muted-foreground">Verification</p>
-                                  <p className={`font-semibold ${config.color}`}>{config.shortLabel}</p>
-                                </div>
-                              </div>
-                            );
-                          })()}
+                          <div className="flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-muted-foreground" />
+                            <div className="text-sm">
+                              <p className="text-muted-foreground">Verification</p>
+                              <VerificationLevelBadge 
+                                level={challenge.required_verification} 
+                                compact 
+                                showIcon={false}
+                                showTooltip={false}
+                              />
+                            </div>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button className="flex-1" onClick={() => handleStartChallenge(challenge)}>
