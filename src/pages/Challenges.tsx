@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter, Award } from "lucide-react";
+import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter, Award, Target, Zap } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 import { CHALLENGE_TYPE_CONFIG } from "@/lib/challengeVerification";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { StatCard } from "@/components/StatCard";
+import { isThisMonth } from "date-fns";
 
 interface Challenge {
   id: string;
@@ -328,12 +330,53 @@ export default function Challenges() {
     userAttempts.filter((a) => a.status === "completed").map((a) => a.challenge_id)
   );
 
+  // Calculate stats
+  const completedCount = completedChallengeIds.size;
+  const totalChallenges = challenges.length;
+  const availableCount = totalChallenges - completedCount;
+  const completionPercentage = totalChallenges ? Math.round((completedCount / totalChallenges) * 100) : 0;
+  const thisMonthCount = userAttempts.filter(
+    a => a.status === "completed" && isThisMonth(new Date(a.completed_at))
+  ).length;
+
   return (
     <AppLayout>
       <div className="max-w-6xl mx-auto">
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-black mb-2">Challenges</h1>
           <p className="text-muted-foreground">Test yourself with official and community challenges</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <StatCard
+            icon={Trophy}
+            label="Completed"
+            value={completedCount}
+            iconColor="text-green-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Target}
+            label="Available"
+            value={availableCount}
+            iconColor="text-gray-400"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Award}
+            label="Completion"
+            value={`${completionPercentage}%`}
+            iconColor="text-purple-500"
+            loading={isLoading}
+          />
+          <StatCard
+            icon={Zap}
+            label="This Month"
+            value={thisMonthCount}
+            iconColor="text-yellow-500"
+            loading={isLoading}
+          />
         </div>
 
         {/* Friends Activity Preview */}
