@@ -308,9 +308,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 7, 2.5],
-          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 18, 7],
-          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 27, 11]
+          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 4, 2.5],
+          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 10.5, 7],
+          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 16.5, 11]
         ],
         'circle-color': [
           'case',
@@ -514,14 +514,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
     console.log(`🗺️ Updated ${updatedFeatures.filter(f => f.properties.sequence > 0).length} stations with sequence numbers`);
 
     // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
-    // Visited stations (red) are significantly larger than unvisited
+    // Visited stations (red) are 1.5x larger than unvisited
     map.current.setPaintProperty('stations', 'circle-radius', [
       'interpolate',
       ['linear'],
       ['zoom'],
-      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 7, 2.5],
-      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 18, 7],
-      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 27, 11]
+      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 4, 2.5],
+      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 10.5, 7],
+      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 16.5, 11]
     ]);
 
     map.current.setPaintProperty('stations', 'circle-color', [
