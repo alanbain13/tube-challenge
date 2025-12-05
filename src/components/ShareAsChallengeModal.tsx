@@ -78,14 +78,24 @@ export function ShareAsChallengeModal({ open, onOpenChange, route, onSuccess }: 
         return;
       }
 
-      // Get metro_system_id from the first station
+      // Get metro_system_id - try from station first, fallback to London Underground
       const { data: stationData } = await supabase
         .from("stations")
         .select("metro_system_id")
         .eq("tfl_id", stationIds[0])
-        .single();
+        .maybeSingle();
 
-      const metroSystemId = stationData?.metro_system_id;
+      let metroSystemId = stationData?.metro_system_id;
+
+      // If station doesn't have metro_system_id, get London Underground as default
+      if (!metroSystemId) {
+        const { data: londonMetro } = await supabase
+          .from("metro_systems")
+          .select("id")
+          .eq("code", "london")
+          .maybeSingle();
+        metroSystemId = londonMetro?.id;
+      }
 
       if (!metroSystemId) {
         toast({
