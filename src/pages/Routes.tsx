@@ -79,7 +79,7 @@ const Routes = () => {
   // Fetch user's own routes
   const { data: myRoutes = [], isLoading: isLoadingMyRoutes, refetch: refetchMyRoutes } = useQuery({
     queryKey: ["my-routes", user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<RouteWithStations[]> => {
       const { data, error } = await supabase
         .from("routes")
         .select(`
@@ -90,7 +90,10 @@ const Routes = () => {
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as RouteWithStations[];
+      return (data || []).map(route => ({
+        ...route,
+        profiles: null,
+      }));
     },
     enabled: !!user,
   });
@@ -114,7 +117,7 @@ const Routes = () => {
   // Fetch shared routes from friends
   const { data: sharedRoutes = [], isLoading: isLoadingShared, refetch: refetchShared } = useQuery({
     queryKey: ["shared-routes", friendsList],
-    queryFn: async () => {
+    queryFn: async (): Promise<RouteWithStations[]> => {
       if (friendsList.length === 0) return [];
       
       const { data, error } = await supabase
@@ -142,7 +145,7 @@ const Routes = () => {
       return (data || []).map(route => ({
         ...route,
         profiles: profileMap.get(route.user_id) || null
-      })) as RouteWithStations[];
+      }));
     },
     enabled: friendsList.length > 0,
   });
