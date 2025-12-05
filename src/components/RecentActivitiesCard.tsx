@@ -25,8 +25,8 @@ export function RecentActivitiesCard({ activities, loading }: RecentActivitiesCa
     return (
       <Card className="col-span-1">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Activity className="w-4 h-4" />
             Recent Activities
           </CardTitle>
         </CardHeader>
@@ -45,8 +45,8 @@ export function RecentActivitiesCard({ activities, loading }: RecentActivitiesCa
     <Card className="col-span-1">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Activity className="w-4 h-4" />
             Recent Activities
           </CardTitle>
           <Button 
@@ -72,8 +72,8 @@ export function RecentActivitiesCard({ activities, loading }: RecentActivitiesCa
               onClick={() => navigate(`/activities/${activity.id}`)}
               className="w-full flex items-center gap-3 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors text-left"
             >
-              <div className="p-1.5 rounded-md bg-primary/10">
-                <Activity className="w-3.5 h-3.5 text-primary" />
+              <div className="p-1.5 rounded-md bg-muted">
+                <Activity className="w-3.5 h-3.5 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground truncate">
