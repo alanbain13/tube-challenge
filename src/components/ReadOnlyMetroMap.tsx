@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import emptyRoundel from "@/assets/roundel-empty.svg";
-import filledRoundel from "@/assets/roundel-filled.svg";
+import { Card } from "@/components/ui/card";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || localStorage.getItem('mapbox_token') || '';
 
@@ -38,18 +37,24 @@ interface ReadOnlyMetroMapProps {
   verifiedVisits: string[]; // Array of station tfl_ids
   center?: [number, number];
   zoom?: number;
+  showLegend?: boolean;
 }
 
 export default function ReadOnlyMetroMap({ 
   stations, 
   verifiedVisits,
   center = [-0.1276, 51.5074],
-  zoom = 10
+  zoom = 10,
+  showLegend = true
 }: ReadOnlyMetroMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [lineFeatures, setLineFeatures] = useState<any[]>([]);
+  const networkBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);
+
+  const visitedCount = verifiedVisits.length;
+  const notVisitedCount = stations.length - visitedCount;
 
   // Load tube lines from GeoJSON
   useEffect(() => {
@@ -77,6 +82,37 @@ export default function ReadOnlyMetroMap({
     loadLinesFromGeoJSON();
   }, []);
 
+  // Simple custom control to fit to full network extent
+  class FitBoundsControl implements mapboxgl.IControl {
+    private _map?: mapboxgl.Map;
+    private _container?: HTMLDivElement;
+
+    onAdd(map: mapboxgl.Map) {
+      this._map = map;
+      const container = document.createElement('div');
+      container.className = 'mapboxgl-ctrl-group mapboxgl-ctrl';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'mapboxgl-ctrl-icon';
+      button.title = 'Fit to full extent';
+      button.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 9V3h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 9V3h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 15v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 15v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+      button.onclick = () => {
+        const b = networkBoundsRef.current;
+        if (this._map && b) this._map.fitBounds(b, { padding: 40, duration: 600 });
+      };
+      container.appendChild(button);
+      this._container = container;
+      return container;
+    }
+
+    onRemove() {
+      if (this._container && this._container.parentNode) {
+        this._container.parentNode.removeChild(this._container);
+      }
+      this._map = undefined;
+    }
+  }
+
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
@@ -91,9 +127,29 @@ export default function ReadOnlyMetroMap({
       center,
       zoom,
       accessToken: MAPBOX_TOKEN,
+      dragRotate: false,
+      pitchWithRotate: false,
     });
 
+    // Add navigation controls
+    map.current.addControl(
+      new mapboxgl.NavigationControl({
+        visualizePitch: true,
+      }),
+      'top-right'
+    );
+
+    map.current.scrollZoom.enable();
+
     map.current.on("load", () => {
+      // Hide POIs and road labels for cleaner map
+      const styleLayers = map.current!.getStyle().layers;
+      styleLayers?.forEach((l) => {
+        if (l.type === 'symbol' && (l.id.includes('poi') || l.id.includes('road'))) {
+          try { map.current!.setLayoutProperty(l.id, 'visibility', 'none'); } catch {}
+        }
+      });
+
       setMapLoaded(true);
     });
 
@@ -150,13 +206,25 @@ export default function ReadOnlyMetroMap({
     });
   }, [mapLoaded, lineFeatures]);
 
-  // Add station markers as GeoJSON layers
+  // Add station markers as GeoJSON layers (AFTER lines so they appear on top)
   useEffect(() => {
     if (!map.current || !mapLoaded || stations.length === 0) return;
+
+    // Wait for lines to be added first
+    const timer = setTimeout(() => {
+      addStationsToMap();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [mapLoaded, stations, verifiedVisits, lineFeatures]);
+
+  const addStationsToMap = () => {
+    if (!map.current) return;
 
     const sourceId = 'stations';
     const visitedLayerId = 'visited-stations';
     const unvisitedLayerId = 'unvisited-stations';
+    const labelsLayerId = 'station-labels';
 
     // Create GeoJSON from stations
     const stationsGeoJSON = {
@@ -169,6 +237,7 @@ export default function ReadOnlyMetroMap({
         },
         properties: {
           id: station.id,
+          name: station.name,
           displayName: station.displayName,
           zone: station.zone,
           lines: station.lines,
@@ -176,6 +245,11 @@ export default function ReadOnlyMetroMap({
         }
       }))
     };
+
+    // Compute network bounds and add fit control
+    const b = new mapboxgl.LngLatBounds();
+    stations.forEach((s) => b.extend([s.coordinates[0], s.coordinates[1]]));
+    networkBoundsRef.current = b;
 
     try {
       const source = map.current.getSource(sourceId) as mapboxgl.GeoJSONSource;
@@ -190,14 +264,14 @@ export default function ReadOnlyMetroMap({
           data: stationsGeoJSON
         });
 
-        // Add visited stations layer (filled red circles)
+        // Add visited stations layer (filled red circles) - ON TOP of lines
         map.current.addLayer({
           id: visitedLayerId,
           type: 'circle',
           source: sourceId,
           filter: ['==', ['get', 'visited'], true],
           paint: {
-            'circle-radius': 8,
+            'circle-radius': 7,
             'circle-color': '#E32017',
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff'
@@ -217,6 +291,36 @@ export default function ReadOnlyMetroMap({
             'circle-stroke-color': '#E32017'
           }
         });
+
+        // Add station name labels
+        map.current.addLayer({
+          id: labelsLayerId,
+          type: 'symbol',
+          source: sourceId,
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 11,
+            'text-anchor': 'top',
+            'text-offset': [0, 1.2],
+            'text-max-width': 8,
+            'text-allow-overlap': false,
+            'text-ignore-placement': false
+          },
+          paint: {
+            'text-color': '#333333',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 1.5
+          }
+        });
+
+        // Add fit bounds control
+        map.current.addControl(new FitBoundsControl(), 'top-left');
+
+        // Fit to bounds initially
+        if (!b.isEmpty()) {
+          map.current.fitBounds(b, { padding: 40, duration: 0 });
+        }
 
         // Add click handlers for both layers
         [visitedLayerId, unvisitedLayerId].forEach(layerId => {
@@ -268,9 +372,32 @@ export default function ReadOnlyMetroMap({
     } catch (error) {
       console.error('Error adding station layers:', error);
     }
-  }, [mapLoaded, stations, verifiedVisits]);
+  };
 
   return (
-    <div ref={mapContainer} className="w-full h-full min-h-[500px] rounded-lg" />
+    <div className="relative w-full h-full min-h-[500px]">
+      <div ref={mapContainer} className="w-full h-full min-h-[500px] rounded-lg" />
+      
+      {/* Legend */}
+      {showLegend && (
+        <Card className="absolute bottom-4 left-4 p-3 bg-background/95 backdrop-blur-sm shadow-md z-10">
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#E32017] border-2 border-white shadow-sm"></span>
+              <span className="text-muted-foreground">Visited</span>
+              <span className="font-medium ml-auto">{visitedCount}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-white border-[3px] border-[#E32017]"></span>
+              <span className="text-muted-foreground">Not Visited</span>
+              <span className="font-medium ml-auto">{notVisitedCount}</span>
+            </div>
+            <div className="pt-1 border-t text-xs text-muted-foreground">
+              {stations.length} stations total
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }
