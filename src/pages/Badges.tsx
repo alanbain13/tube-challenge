@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BadgeIcon } from "@/components/admin/IconPicker";
+import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 
 interface BadgeData {
   id: string;
@@ -24,6 +25,7 @@ interface BadgeData {
     zone?: string;
     line?: string;
     time_limit_minutes?: number;
+    required_verification?: string;
   } | null;
 }
 
@@ -582,6 +584,15 @@ export default function Badges() {
                     <p className="text-sm text-muted-foreground px-2">
                       {userBadge.badge.description}
                     </p>
+                    {userBadge.badge.criteria?.required_verification && (
+                      <div className="flex justify-center">
+                        <VerificationLevelBadge 
+                          level={userBadge.badge.criteria.required_verification} 
+                          compact 
+                          showTooltip 
+                        />
+                      </div>
+                    )}
                     {userBadge.completion_time_minutes && (
                       <p className="text-xs text-primary font-medium">
                         Completed in {Math.floor(userBadge.completion_time_minutes / 60)}h {userBadge.completion_time_minutes % 60}m
@@ -626,6 +637,15 @@ export default function Badges() {
                           <p className="text-sm text-muted-foreground px-2">
                             {badge.description}
                           </p>
+                          {(badge.criteria as BadgeData['criteria'])?.required_verification && (
+                            <div className="flex justify-center">
+                              <VerificationLevelBadge 
+                                level={(badge.criteria as BadgeData['criteria'])?.required_verification} 
+                                compact 
+                                showTooltip 
+                              />
+                            </div>
+                          )}
                           {progress && (
                             <div className="px-4 pt-2 space-y-2">
                               <Progress value={progress.percentage} className="h-2" />
