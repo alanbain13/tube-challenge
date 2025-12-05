@@ -828,6 +828,7 @@ const ActivityDetail = () => {
                   visits={mapVisits}
                   activityMode={counts.planned_total > 0 ? 'planned' : 'unplanned'}
                   isSequenced={challenge?.is_sequenced !== false}
+                  hideSequenceList={true}
                 />
               </div>
               {/* Map Legend */}
