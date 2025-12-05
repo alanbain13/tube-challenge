@@ -718,7 +718,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
               type: 'line',
               source: 'preview-path',
               paint: {
-                'line-color': '#dc143c', // Crimson red for planned preview (same as visited path)
+                'line-color': '#4169e1', // Blue for planned preview (same as planned station dots)
                 'line-width': 4,
                 'line-opacity': 0.7,
                 'line-dasharray': [4, 6] // Short dashes for clear dotted appearance
