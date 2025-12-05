@@ -76,10 +76,10 @@ export function RecentActivitiesCard({ activities, loading }: RecentActivitiesCa
                 <Activity className="w-3.5 h-3.5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="text-xs font-medium text-foreground truncate">
                   {activity.title || "Untitled Activity"}
                 </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="w-3 h-3" />
                   <span>{format(new Date(activity.started_at), "MMM d")}</span>
                   <span>·</span>
