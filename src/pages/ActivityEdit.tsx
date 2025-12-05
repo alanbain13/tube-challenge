@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -51,6 +52,7 @@ const ActivityEdit = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof activitySchema>>({
     resolver: zodResolver(activitySchema),
@@ -136,7 +138,10 @@ const ActivityEdit = () => {
         description: 'Activity updated successfully!',
       });
       
-      navigate(`/activities/${activity.id}`);
+      // Invalidate caches for immediate thumbnail refresh
+      await queryClient.invalidateQueries({ queryKey: ['activity-extra-photos', 'activity', activity.id] });
+      await queryClient.invalidateQueries({ queryKey: ['activities'] });
+      navigate('/activities');
       
     } catch (error) {
       console.error('Error saving activity:', error);
@@ -151,7 +156,9 @@ const ActivityEdit = () => {
   };
 
   const handleCancel = () => {
-    navigate(`/activities/${activityId}`);
+    queryClient.invalidateQueries({ queryKey: ['activity-extra-photos', 'activity', activityId] });
+    queryClient.invalidateQueries({ queryKey: ['activities'] });
+    navigate('/activities');
   };
 
   // SEO
