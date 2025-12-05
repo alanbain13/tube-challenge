@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/StatCard";
 import { Progress } from "@/components/ui/progress";
-import { Award, Trophy, Zap, Target, Medal, TrendingUp } from "lucide-react";
+import { Award, Trophy, Zap, Target, Medal, TrendingUp, MapPinCheck, Camera, Globe, Filter } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, isThisMonth } from "date-fns";
@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BadgeIcon } from "@/components/admin/IconPicker";
 import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 interface BadgeData {
   id: string;
@@ -61,6 +63,8 @@ interface LeaderboardEntry {
 }
 
 export default function Badges() {
+  const [verificationFilter, setVerificationFilter] = useState<string | null>(null);
+
   // Get current user
   const { data: currentUser } = useQuery({
     queryKey: ["current-user"],
@@ -336,8 +340,30 @@ export default function Badges() {
   // Get earned badge IDs
   const earnedBadgeIds = new Set(userBadges?.map(ub => ub.badge_id) || []);
   
-  // Get unearned badges grouped by badge type
-  const unearnedBadges = allBadges?.filter(badge => !earnedBadgeIds.has(badge.id)) || [];
+  // Filter function for verification level
+  const matchesVerificationFilter = (criteria: BadgeData['criteria']) => {
+    if (!verificationFilter) return true;
+    const badgeVerification = criteria?.required_verification || 'remote_verified';
+    
+    if (verificationFilter === 'location_verified') {
+      return badgeVerification === 'location_verified';
+    }
+    if (verificationFilter === 'photo_verified') {
+      return badgeVerification === 'location_verified' || badgeVerification === 'photo_verified';
+    }
+    // remote_verified shows all
+    return true;
+  };
+  
+  // Filter earned badges
+  const filteredUserBadges = userBadges?.filter(ub => 
+    matchesVerificationFilter(ub.badge.criteria)
+  ) || [];
+  
+  // Get unearned badges grouped by badge type (with filter)
+  const unearnedBadges = allBadges?.filter(badge => 
+    !earnedBadgeIds.has(badge.id) && matchesVerificationFilter(badge.criteria as BadgeData['criteria'])
+  ) || [];
   
   const badgeTypeLabels: Record<string, string> = {
     milestone: "Milestone Badges",
@@ -550,11 +576,64 @@ export default function Badges() {
           </Card>
         )}
 
+        {/* Verification Filter */}
+        <Card className="mb-8">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Filter className="w-4 h-4" />
+                <span>Filter by Verification:</span>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant={!verificationFilter ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setVerificationFilter(null)}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={verificationFilter === 'location_verified' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setVerificationFilter('location_verified')}
+                  className="gap-1"
+                >
+                  <MapPinCheck className="w-3 h-3" />
+                  Location Only
+                </Button>
+                <Button
+                  variant={verificationFilter === 'photo_verified' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setVerificationFilter('photo_verified')}
+                  className="gap-1"
+                >
+                  <Camera className="w-3 h-3" />
+                  Photo+
+                </Button>
+                <Button
+                  variant={verificationFilter === 'remote_verified' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setVerificationFilter('remote_verified')}
+                  className="gap-1"
+                >
+                  <Globe className="w-3 h-3" />
+                  Remote+
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Badges Section */}
         <div className="mb-6">
           <h2 className="text-2xl font-semibold flex items-center gap-2">
             <Award className="w-6 h-6 text-orange-500" />
             Your Badges
+            {verificationFilter && (
+              <Badge variant="secondary" className="text-xs ml-2">
+                {filteredUserBadges.length} shown
+              </Badge>
+            )}
           </h2>
         </div>
 
@@ -562,16 +641,20 @@ export default function Badges() {
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading your badges...</p>
           </div>
-        ) : !userBadges || userBadges.length === 0 ? (
+        ) : filteredUserBadges.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <Award className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Complete challenges to earn badges!</p>
+              <p className="text-muted-foreground">
+                {verificationFilter 
+                  ? "No badges match this verification filter" 
+                  : "Complete challenges to earn badges!"}
+              </p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {userBadges.map((userBadge) => {
+            {filteredUserBadges.map((userBadge) => {
               return (
                 <Card key={userBadge.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                   <CardContent className="pt-8 pb-6 text-center space-y-4">
