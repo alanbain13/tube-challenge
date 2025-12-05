@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { getThumbnailFromCache, saveThumbnailToCache } from '@/lib/thumbnailCache';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
 import roundelFilled from '@/assets/roundel-filled.svg';
+import { ImageIcon } from 'lucide-react';
 
 interface RoundelThumbnailStripProps {
   type: 'activity' | 'route';
@@ -18,10 +19,17 @@ interface ThumbnailData {
   needsGeneration?: boolean;
 }
 
+interface ExtraPhoto {
+  id: string;
+  photo_url: string;
+  thumb_url: string | null;
+}
+
 export const RoundelThumbnailStrip = ({ type, id }: RoundelThumbnailStripProps) => {
   const { stations } = useStations();
   const [generatedThumbs, setGeneratedThumbs] = useState<Map<string, string>>(new Map());
 
+  // Fetch roundel thumbnails
   const { data: thumbnails = [] } = useQuery({
     queryKey: ['roundel-thumbnails', type, id],
     queryFn: async () => {
@@ -79,6 +87,26 @@ export const RoundelThumbnailStrip = ({ type, id }: RoundelThumbnailStripProps) 
     staleTime: 30000
   });
 
+  // Fetch additional activity photos (only for activities)
+  const { data: extraPhotos = [] } = useQuery({
+    queryKey: ['activity-extra-photos', type, id],
+    queryFn: async () => {
+      if (type !== 'activity') return [];
+      
+      const { data, error } = await supabase
+        .from('activity_photos')
+        .select('id, photo_url, thumb_url')
+        .eq('activity_id', id)
+        .order('sequence_number', { ascending: true })
+        .limit(3);
+
+      if (error) throw error;
+      return (data || []) as ExtraPhoto[];
+    },
+    enabled: !!id && type === 'activity',
+    staleTime: 30000
+  });
+
   // Generate missing thumbnails asynchronously
   useEffect(() => {
     const generateMissingThumbnails = async () => {
@@ -119,16 +147,19 @@ export const RoundelThumbnailStrip = ({ type, id }: RoundelThumbnailStripProps) 
     }
   }, [thumbnails, generatedThumbs]);
 
-  // Fill remaining slots with placeholders
-  const placeholderCount = Math.max(0, 3 - thumbnails.length);
-  const placeholders = Array(placeholderCount).fill(null);
+  // Calculate placeholder count for roundels
+  const roundelPlaceholderCount = Math.max(0, 3 - thumbnails.length);
+  const roundelPlaceholders = Array(roundelPlaceholderCount).fill(null);
   
-  if (placeholderCount > 0) {
-    console.log('[Tile.Thumb.PlaceholderUsed]', placeholderCount);
+  if (roundelPlaceholderCount > 0) {
+    console.log('[Tile.Thumb.PlaceholderUsed]', roundelPlaceholderCount);
   }
+
+  const hasExtraPhotos = extraPhotos.length > 0;
 
   return (
     <div className="flex items-center gap-1.5 mt-2">
+      {/* Roundel photos section */}
       {thumbnails.map((thumb, idx) => {
         const displayUrl = thumb.url || (thumb.visitId ? generatedThumbs.get(thumb.visitId) : null);
         
@@ -136,6 +167,7 @@ export const RoundelThumbnailStrip = ({ type, id }: RoundelThumbnailStripProps) 
           <div 
             key={`thumb-${idx}`}
             className="relative w-7 h-7 rounded-md border border-border/50 overflow-hidden bg-muted"
+            title={`Roundel: ${thumb.stationName}`}
           >
             {displayUrl ? (
               <img
@@ -159,7 +191,7 @@ export const RoundelThumbnailStrip = ({ type, id }: RoundelThumbnailStripProps) 
           </div>
         );
       })}
-      {placeholders.map((_, idx) => (
+      {roundelPlaceholders.map((_, idx) => (
         <div 
           key={`placeholder-${idx}`}
           className="relative w-7 h-7 rounded-md border border-border/30 bg-muted/30 flex items-center justify-center"
@@ -171,6 +203,33 @@ export const RoundelThumbnailStrip = ({ type, id }: RoundelThumbnailStripProps) 
           />
         </div>
       ))}
+
+      {/* Separator and extra photos section */}
+      {hasExtraPhotos && (
+        <>
+          <div className="w-px h-5 bg-border/50 mx-0.5" />
+          {extraPhotos.map((photo) => (
+            <div 
+              key={photo.id}
+              className="relative w-7 h-7 rounded-md border border-primary/30 overflow-hidden bg-muted"
+              title="Additional photo"
+            >
+              <img
+                src={photo.thumb_url || photo.photo_url}
+                alt="Activity photo"
+                loading="lazy"
+                width={28}
+                height={28}
+                className="w-full h-full object-cover"
+              />
+              {/* Small camera icon overlay */}
+              <div className="absolute bottom-0 right-0 p-0.5 bg-primary/80 rounded-tl">
+                <ImageIcon className="w-2 h-2 text-primary-foreground" />
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 };
