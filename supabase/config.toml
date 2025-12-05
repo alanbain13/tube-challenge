@@ -59,22 +59,22 @@ enabled = true
 inspector_port = 8083
 
 [functions.fetch-tfl-stations]
-verify_jwt = false
+verify_jwt = true
 
 [functions.upload-stations]
-verify_jwt = false
+verify_jwt = true
 
 [functions.verify-roundel]
 verify_jwt = true
 
 [functions.update-station-zones]
-verify_jwt = false
+verify_jwt = true
 
 [functions.sync-stations-from-geojson]
-verify_jwt = false
+verify_jwt = true
 
 [functions.seed-challenges]
-verify_jwt = false
+verify_jwt = true
 
 [functions.evaluate-badges]
 verify_jwt = true

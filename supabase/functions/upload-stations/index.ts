@@ -13,7 +13,6 @@ interface StationData {
   longitude: number;
   zone: string | number;
   lines: string[];
-  // Support various field name variations
   station_name?: string;
   lat?: number;
   lng?: number;
@@ -41,6 +40,22 @@ function processStationData(data: any[], source: string = 'uploaded'): any[] {
   })).filter(station => station.latitude !== 0 && station.longitude !== 0);
 }
 
+async function verifyAdminRole(supabase: any, userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('role', 'admin')
+    .maybeSingle();
+  
+  if (error) {
+    console.error('Error checking admin role:', error);
+    return false;
+  }
+  
+  return !!data;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -51,7 +66,42 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Create client with service key for admin operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Extract and verify JWT from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Missing or invalid authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify the JWT and get user
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify user has admin role
+    const isAdmin = await verifyAdminRole(supabaseAdmin, user.id);
+    if (!isAdmin) {
+      console.error('User is not admin:', user.id);
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Admin role required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Admin user ${user.id} authorized for upload-stations`);
 
     const { stationsData } = await req.json();
     
@@ -74,10 +124,10 @@ Deno.serve(async (req) => {
 
     // Clear existing mappings and stations, then insert new ones
     // 1) Clear mapping table
-    const { error: deleteMapError } = await supabase
+    const { error: deleteMapError } = await supabaseAdmin
       .from('station_id_mapping')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all mappings
+      .neq('id', '00000000-0000-0000-0000-000000000000');
 
     if (deleteMapError) {
       console.error('❌ Error clearing station_id_mapping:', deleteMapError);
@@ -85,10 +135,10 @@ Deno.serve(async (req) => {
     }
 
     // 2) Clear stations table
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('stations')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all stations
+      .neq('id', '00000000-0000-0000-0000-000000000000');
     
     if (deleteError) {
       console.error('❌ Error clearing stations:', deleteError);
@@ -105,7 +155,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < processedStations.length; i += batchSize) {
       const batch = processedStations.slice(i, i + batchSize);
       
-      const { data: inserted, error: insertError } = await supabase
+      const { data: inserted, error: insertError } = await supabaseAdmin
         .from('stations')
         .insert(batch)
         .select('id, tfl_id');
@@ -122,7 +172,7 @@ Deno.serve(async (req) => {
       }));
 
       if (mappingBatch.length > 0) {
-        const { error: mappingError } = await supabase
+        const { error: mappingError } = await supabaseAdmin
           .from('station_id_mapping')
           .insert(mappingBatch);
 
