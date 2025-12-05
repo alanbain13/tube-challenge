@@ -5,8 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ImagePlus, X, Camera, Check } from 'lucide-react';
+import { Camera, Upload, X, Check, Loader2 } from 'lucide-react';
 
 interface ActivityPhoto {
   id: string;
@@ -23,11 +22,6 @@ interface ActivityPhotoManagerProps {
   activityId: string;
 }
 
-interface PreviewPhoto {
-  file: File;
-  previewUrl: string;
-}
-
 const MAX_PHOTOS = 10;
 
 export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ activityId }) => {
@@ -35,8 +29,12 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
   const [isUploading, setIsUploading] = useState(false);
-  const [previewPhoto, setPreviewPhoto] = useState<PreviewPhoto | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [isCamera, setIsCamera] = useState(false);
 
   // Fetch existing photos
   const { data: photos = [], isLoading } = useQuery({
@@ -62,12 +60,10 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
 
       // Delete from storage
       if (photo.photo_url) {
-        const path = photo.photo_url.split('/').slice(-2).join('/');
-        await supabase.storage.from('activity-photos').remove([path]);
-      }
-      if (photo.thumb_url) {
-        const thumbPath = photo.thumb_url.split('/').slice(-2).join('/');
-        await supabase.storage.from('activity-photos').remove([thumbPath]);
+        const urlParts = photo.photo_url.split('/activity-photos/');
+        if (urlParts[1]) {
+          await supabase.storage.from('activity-photos').remove([urlParts[1]]);
+        }
       }
 
       // Delete from database
@@ -89,6 +85,51 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
     }
   });
 
+  // Start camera
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setIsCamera(true);
+      }
+    } catch (error) {
+      toast({ 
+        title: 'Camera access denied', 
+        description: 'Please allow camera access or upload a photo instead.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Capture photo from camera
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      if (context) {
+        context.drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        setCapturedImage(imageData);
+        setIsCamera(false);
+        
+        // Stop camera stream
+        const stream = video.srcObject as MediaStream;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
+    }
+  };
+
+  // Handle file selection
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0 || !user) return;
@@ -103,10 +144,13 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
       return;
     }
 
-    // Take the first file and show preview
     const file = files[0];
-    const previewUrl = URL.createObjectURL(file);
-    setPreviewPhoto({ file, previewUrl });
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageData = e.target?.result as string;
+      setCapturedImage(imageData);
+    };
+    reader.readAsDataURL(file);
 
     // Reset input
     if (fileInputRef.current) {
@@ -114,32 +158,42 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
     }
   };
 
-  const handleCancelPreview = () => {
-    if (previewPhoto) {
-      URL.revokeObjectURL(previewPhoto.previewUrl);
+  // Cancel preview
+  const handleCancel = () => {
+    setCapturedImage(null);
+    
+    // Stop camera if active
+    if (videoRef.current) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
     }
-    setPreviewPhoto(null);
+    setIsCamera(false);
   };
 
+  // Save photo
   const handleSavePhoto = async () => {
-    if (!previewPhoto || !user) return;
+    if (!capturedImage || !user) return;
 
     setIsUploading(true);
 
     try {
-      const file = previewPhoto.file;
+      // Convert base64 to blob
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
       
       // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.jpg`;
       const filePath = `${user.id}/${activityId}/extras/${fileName}`;
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from('activity-photos')
-        .upload(filePath, file, { 
+        .upload(filePath, blob, { 
           cacheControl: '3600',
-          upsert: false 
+          upsert: false,
+          contentType: 'image/jpeg'
         });
 
       if (uploadError) throw uploadError;
@@ -168,9 +222,7 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
       queryClient.invalidateQueries({ queryKey: ['activity-extra-photos', 'activity', activityId] });
       toast({ title: 'Photo saved' });
 
-      // Clean up preview
-      URL.revokeObjectURL(previewPhoto.previewUrl);
-      setPreviewPhoto(null);
+      setCapturedImage(null);
 
     } catch (error) {
       console.error('Error uploading photo:', error);
@@ -199,28 +251,89 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Upload button */}
-          {canAddMore && (
-            <div className="flex justify-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-                disabled={isUploading}
-              />
-              <Button 
-                variant="outline" 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="gap-2"
+          {/* Camera Interface */}
+          {isCamera && (
+            <div className="space-y-3">
+              <video ref={videoRef} autoPlay playsInline className="w-full rounded-lg" />
+              <div className="flex gap-2">
+                <Button onClick={capturePhoto} className="flex-1">
+                  <Camera className="h-4 w-4 mr-2" />
+                  Capture
+                </Button>
+                <Button variant="outline" onClick={handleCancel}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Take/Load Photo Buttons */}
+          {canAddMore && !capturedImage && !isCamera && (
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={startCamera}
+                className="h-20 flex flex-col items-center justify-center gap-2"
+                variant="outline"
               >
-                <ImagePlus className="w-4 h-4" />
-                Add Photo
+                <Camera className="h-5 w-5" />
+                <span className="text-sm">Take Photo</span>
+              </Button>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                className="h-20 flex flex-col items-center justify-center gap-2"
+                variant="outline"
+              >
+                <Upload className="h-5 w-5" />
+                <span className="text-sm">Load Photo</span>
               </Button>
             </div>
           )}
+
+          {/* Captured Image Preview with Save/Cancel */}
+          {capturedImage && (
+            <div className="space-y-3">
+              <img 
+                src={capturedImage} 
+                alt="Captured photo" 
+                className="w-full rounded-lg"
+              />
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSavePhoto}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4 mr-2" />
+                      Save
+                    </>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={handleCancel} disabled={isUploading}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isUploading}
+          />
+
+          {/* Hidden canvas for camera capture */}
+          <canvas ref={canvasRef} className="hidden" />
 
           {/* Photo thumbnail grid */}
           {isLoading ? (
@@ -258,55 +371,6 @@ export const ActivityPhotoManager: React.FC<ActivityPhotoManagerProps> = ({ acti
           )}
         </CardContent>
       </Card>
-
-      {/* Preview Dialog */}
-      <Dialog open={!!previewPhoto} onOpenChange={(open) => !open && handleCancelPreview()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Preview Photo</DialogTitle>
-          </DialogHeader>
-          
-          {previewPhoto && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-full max-h-[60vh] overflow-hidden rounded-lg">
-                <img
-                  src={previewPhoto.previewUrl}
-                  alt="Preview"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="flex gap-2 sm:gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleCancelPreview}
-              disabled={isUploading}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSavePhoto}
-              disabled={isUploading}
-              className="flex-1 gap-2"
-            >
-              {isUploading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Save
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };

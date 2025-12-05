@@ -24,7 +24,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { ActivityPhotoManager } from '@/components/ActivityPhotoManager';
 
 const activitySchema = z.object({
@@ -150,6 +150,10 @@ const ActivityEdit = () => {
     }
   };
 
+  const handleCancel = () => {
+    navigate(`/activities/${activityId}`);
+  };
+
   // SEO
   useEffect(() => {
     document.title = `Edit ${activity?.title || 'Activity'} | Tube Challenge`;
@@ -177,38 +181,29 @@ const ActivityEdit = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex flex-col">
+      <div className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-lg mx-auto">
-          <header className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => navigate(`/activities/${activityId}`)}
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-              <h1 className="text-2xl font-bold text-foreground">Edit Activity</h1>
-            </div>
+          {/* Header */}
+          <header className="flex items-center gap-4 mb-8">
             <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => navigate(`/activities/${activityId}`)}
-              className="text-muted-foreground hover:text-foreground"
+              variant="outline" 
+              size="icon"
+              onClick={handleCancel}
             >
-              <X className="w-4 h-4 mr-1" />
-              Close
+              <ArrowLeft className="w-4 h-4" />
             </Button>
+            <h1 className="text-2xl font-bold text-foreground">Edit Activity</h1>
           </header>
 
+          {/* Activity Details Form */}
           <Card>
             <CardHeader>
               <CardTitle>Activity Details</CardTitle>
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form id="activity-edit-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
                     name="title"
@@ -236,20 +231,6 @@ const ActivityEdit = () => {
                       </FormItem>
                     )}
                   />
-
-                  <div className="flex gap-3 pt-4">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      className="flex-1"
-                      onClick={() => navigate(`/activities/${activityId}`)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="flex-1" disabled={isSubmitting}>
-                      {isSubmitting ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </div>
                 </form>
               </Form>
             </CardContent>
@@ -259,6 +240,30 @@ const ActivityEdit = () => {
           {activityId && (
             <ActivityPhotoManager activityId={activityId} />
           )}
+        </div>
+      </div>
+
+      {/* Page-level Cancel/Save Buttons - Sticky Footer */}
+      <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t border-border">
+        <div className="container mx-auto px-4 py-4">
+          <div className="max-w-lg mx-auto flex gap-3">
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="flex-1"
+              onClick={handleCancel}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              form="activity-edit-form"
+              className="flex-1 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
