@@ -23,6 +23,7 @@ interface RouteMapProps {
   activityStations?: string[]; // Complete list of stations in activity sequence
   activityMode?: 'planned' | 'unplanned'; // undefined = route creation/view mode
   isSequenced?: boolean; // For challenges: true = show sequence numbers, false = hide them
+  hideSequenceList?: boolean; // Hide the route sequence list below the map
 }
 
 const RouteMap: React.FC<RouteMapProps> = ({
@@ -35,7 +36,8 @@ const RouteMap: React.FC<RouteMapProps> = ({
   visits = [],
   activityStations = [],
   activityMode, // undefined for route creation/view mode
-  isSequenced = true // default to showing sequence numbers
+  isSequenced = true, // default to showing sequence numbers
+  hideSequenceList = false // default to showing the sequence list
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -802,7 +804,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
         </CardContent>
       </Card>
 
-      {selectedStations.length > 0 && (
+      {selectedStations.length > 0 && !hideSequenceList && (
         <Card>
           <CardHeader>
             <CardTitle>Route Sequence ({selectedStations.length} stations)</CardTitle>
