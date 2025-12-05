@@ -308,9 +308,9 @@ const RouteMap: React.FC<RouteMapProps> = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          8, 2.5,
-          12, 7,
-          16, 11
+          8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 7, 2.5],
+          12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 18, 7],
+          16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 27, 11]
         ],
         'circle-color': [
           'case',
