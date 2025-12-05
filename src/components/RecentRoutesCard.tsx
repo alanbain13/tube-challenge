@@ -71,10 +71,10 @@ export function RecentRoutesCard({ routes, loading }: RecentRoutesCardProps) {
           <Button 
             variant="ghost" 
             size="sm" 
-            className="h-6 text-xs"
+            className="h-auto py-1 px-2 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => navigate('/routes')}
           >
-            See All
+            View All
             <ChevronRight className="w-3 h-3 ml-1" />
           </Button>
         </div>
