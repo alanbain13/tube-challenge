@@ -25,6 +25,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { ArrowLeft } from 'lucide-react';
+import { ActivityPhotoManager } from '@/components/ActivityPhotoManager';
 
 const activitySchema = z.object({
   title: z.string().min(2, {
@@ -242,6 +243,11 @@ const ActivityEdit = () => {
               </Form>
             </CardContent>
           </Card>
+
+          {/* Additional Photos Section */}
+          {activityId && (
+            <ActivityPhotoManager activityId={activityId} />
+          )}
         </div>
       </div>
     </div>

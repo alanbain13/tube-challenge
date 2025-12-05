@@ -235,6 +235,47 @@ export type Database = {
           },
         ]
       }
+      activity_photos: {
+        Row: {
+          activity_id: string
+          caption: string | null
+          created_at: string
+          id: string
+          photo_url: string
+          sequence_number: number
+          thumb_url: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          caption?: string | null
+          created_at?: string
+          id?: string
+          photo_url: string
+          sequence_number?: number
+          thumb_url?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          caption?: string | null
+          created_at?: string
+          id?: string
+          photo_url?: string
+          sequence_number?: number
+          thumb_url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_photos_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activity_plan_item: {
         Row: {
           activity_id: string
