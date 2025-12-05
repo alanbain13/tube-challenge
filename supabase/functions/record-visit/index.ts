@@ -301,12 +301,69 @@ serve(async (req) => {
   }
 
   try {
+    // Verify JWT and extract authenticated user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('🚨 Missing or invalid Authorization header');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Authentication required',
+          error_code: 'unauthorized'
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('🚨 Authentication failed:', authError?.message);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Invalid or expired token',
+          error_code: 'unauthorized'
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
     const visitData: RecordVisitRequest = await req.json();
+    
+    // Verify that the authenticated user matches the request user_id
+    if (visitData.user_id && visitData.user_id !== user.id) {
+      console.error('🚨 User ID mismatch:', { 
+        authenticated: user.id, 
+        requested: visitData.user_id 
+      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'User ID does not match authenticated user',
+          error_code: 'forbidden'
+        }),
+        { 
+          status: 403, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Use authenticated user ID (ignore any user_id in request body for security)
+    const authenticatedUserId = user.id;
     
     console.log('🎯 Record Visit Request:', {
       activity_id: visitData.activity_id,
       station_tfl_id: visitData.station_tfl_id,
-      user_id: visitData.user_id,
+      user_id: authenticatedUserId,
       ocr_passed: visitData.ocr_passed,
       exif_time_present: visitData.exif_time_present,
       exif_gps_present: visitData.exif_gps_present,
@@ -314,11 +371,11 @@ serve(async (req) => {
     });
 
     // Validate required fields
-    if (!visitData.activity_id || !visitData.station_tfl_id || !visitData.user_id) {
+    if (!visitData.activity_id || !visitData.station_tfl_id) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: activity_id, station_tfl_id, user_id',
+          error: 'Missing required fields: activity_id, station_tfl_id',
           error_code: 'missing_fields'
         }),
         { 
@@ -338,7 +395,7 @@ serve(async (req) => {
       .select('id, visited_at, station_tfl_id')
       .eq('activity_id', visitData.activity_id)
       .eq('station_tfl_id', visitData.station_tfl_id)
-      .eq('user_id', visitData.user_id)
+      .eq('user_id', authenticatedUserId)
       .maybeSingle();
 
     if (existingVisit) {
@@ -491,7 +548,7 @@ serve(async (req) => {
       id: crypto.randomUUID(),
       activity_id: visitData.activity_id,
       station_tfl_id: visitData.station_tfl_id,
-      user_id: visitData.user_id,
+      user_id: authenticatedUserId,
       seq_actual: nextSeqActual,
       
       // New verification status system
