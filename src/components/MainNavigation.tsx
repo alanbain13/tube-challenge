@@ -64,7 +64,7 @@ export const MainNavigation = () => {
 
           {/* Desktop Navigation */}
           <TooltipProvider delayDuration={100}>
-            <div className="hidden lg:flex items-center gap-0.5 xl:gap-4">
+            <div className="hidden md:flex items-center gap-0.5 lg:gap-1 xl:gap-2">
               {navItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 const Icon = item.icon;
@@ -75,17 +75,17 @@ export const MainNavigation = () => {
                       <Link
                         to={item.path}
                         className={cn(
-                          "flex items-center gap-1.5 px-2 xl:px-3 py-2 text-sm font-medium transition-colors rounded-md",
+                          "flex items-center gap-1.5 px-1.5 md:px-2 lg:px-3 py-2 text-sm font-medium transition-colors rounded-md",
                           isActive
                             ? "text-foreground bg-accent/10"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted"
                         )}
                       >
                         <Icon className="w-4 h-4" />
-                        <span className="hidden xl:inline">{item.name}</span>
+                        <span className="hidden lg:inline">{item.name}</span>
                       </Link>
                     </TooltipTrigger>
-                    <TooltipContent className="xl:hidden">
+                    <TooltipContent className="lg:hidden">
                       {item.name}
                     </TooltipContent>
                   </Tooltip>
@@ -99,17 +99,17 @@ export const MainNavigation = () => {
                     <Link
                       to="/admin"
                       className={cn(
-                        "flex items-center gap-1.5 px-2 xl:px-3 py-2 text-sm font-medium transition-colors rounded-md",
+                        "flex items-center gap-1.5 px-1.5 md:px-2 lg:px-3 py-2 text-sm font-medium transition-colors rounded-md",
                         location.pathname === "/admin"
                           ? "text-foreground bg-accent/10"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted"
                       )}
                     >
                       <Shield className="w-4 h-4" />
-                      <span className="hidden xl:inline">Admin</span>
+                      <span className="hidden lg:inline">Admin</span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent className="xl:hidden">
+                  <TooltipContent className="lg:hidden">
                     Admin
                   </TooltipContent>
                 </Tooltip>
@@ -156,7 +156,7 @@ export const MainNavigation = () => {
           </TooltipProvider>
 
           {/* Mobile Navigation */}
-          <div className="lg:hidden flex items-center gap-2">
+          <div className="md:hidden flex items-center gap-2">
             {!loading && user && <NotificationBell />}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
