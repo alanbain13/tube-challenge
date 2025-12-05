@@ -30,6 +30,7 @@ import { BadgeCreateForm } from "@/components/admin/BadgeCreateForm";
 import { BadgeIcon } from "@/components/admin/IconPicker";
 import { UserSearchInput } from "@/components/admin/UserSearchInput";
 import { AppSettingsForm } from "@/components/admin/AppSettingsForm";
+import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 import type { Database as DB, Tables } from "@/integrations/supabase/types";
 
 type AppRole = DB["public"]["Enums"]["app_role"];
@@ -553,13 +554,14 @@ const Admin = () => {
                             <TableRow>
                               <TableHead>Badge</TableHead>
                               <TableHead>Criteria</TableHead>
+                              <TableHead>Verification</TableHead>
                               <TableHead>Description</TableHead>
                               <TableHead>Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {typeBadges.map((badge) => {
-                              const criteria = badge.criteria as { threshold?: number; zone?: string; line?: string; time_limit_minutes?: number } | null;
+                              const criteria = badge.criteria as { threshold?: number; zone?: string; line?: string; time_limit_minutes?: number; required_verification?: string } | null;
                               let criteriaText = '';
                               if (badgeType === 'milestone' && criteria?.threshold) {
                                 criteriaText = `${criteria.threshold} stations`;
@@ -581,6 +583,17 @@ const Admin = () => {
                                   </TableCell>
                                   <TableCell>
                                     <span className="text-sm font-mono">{criteriaText || '—'}</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    {criteria?.required_verification ? (
+                                      <VerificationLevelBadge 
+                                        level={criteria.required_verification} 
+                                        compact 
+                                        showTooltip 
+                                      />
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
                                   </TableCell>
                                   <TableCell>
                                     <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
