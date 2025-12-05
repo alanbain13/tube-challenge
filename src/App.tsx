@@ -25,6 +25,7 @@ import Metros from "@/pages/Metros";
 import MetroDetail from "@/pages/MetroDetail";
 import Challenges from "@/pages/Challenges";
 import ChallengeLeaderboardPage from "@/pages/ChallengeLeaderboardPage";
+import Leaderboards from "@/pages/Leaderboards";
 import Badges from "@/pages/Badges";
 import Friends from "@/pages/Friends";
 import Admin from "@/pages/Admin";
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/map" element={<MapPage />} />
             <Route path="/challenges" element={<Challenges />} />
             <Route path="/challenges/:id/leaderboard" element={<ChallengeLeaderboardPage />} />
+            <Route path="/leaderboards" element={<Leaderboards />} />
             <Route path="/badges" element={<Badges />} />
             <Route path="/friends" element={<Friends />} />
             <Route path="/activities/new" element={<ActivityNew />} />

@@ -241,13 +241,26 @@ const ActivityDetail = () => {
       const lastVisited = activityState.actual_visits?.[activityState.actual_visits.length - 1];
       const firstVisit = activityState.actual_visits?.[0];
 
+      // Calculate verification level from station visits (weakest link model)
+      let verificationLevel: string | null = null;
+      if (stationVisits && stationVisits.length > 0) {
+        const hasRemote = stationVisits.some(v => v.verification_status === 'remote_verified' || v.verification_status === 'pending' || !v.verification_status);
+        const hasPhoto = stationVisits.some(v => v.verification_status === 'photo_verified');
+        const allLocation = stationVisits.every(v => v.verification_status === 'location_verified');
+        
+        if (allLocation) verificationLevel = 'location_verified';
+        else if (!hasRemote && (hasPhoto || stationVisits.some(v => v.verification_status === 'location_verified'))) verificationLevel = 'photo_verified';
+        else verificationLevel = 'remote_verified';
+      }
+
       // Update the activity
       const { error } = await supabase
         .from("activities")
         .update({ 
           status: "completed",
           ended_at: endTime.toISOString(),
-          end_station_tfl_id: lastVisited?.station_tfl_id || activity.end_station_tfl_id
+          end_station_tfl_id: lastVisited?.station_tfl_id || activity.end_station_tfl_id,
+          verification_level: verificationLevel
         })
         .eq("id", activity.id);
 
