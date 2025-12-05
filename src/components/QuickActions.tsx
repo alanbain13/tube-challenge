@@ -1,4 +1,4 @@
-import { Activity, Zap, Map, ChevronRight } from "lucide-react";
+import { Activity, Trophy, Globe, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface QuickActionsProps {
@@ -42,13 +42,13 @@ export function QuickActions({ onStartActivity }: QuickActionsProps) {
         onClick={onStartActivity}
       />
       <ActionItem
-        icon={<Zap className="w-4 h-4" />}
+        icon={<Trophy className="w-4 h-4" />}
         title="Challenges"
         description="Test yourself"
         onClick={() => navigate('/challenges')}
       />
       <ActionItem
-        icon={<Map className="w-4 h-4" />}
+        icon={<Globe className="w-4 h-4" />}
         title="Explore Map"
         description="Find stations"
         onClick={() => navigate('/map')}
