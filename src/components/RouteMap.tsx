@@ -514,11 +514,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
     console.log(`🗺️ Updated ${updatedFeatures.filter(f => f.properties.sequence > 0).length} stations with sequence numbers`);
 
     // Update layer styles with visit status colors (red for visited, blue for planned, grey for others)
+    // Visited stations (red) are slightly larger than unvisited
     map.current.setPaintProperty('stations', 'circle-radius', [
-      'case',
-      ['>', ['get', 'sequence'], 0], // Only enlarge if showing sequence numbers
-      14,
-      7 // Fixed size for all other stations
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      8, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 3.5, 2.5],
+      12, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 9, 7],
+      16, ['case', ['any', ['==', ['get', 'visitStatus'], 'verified'], ['==', ['get', 'visitStatus'], 'pending']], 14, 11]
     ]);
 
     map.current.setPaintProperty('stations', 'circle-color', [
@@ -602,6 +605,17 @@ const RouteMap: React.FC<RouteMapProps> = ({
         'line-opacity': 0.8
       }
     });
+
+    // Move station layers to top so they render above the route line
+    if (map.current.getLayer('stations')) {
+      map.current.moveLayer('stations');
+    }
+    if (map.current.getLayer('station-numbers')) {
+      map.current.moveLayer('station-numbers');
+    }
+    if (map.current.getLayer('station-labels')) {
+      map.current.moveLayer('station-labels');
+    }
   };
 
   const addActivityPaths = () => {
@@ -713,6 +727,17 @@ const RouteMap: React.FC<RouteMapProps> = ({
           }
         }
       }
+    }
+
+    // Move station layers to top so they render above path lines
+    if (map.current.getLayer('stations')) {
+      map.current.moveLayer('stations');
+    }
+    if (map.current.getLayer('station-numbers')) {
+      map.current.moveLayer('station-numbers');
+    }
+    if (map.current.getLayer('station-labels')) {
+      map.current.moveLayer('station-labels');
     }
   };
 
