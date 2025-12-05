@@ -95,7 +95,7 @@ export function RecentRoutesCard({ routes, loading }: RecentRoutesCardProps) {
                 <Route className="w-3.5 h-3.5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="text-xs font-medium text-foreground truncate">
                   {route.name}
                 </p>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">

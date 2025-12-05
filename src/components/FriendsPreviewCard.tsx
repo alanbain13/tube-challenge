@@ -171,7 +171,7 @@ export function FriendsPreviewCard() {
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-foreground truncate">
+                <p className="text-xs font-medium text-foreground truncate">
                   {friend.display_name || 'Friend'}
                 </p>
               </div>
