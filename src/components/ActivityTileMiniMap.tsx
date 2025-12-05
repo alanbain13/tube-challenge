@@ -1,5 +1,6 @@
 import { MiniMapSnapshot } from './MiniMapSnapshot';
 import { RoundelGallery } from './RoundelGallery';
+import { ActivityExtraPhotos } from './ActivityExtraPhotos';
 import { useActivityState } from '@/hooks/useActivityState';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +59,7 @@ export const ActivityTileMiniMap = ({ activityId, updatedAt, challengeId }: Acti
         isSequenced={isSequenced}
       />
       <RoundelGallery type="activity" id={activityId} />
+      <ActivityExtraPhotos activityId={activityId} />
     </div>
   );
 };
