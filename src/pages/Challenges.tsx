@@ -32,6 +32,9 @@ interface Challenge {
   target_station_count: number | null;
   ranking_metric: string | null;
   required_verification: string | null;
+  created_by_user_id: string | null;
+  // Joined profile data for social challenges
+  profiles?: { display_name: string | null; username: string | null; avatar_url: string | null } | null;
 }
 
 interface ChallengeAttempt {
@@ -75,17 +78,35 @@ export default function Challenges() {
   const { user } = useAuth();
   const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>("all");
 
+  const [challengeFilter, setChallengeFilter] = useState<"all" | "official" | "social">("all");
+
   const { data: challenges = [], isLoading } = useQuery({
-    queryKey: ["challenges"],
+    queryKey: ["challenges", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch official challenges
+      const { data: officialChallenges, error: officialError } = await supabase
         .from("challenges")
         .select("*")
         .eq("is_official", true)
         .order("created_at", { ascending: true });
 
-      if (error) throw error;
-      return data as Challenge[];
+      if (officialError) throw officialError;
+
+      // Fetch social challenges (created by user or friends)
+      let socialChallenges: Challenge[] = [];
+      if (user?.id) {
+        const { data: social, error: socialError } = await supabase
+          .from("challenges")
+          .select("*, profiles:created_by_user_id(display_name, username, avatar_url)")
+          .eq("is_official", false)
+          .order("created_at", { ascending: false });
+
+        if (!socialError && social) {
+          socialChallenges = social as any;
+        }
+      }
+
+      return [...(officialChallenges || []), ...socialChallenges] as Challenge[];
     },
   });
 
@@ -317,8 +338,18 @@ export default function Challenges() {
     return { ...config, icon };
   };
 
-  // Filter challenges by verification level
+  // Get creator display name for social challenges
+  const getCreatorName = (challenge: Challenge) => {
+    return challenge.profiles?.display_name || challenge.profiles?.username || "Friend";
+  };
+
+  // Filter challenges by verification level and type (official/social)
   const filteredChallenges = challenges.filter(c => {
+    // Filter by challenge type (official/social)
+    if (challengeFilter === "official" && !c.is_official) return false;
+    if (challengeFilter === "social" && c.is_official) return false;
+
+    // Filter by verification level
     if (verificationFilter === "all") return true;
     const reqLevel = c.required_verification || "remote_verified";
     if (verificationFilter === "location_verified") return reqLevel === "location_verified";
@@ -437,9 +468,16 @@ export default function Challenges() {
           </TabsList>
 
           <TabsContent value="available" className="mt-6">
+            {/* Challenge Type Filter */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="text-sm text-muted-foreground mr-2 flex items-center"><Shield className="w-4 h-4 mr-1" />Type:</span>
+              <Button size="sm" variant={challengeFilter === "all" ? "default" : "outline"} onClick={() => setChallengeFilter("all")}>All</Button>
+              <Button size="sm" variant={challengeFilter === "official" ? "default" : "outline"} onClick={() => setChallengeFilter("official")}>Official</Button>
+              <Button size="sm" variant={challengeFilter === "social" ? "default" : "outline"} onClick={() => setChallengeFilter("social")}>Social</Button>
+            </div>
             {/* Verification Filter */}
             <div className="flex flex-wrap gap-2 mb-6">
-              <span className="text-sm text-muted-foreground mr-2 flex items-center"><Filter className="w-4 h-4 mr-1" />Filter:</span>
+              <span className="text-sm text-muted-foreground mr-2 flex items-center"><Filter className="w-4 h-4 mr-1" />Verification:</span>
               <Button size="sm" variant={verificationFilter === "all" ? "default" : "outline"} onClick={() => setVerificationFilter("all")}>All</Button>
               <Button size="sm" variant={verificationFilter === "location_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("location_verified")}>Location Only</Button>
               <Button size="sm" variant={verificationFilter === "photo_verified" ? "default" : "outline"} onClick={() => setVerificationFilter("photo_verified")}>Photo+</Button>
@@ -470,7 +508,18 @@ export default function Challenges() {
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              {challenge.is_official ? (
+                                <Badge variant="secondary" className="text-xs">
+                                  <Shield className="w-3 h-3 mr-1" />
+                                  Official
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs">
+                                  <Users className="w-3 h-3 mr-1" />
+                                  Social
+                                </Badge>
+                              )}
                               <Badge className={`${typeConfig.color} text-white`}>
                                 <TypeIcon className="w-3 h-3 mr-1" />
                                 {typeConfig.label}
@@ -481,7 +530,16 @@ export default function Challenges() {
                                 </Badge>
                               )}
                             </div>
-                            <CardTitle className="text-2xl mb-2">{challenge.name}</CardTitle>
+                            <CardTitle className="text-xl mb-1">{challenge.name}</CardTitle>
+                            {!challenge.is_official && challenge.profiles && (
+                              <div className="flex items-center gap-2 mb-2">
+                                <Avatar className="h-5 w-5">
+                                  <AvatarImage src={challenge.profiles.avatar_url || undefined} />
+                                  <AvatarFallback className="text-xs">{getCreatorName(challenge).charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-muted-foreground">by {getCreatorName(challenge)}</span>
+                              </div>
+                            )}
                             <CardDescription>{challenge.description}</CardDescription>
                           </div>
                         </div>
