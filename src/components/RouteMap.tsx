@@ -814,7 +814,7 @@ const RouteMap: React.FC<RouteMapProps> = ({
               {selectedStations.map((stationId, index) => (
                 <div key={stationId} className="flex items-center justify-between p-2 bg-secondary rounded">
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold">
+                    <span className="w-6 h-6 bg-challenge-blue text-white rounded-full flex items-center justify-center text-xs font-bold">
                       {index + 1}
                     </span>
                     <span className="font-medium">{getStationName(stationId)}</span>
