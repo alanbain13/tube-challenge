@@ -2,13 +2,13 @@ import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/StatCard";
 import { Progress } from "@/components/ui/progress";
-import { Award, Trophy, Zap, Target, Medal, TrendingUp, MapPinCheck, Camera, Globe, Filter } from "lucide-react";
+import { Award, Trophy, Zap, Target, Medal, TrendingUp, MapPinCheck, Camera, Globe, Filter, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, isThisMonth } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { BadgeIcon } from "@/components/admin/IconPicker";
 import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 import { Button } from "@/components/ui/button";
@@ -384,28 +384,13 @@ export default function Badges() {
     return acc;
   }, {} as Record<string, typeof unearnedBadges>);
 
-  // Sort leaderboard entries
+  // Sort leaderboard entries for compact preview
   const topByBadges = [...(leaderboardData || [])]
     .sort((a, b) => b.badge_count - a.badge_count)
-    .slice(0, 10);
-  
-  const topByChallenges = [...(leaderboardData || [])]
-    .sort((a, b) => b.challenge_count - a.challenge_count)
-    .slice(0, 10);
-  
-  const topBySpeed = [...(leaderboardData || [])]
-    .filter(e => e.fastest_time !== null)
-    .sort((a, b) => (a.fastest_time || Infinity) - (b.fastest_time || Infinity))
     .slice(0, 10);
 
   const getDisplayName = (profile?: Profile) => {
     return profile?.display_name || profile?.username || "Unknown User";
-  };
-
-  const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
   };
 
   return (
@@ -448,130 +433,50 @@ export default function Badges() {
           />
         </div>
 
-        {/* Friend Leaderboards */}
+        {/* Friends Preview - Compact */}
         {friendsList && friendsList.length > 0 && leaderboardData && leaderboardData.length > 0 && (
           <Card className="mb-12">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="w-6 h-6 text-yellow-500" />
-                Friend Leaderboards
-              </CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  Friends Activity
+                </CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => window.location.href = '/leaderboards'}
+                >
+                  View Global Leaderboards →
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="badges" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="badges">Most Badges</TabsTrigger>
-                  <TabsTrigger value="challenges">Most Challenges</TabsTrigger>
-                  <TabsTrigger value="speed">Fastest Times</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="badges" className="mt-6">
-                  <div className="space-y-3">
-                    {topByBadges.map((entry, index) => (
-                      <div
-                        key={entry.user_id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
-                            {index + 1}
-                          </div>
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={entry.profile?.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {getDisplayName(entry.profile).charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h3 className="font-semibold">{getDisplayName(entry.profile)}</h3>
-                            {entry.user_id === currentUser?.id && (
-                              <Badge variant="secondary" className="text-xs">You</Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Award className="w-5 h-5 text-orange-500" />
-                          <span className="font-bold text-lg">{entry.badge_count}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="challenges" className="mt-6">
-                  <div className="space-y-3">
-                    {topByChallenges.map((entry, index) => (
-                      <div
-                        key={entry.user_id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
-                            {index + 1}
-                          </div>
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={entry.profile?.avatar_url || undefined} />
-                            <AvatarFallback>
-                              {getDisplayName(entry.profile).charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h3 className="font-semibold">{getDisplayName(entry.profile)}</h3>
-                            {entry.user_id === currentUser?.id && (
-                              <Badge variant="secondary" className="text-xs">You</Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Trophy className="w-5 h-5 text-purple-500" />
-                          <span className="font-bold text-lg">{entry.challenge_count}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="speed" className="mt-6">
-                  <div className="space-y-3">
-                    {topBySpeed.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-8">
-                        No timed badges yet
-                      </p>
-                    ) : (
-                      topBySpeed.map((entry, index) => (
-                        <div
-                          key={entry.user_id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
-                              {index + 1}
-                            </div>
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={entry.profile?.avatar_url || undefined} />
-                              <AvatarFallback>
-                                {getDisplayName(entry.profile).charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <h3 className="font-semibold">{getDisplayName(entry.profile)}</h3>
-                              {entry.user_id === currentUser?.id && (
-                                <Badge variant="secondary" className="text-xs">You</Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Zap className="w-5 h-5 text-yellow-500" />
-                            <span className="font-bold text-lg">
-                              {entry.fastest_time ? formatTime(entry.fastest_time) : "—"}
-                            </span>
-                          </div>
-                        </div>
-                      ))
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {topByBadges.slice(0, 3).map((entry, index) => (
+                  <div
+                    key={entry.user_id}
+                    className="flex items-center gap-3 p-3 border rounded-lg min-w-[200px] bg-muted/30"
+                  >
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs">
+                      {index + 1}
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={entry.profile?.avatar_url || undefined} />
+                      <AvatarFallback className="text-xs">
+                        {getDisplayName(entry.profile).charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{getDisplayName(entry.profile)}</p>
+                      <p className="text-xs text-muted-foreground">{entry.badge_count} badges</p>
+                    </div>
+                    {entry.user_id === currentUser?.id && (
+                      <Badge variant="secondary" className="text-xs shrink-0">You</Badge>
                     )}
                   </div>
-                </TabsContent>
-              </Tabs>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}
