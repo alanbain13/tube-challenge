@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   MapPin, 
   Activity, 
@@ -15,7 +16,6 @@ import {
   Clock, 
   Settings, 
   Calendar,
-  Target,
   MapPinCheck,
   Camera,
   Globe,
@@ -305,11 +305,38 @@ export default function Profile() {
   const getVerificationIcon = (status: string | null) => {
     switch (status) {
       case 'location_verified':
-        return <MapPinCheck className="h-3 w-3 text-green-600" />;
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <MapPinCheck className="h-3 w-3 text-green-600 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Location verified within geofence
+            </TooltipContent>
+          </Tooltip>
+        );
       case 'photo_verified':
-        return <Camera className="h-3 w-3 text-amber-600" />;
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <MapPinCheck className="h-3 w-3 text-amber-600 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Roundel photo matched
+            </TooltipContent>
+          </Tooltip>
+        );
       default:
-        return <Globe className="h-3 w-3 text-blue-600" />;
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Globe className="h-3 w-3 text-blue-600 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Uploaded remotely
+            </TooltipContent>
+          </Tooltip>
+        );
     }
   };
 
@@ -333,7 +360,8 @@ export default function Profile() {
 
   return (
     <AppLayout>
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <TooltipProvider>
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Profile Header */}
         <Card className="mb-6 overflow-hidden">
           <div className="h-24 bg-gradient-to-r from-primary/20 via-primary/10 to-secondary/20" />
@@ -416,21 +444,42 @@ export default function Profile() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
-                <div className="flex flex-col items-center text-center p-3 rounded-lg bg-green-500/10">
-                  <MapPinCheck className="h-6 w-6 text-green-600 mb-2" />
-                  <p className="text-2xl font-bold text-green-600">{verificationStats.locationVerified}</p>
-                  <p className="text-xs text-muted-foreground">Location Verified</p>
-                </div>
-                <div className="flex flex-col items-center text-center p-3 rounded-lg bg-amber-500/10">
-                  <Camera className="h-6 w-6 text-amber-600 mb-2" />
-                  <p className="text-2xl font-bold text-amber-600">{verificationStats.photoVerified}</p>
-                  <p className="text-xs text-muted-foreground">Photo Verified</p>
-                </div>
-                <div className="flex flex-col items-center text-center p-3 rounded-lg bg-blue-500/10">
-                  <Globe className="h-6 w-6 text-blue-600 mb-2" />
-                  <p className="text-2xl font-bold text-blue-600">{verificationStats.remoteVerified}</p>
-                  <p className="text-xs text-muted-foreground">Remote Verified</p>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-col items-center text-center p-3 rounded-lg bg-green-500/10 cursor-help">
+                      <MapPinCheck className="h-6 w-6 text-green-600 mb-2" />
+                      <p className="text-2xl font-bold text-green-600">{verificationStats.locationVerified}</p>
+                      <p className="text-xs text-muted-foreground">Location Verified</p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-[200px] text-center">
+                    Verified within geofence using GPS location
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-col items-center text-center p-3 rounded-lg bg-amber-500/10 cursor-help">
+                      <Camera className="h-6 w-6 text-amber-600 mb-2" />
+                      <p className="text-2xl font-bold text-amber-600">{verificationStats.photoVerified}</p>
+                      <p className="text-xs text-muted-foreground">Photo Verified</p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-[200px] text-center">
+                    Verified by matching roundel photo
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-col items-center text-center p-3 rounded-lg bg-blue-500/10 cursor-help">
+                      <Globe className="h-6 w-6 text-blue-600 mb-2" />
+                      <p className="text-2xl font-bold text-blue-600">{verificationStats.remoteVerified}</p>
+                      <p className="text-xs text-muted-foreground">Remote Verified</p>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-[200px] text-center">
+                    Photo uploaded remotely without location verification
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </CardContent>
           </Card>
@@ -663,7 +712,8 @@ export default function Profile() {
           <Clock className="h-4 w-4 inline-block mr-1" />
           Member since {profile?.created_at ? format(new Date(profile.created_at), 'MMMM yyyy') : 'recently'}
         </div>
-      </div>
+        </div>
+      </TooltipProvider>
     </AppLayout>
   );
 }
