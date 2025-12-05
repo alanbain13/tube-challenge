@@ -122,15 +122,27 @@ const Routes = () => {
         .select(`
           *,
           route_stations(station_tfl_id, sequence_number),
-          challenges(id),
-          profiles!routes_user_id_fkey(display_name, username, avatar_url)
+          challenges(id)
         `)
         .eq("is_public", true)
         .in("user_id", friendsList)
         .order("created_at", { ascending: false });
       
       if (error) throw error;
-      return (data || []) as RouteWithStations[];
+
+      // Fetch profiles for route creators
+      const userIds = [...new Set(data?.map(r => r.user_id) || [])];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, username, avatar_url")
+        .in("user_id", userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+
+      return (data || []).map(route => ({
+        ...route,
+        profiles: profileMap.get(route.user_id) || null
+      })) as RouteWithStations[];
     },
     enabled: friendsList.length > 0,
   });
