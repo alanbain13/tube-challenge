@@ -531,42 +531,9 @@ const ActivityDetail = () => {
         </header>
 
         <main className="space-y-6">
-          {/* Summary Bar */}
+          {/* Summary Bar - Redesigned */}
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
-                <div>
-                  <div className="text-sm text-muted-foreground">Route</div>
-                  <div className="font-medium">
-                    {activity.start_station_tfl_id && activity.end_station_tfl_id ? 
-                      `${getStationName(activity.start_station_tfl_id)} → ${getStationName(activity.end_station_tfl_id)}` : 
-                      'No route set'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Status</div>
-                  <Badge variant={activity.status === 'completed' ? 'default' : 'outline'}>
-                    {statusText}
-                  </Badge>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Elapsed Time</div>
-                  <div className="font-medium">
-                    {activity.actual_duration_minutes ? 
-                      `${Math.floor(activity.actual_duration_minutes / 60).toString().padStart(2, '0')}:${(activity.actual_duration_minutes % 60).toString().padStart(2, '0')}:00` :
-                      formatDuration(elapsedTime)
-                    }
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Visited Count</div>
-                  <div className="font-medium">
-                    {counts.visited_actual}/{(challenge?.challenge_type === 'point_to_point' || challenge?.challenge_type === 'timed' || counts.planned_total === 0) ? 'Open' : counts.planned_total} stations
-                  </div>
-                </div>
-              </div>
-              
-              {/* Journey Timing - from first/last visit EXIF times */}
               {(() => {
                 // Get first and last visit EXIF times from stationVisits
                 const sortedVisits = stationVisits?.slice().sort((a, b) => 
@@ -579,47 +546,90 @@ const ActivityDetail = () => {
                 
                 return (
                   <>
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <div className="text-xs font-medium text-muted-foreground mb-2">Journey Timing</div>
-                      <div className="grid grid-cols-2 gap-4 text-center">
-                        <div>
-                          <div className="text-xs text-muted-foreground">Start Time</div>
-                          <div className="font-medium text-sm">
-                            {firstVisitExif ? new Date(firstVisitExif).toLocaleString('en-GB') : '—'}
-                          </div>
+                    {/* Primary Metrics Row */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      {/* Route */}
+                      <div className="text-center md:text-left">
+                        <div className="flex items-center justify-center md:justify-start gap-1.5 text-sm text-muted-foreground mb-1">
+                          <MapPin className="w-3.5 h-3.5" />
+                          <span>Route</span>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">End Time</div>
-                          <div className="font-medium text-sm">
-                            {lastVisitExif && activity.status === 'completed' ? new Date(lastVisitExif).toLocaleString('en-GB') : '—'}
-                          </div>
+                        <div className="font-semibold">
+                          {activity.start_station_tfl_id && activity.end_station_tfl_id ? 
+                            `${getStationName(activity.start_station_tfl_id)} → ${getStationName(activity.end_station_tfl_id)}` : 
+                            'Open Route'}
+                        </div>
+                      </div>
+                      
+                      {/* Status */}
+                      <div className="text-center">
+                        <div className="text-sm text-muted-foreground mb-1">Status</div>
+                        <Badge 
+                          variant={activity.status === 'completed' ? 'default' : 'outline'}
+                          className={activity.status === 'active' ? 'border-green-500 text-green-600' : ''}
+                        >
+                          {statusText}
+                        </Badge>
+                      </div>
+                      
+                      {/* Elapsed Time - Prominent */}
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground mb-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Elapsed Time</span>
+                        </div>
+                        <div className="text-2xl font-bold font-mono tracking-tight">
+                          {activity.actual_duration_minutes ? 
+                            `${Math.floor(activity.actual_duration_minutes / 60).toString().padStart(2, '0')}:${(activity.actual_duration_minutes % 60).toString().padStart(2, '0')}:00` :
+                            formatDuration(elapsedTime)
+                          }
+                        </div>
+                      </div>
+                      
+                      {/* Progress */}
+                      <div className="text-center md:text-right">
+                        <div className="text-sm text-muted-foreground mb-1">Progress</div>
+                        <div className="font-semibold text-lg">
+                          <span className="text-primary">{counts.visited_actual}</span>
+                          <span className="text-muted-foreground">/</span>
+                          <span>{(challenge?.challenge_type === 'point_to_point' || challenge?.challenge_type === 'timed' || counts.planned_total === 0) ? 'Open' : counts.planned_total}</span>
+                          <span className="text-sm text-muted-foreground ml-1">stations</span>
                         </div>
                       </div>
                     </div>
                     
+                    {/* Secondary Details Row */}
                     <div className="mt-4 pt-4 border-t border-border">
-                      <div className="text-xs font-medium text-muted-foreground mb-2">Activity Record</div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
+                        {/* Started */}
                         <div>
-                          <div className="text-xs text-muted-foreground">Activity Create Time</div>
+                          <div className="text-xs text-muted-foreground">Started</div>
                           <div className="font-medium text-sm">
-                            {new Date(activity.created_at).toLocaleString('en-GB')}
+                            {firstVisitExif ? new Date(firstVisitExif).toLocaleString('en-GB', {
+                              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            }) : '—'}
                           </div>
                         </div>
+                        
+                        {/* Finished */}
                         <div>
-                          <div className="text-xs text-muted-foreground">Completion Time</div>
+                          <div className="text-xs text-muted-foreground">Finished</div>
                           <div className="font-medium text-sm">
-                            {activity.ended_at ? new Date(activity.ended_at).toLocaleString('en-GB') : '—'}
+                            {lastVisitExif && activity.status === 'completed' ? new Date(lastVisitExif).toLocaleString('en-GB', {
+                              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            }) : '—'}
                           </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">Status</div>
-                          <div className="font-medium text-sm">
-                            <Badge variant={activity.status === 'completed' ? 'default' : 'outline'} className="mt-1">
-                              {statusText}
-                            </Badge>
+                        
+                        {/* Verification (only for completed) */}
+                        {activity.status === 'completed' && (
+                          <div>
+                            <div className="text-xs text-muted-foreground">Verification</div>
+                            <div className="mt-1">
+                              <VerificationLevelBadge level={activity.verification_level || 'remote_verified'} />
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </>
