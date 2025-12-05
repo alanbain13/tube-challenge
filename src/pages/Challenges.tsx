@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter } from "lucide-react";
+import { Trophy, Users, Clock, MapPin, Route, Timer, Hash, Navigation, Shield, Filter, Award } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { VerificationLevelBadge } from "@/components/VerificationLevelBadge";
 import { CHALLENGE_TYPE_CONFIG } from "@/lib/challengeVerification";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Challenge {
   id: string;
@@ -41,6 +42,20 @@ interface ChallengeAttempt {
   duration_seconds: number | null;
   stations_visited: number | null;
   is_personal_best: boolean | null;
+}
+
+interface Profile {
+  id: string;
+  user_id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+}
+
+interface FriendLeaderboardEntry {
+  user_id: string;
+  challenge_count: number;
+  profile?: Profile;
 }
 
 type VerificationFilter = "all" | "location_verified" | "photo_verified" | "remote_verified";
@@ -110,6 +125,76 @@ export default function Challenges() {
       return counts;
     },
   });
+
+  // Fetch friends list
+  const { data: friendsList } = useQuery({
+    queryKey: ["friends-list", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from("friendships")
+        .select("user_id_1, user_id_2")
+        .eq("status", "accepted")
+        .or(`user_id_1.eq.${user.id},user_id_2.eq.${user.id}`);
+
+      if (error) throw error;
+      
+      return data.map(f => 
+        f.user_id_1 === user.id ? f.user_id_2 : f.user_id_1
+      );
+    },
+    enabled: !!user,
+  });
+
+  // Fetch friend leaderboard data for challenges
+  const { data: friendLeaderboard } = useQuery({
+    queryKey: ["friends-challenge-leaderboard", friendsList],
+    queryFn: async () => {
+      if (!friendsList || friendsList.length === 0) return [];
+
+      const userIds = [...friendsList, user?.id].filter(Boolean);
+
+      // Fetch challenge attempt counts
+      const { data: challengeStats, error } = await supabase
+        .from("challenge_attempts")
+        .select("user_id")
+        .eq("status", "completed")
+        .in("user_id", userIds);
+
+      if (error) throw error;
+
+      // Fetch profiles
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("user_id", userIds);
+
+      const profileMap = new Map<string, Profile>();
+      profiles?.forEach(p => profileMap.set(p.user_id, p));
+
+      // Count challenges per user
+      const countMap = new Map<string, number>();
+      challengeStats?.forEach(stat => {
+        countMap.set(stat.user_id, (countMap.get(stat.user_id) || 0) + 1);
+      });
+
+      const entries: FriendLeaderboardEntry[] = userIds.map(userId => ({
+        user_id: userId!,
+        challenge_count: countMap.get(userId!) || 0,
+        profile: profileMap.get(userId!),
+      }));
+
+      return entries.sort((a, b) => b.challenge_count - a.challenge_count).slice(0, 10);
+    },
+    enabled: !!friendsList && friendsList.length > 0,
+  });
+
+  const topByChallenges = friendLeaderboard || [];
+
+  const getDisplayName = (profile?: Profile) => {
+    return profile?.display_name || profile?.username || "Unknown User";
+  };
 
   const handleStartChallenge = async (challenge: Challenge) => {
     if (!user?.id) {
@@ -250,6 +335,57 @@ export default function Challenges() {
           <h1 className="text-4xl font-black mb-2">Challenges</h1>
           <p className="text-muted-foreground">Test yourself with official and community challenges</p>
         </div>
+
+        {/* Friends Activity Preview */}
+        {friendsList && friendsList.length > 0 && topByChallenges.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  Friends Activity
+                </CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => navigate('/leaderboards')}
+                >
+                  View Global Leaderboards →
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                <Trophy className="w-4 h-4" /> Most Challenges Completed
+              </p>
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {topByChallenges.slice(0, 3).map((entry, index) => (
+                  <div
+                    key={entry.user_id}
+                    className="flex items-center gap-3 p-3 border rounded-lg min-w-[200px] bg-muted/30"
+                  >
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs">
+                      {index + 1}
+                    </div>
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={entry.profile?.avatar_url || undefined} />
+                      <AvatarFallback className="text-xs">
+                        {getDisplayName(entry.profile).charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{getDisplayName(entry.profile)}</p>
+                      <p className="text-xs text-muted-foreground">{entry.challenge_count} challenges</p>
+                    </div>
+                    {entry.user_id === user?.id && (
+                      <Badge variant="secondary" className="text-xs shrink-0">You</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="available" className="w-full">
           <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
