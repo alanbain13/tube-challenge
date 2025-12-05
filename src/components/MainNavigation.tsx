@@ -82,10 +82,10 @@ export const MainNavigation = () => {
                         )}
                       >
                         <Icon className="w-4 h-4" />
-                        <span className="hidden lg:inline">{item.name}</span>
+                        <span className="hidden xl:inline">{item.name}</span>
                       </Link>
                     </TooltipTrigger>
-                    <TooltipContent className="lg:hidden">
+                    <TooltipContent className="xl:hidden">
                       {item.name}
                     </TooltipContent>
                   </Tooltip>
@@ -106,10 +106,10 @@ export const MainNavigation = () => {
                       )}
                     >
                       <Shield className="w-4 h-4" />
-                      <span className="hidden lg:inline">Admin</span>
+                      <span className="hidden xl:inline">Admin</span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent className="lg:hidden">
+                  <TooltipContent className="xl:hidden">
                     Admin
                   </TooltipContent>
                 </Tooltip>
